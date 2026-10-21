@@ -1,7 +1,7 @@
-# Test override: publishes service ports on loopback so tests can reach them.
-# Compose profiles cannot change an existing service's ports, so this is an override file.
-# The mock upstream joins here in M0.5.
-#   docker compose -f docker-compose.yml -f docker-compose.test.yml --env-file .env.example up -d --wait
+# Test override: publishes service ports on loopback so tests can reach them, and adds the
+# mock upstream under the `test` profile.
+# Compose profiles cannot change an existing service's ports, so the ports live in this override file.
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml --profile test --env-file .env.example up -d --wait
 services:
   gateway:
     ports: ["127.0.0.1:18080:8080"]
@@ -9,3 +9,26 @@ services:
     ports: ["127.0.0.1:18081:8080"]
   worker:
     ports: ["127.0.0.1:18082:8080"]
+
+  mock-upstream:
+    profiles: ["test"]
+    image: jarvis-mock-upstream:dev
+    build:
+      context: ..
+      dockerfile: deploy/docker/service.Dockerfile
+      args:
+        SERVICE: mock-upstream
+        APP_MODULE: mock_upstream.app:create_app_from_env
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      MOCK_SEED: "${MOCK_SEED:-}"
+    ports: ["127.0.0.1:19000:8080"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/__admin/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s

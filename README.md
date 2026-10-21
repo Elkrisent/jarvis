@@ -36,7 +36,7 @@ Gateway, api and worker each serve `/healthz` (liveness) and `/readyz` (dependen
 internal port 8080 and publish no host ports. For development use
 `-f docker-compose.yml -f docker-compose.dev.yml` (hot reload, ports on 127.0.0.1:8080-8082).
 `make test-system`, `make test-chaos` and `make test-security` start their own stack
-(project `jarvis-test`, ports 18080-18082) and need Docker.
+(project `jarvis-test`, ports 18080-18082, mock upstream on 19000 via the `test` profile) and need Docker.
 
 Other `make test-*` / `make bench-*` targets are placeholders until their suites land.
 
@@ -47,7 +47,7 @@ packages/core/        shared models, interfaces, errors
 services/gateway/     data plane
 services/api/         control plane
 services/worker/      telemetry, analytics, AI
-tools/mock_upstream/  controllable mock upstream (test asset)
+tools/mock_upstream/  controllable mock upstream (test asset, see its README)
 web/                  React app (not started)
 deploy/               compose files (default, dev, test), Dockerfile, env example
 tests/                meta, e2e, load, ai_eval
