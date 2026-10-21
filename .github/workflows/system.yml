@@ -50,6 +50,17 @@ jobs:
           load: true
           cache-from: type=gha,scope=worker
           cache-to: type=gha,mode=max,scope=worker
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/service.Dockerfile
+          build-args: |
+            SERVICE=mock-upstream
+            APP_MODULE=mock_upstream.app:create_app_from_env
+          tags: jarvis-mock-upstream:dev
+          load: true
+          cache-from: type=gha,scope=mock-upstream
+          cache-to: type=gha,mode=max,scope=mock-upstream
       - uses: astral-sh/setup-uv@v5
         with:
           version: "0.11.17"

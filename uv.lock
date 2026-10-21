@@ -592,6 +592,16 @@ requires-dist = [
 name = "jarvis-mock-upstream"
 version = "0.0.0"
 source = { editable = "tools/mock_upstream" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "uvicorn" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = "==0.156.5" },
+    { name = "uvicorn", specifier = "==0.34.2" },
+]
 
 [[package]]
 name = "jarvis-worker"

@@ -3,7 +3,10 @@ name = "jarvis-mock-upstream"
 version = "0.0.0"
 description = "Controllable mock upstream for tests and benchmarks."
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "fastapi==0.156.5",
+    "uvicorn==0.34.2",
+]
 
 [build-system]
 requires = ["hatchling==1.27.0"]

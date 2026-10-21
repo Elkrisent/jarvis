@@ -10,7 +10,7 @@ Phase 0: Foundations
 
 ## Current Module
 
-M0.5: Mock upstream (not started)
+M0.5: Mock upstream (implemented on `feat/m0.5-mock-upstream`, PR pending)
 
 ## Completed
 
@@ -26,11 +26,11 @@ M0.5: Mock upstream (not started)
 
 ## In Progress
 
-Nothing.
+M0.5 on `feat/m0.5-mock-upstream`: `tools/mock_upstream` app (rules, admin API, call log, seeded mode), README, 60 unit and 9 integration tests, `test`-profile service in the compose test override, `mock_upstream` fixture, stack tests. Verified locally: 266 unit, 9 integration, 7 system, 13 security, 1 chaos tests pass. Awaiting PR, CI and merge.
 
 ## Next
 
-Start M0.5 on `feat/m0.5-mock-upstream` (see IMPLEMENTATION.md M0.5): `tools/mock_upstream/` FastAPI app with a rule-driven catch-all route and an admin API (`/__admin/rules`, `/__admin/calls`, `/__admin/reset`), deterministic seeded mode, `README.md`, its own unit and integration tests, and inclusion in the compose test override.
+Merge the M0.5 PR, record M0.5 complete, then start M0.6 (benchmark infrastructure).
 
 ## Blockers / Questions
 
@@ -38,7 +38,7 @@ None.
 
 ## Resume Point
 
-Start M0.5 from `IMPLEMENTATION.md`. Do not begin M0.6 until the M0.5 Definition of Done is satisfied. Housekeeping: remove the exit-code-5 allowance in `make test-integration` when the first integration test lands.
+Finish M0.5: PR, green CI, user merges, then record M0.5 complete. Do not begin M0.6 until then.
 
 ## Last Updated
 

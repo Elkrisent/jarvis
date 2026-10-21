@@ -35,9 +35,8 @@ pip-audit:
 test-unit:
 	$(PYTEST) -m unit
 
-# Exit code 5 means "no tests collected": allowed only while no integration suite exists yet.
 test-integration:
-	$(PYTEST) -m integration; rc=$$?; if [ $$rc -eq 5 ]; then echo "no integration tests collected yet"; exit 0; fi; exit $$rc
+	$(PYTEST) -m integration
 
 test-system:
 	$(PYTEST) -m system

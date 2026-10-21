@@ -1,5 +1,6 @@
 # One Dockerfile for the gateway, api and worker images. Build from the repo root:
 #   docker build -f deploy/docker/service.Dockerfile --build-arg SERVICE=gateway .
+# The mock upstream uses SERVICE=mock-upstream and APP_MODULE=mock_upstream.app:create_app_from_env.
 ARG PYTHON_IMAGE=python:3.12.15-slim-bookworm
 
 FROM ${PYTHON_IMAGE} AS builder
@@ -15,8 +16,9 @@ RUN uv sync --locked --no-dev --no-editable --package "jarvis-${SERVICE}"
 
 FROM ${PYTHON_IMAGE} AS runtime
 ARG SERVICE
+ARG APP_MODULE="jarvis_${SERVICE}.app:create_app_from_env"
 ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 \
-    APP_MODULE="jarvis_${SERVICE}.app:create_app_from_env"
+    APP_MODULE="${APP_MODULE}"
 RUN groupadd --system --gid 10001 jarvis \
     && useradd --system --uid 10001 --gid jarvis --no-create-home --shell /usr/sbin/nologin jarvis
 COPY --from=builder --chown=jarvis:jarvis /app/.venv /app/.venv

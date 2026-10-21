@@ -15,6 +15,7 @@ REPO = Path(__file__).resolve().parent.parent
 DEPLOY = REPO / "deploy"
 PROJECT = "jarvis-test"
 PORTS = {"gateway": 18080, "api": 18081, "worker": 18082}
+MOCK_UPSTREAM_URL = "http://127.0.0.1:19000"
 
 
 def compose(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -23,6 +24,8 @@ def compose(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
         "compose",
         "-p",
         PROJECT,
+        "--profile",
+        "test",
         "-f",
         str(DEPLOY / "docker-compose.yml"),
         "-f",
@@ -95,3 +98,37 @@ def revive(kill: Callable[[str], None]) -> Iterator[Callable[[str], None]]:
     yield _revive
     for service in kill.stopped:  # type: ignore[attr-defined]
         compose("start", service, check=False)
+
+
+class MockUpstream:
+    """Client for the mock upstream admin API (see tools/mock_upstream/README.md)."""
+
+    def __init__(self, base_url: str) -> None:
+        self.base_url = base_url
+        self._http = httpx.Client(base_url=base_url, timeout=5)
+
+    def reset(self, seed: int | None = None) -> None:
+        self._http.post(
+            "/__admin/reset", params={"seed": seed} if seed is not None else {}
+        ).raise_for_status()
+
+    def set_rules(self, *rules: dict[str, object]) -> None:
+        self._http.post("/__admin/rules", json=list(rules)).raise_for_status()
+
+    def calls(self, path_prefix: str = "") -> list[dict[str, object]]:
+        r = self._http.get("/__admin/calls", params={"path_prefix": path_prefix})
+        r.raise_for_status()
+        return list(r.json()["calls"])
+
+    def close(self) -> None:
+        self._http.close()
+
+
+@pytest.fixture
+def mock_upstream(compose_stack: None) -> Iterator[MockUpstream]:
+    """A reset mock upstream, controllable from the test."""
+    mock = MockUpstream(MOCK_UPSTREAM_URL)
+    mock.reset(seed=0)
+    yield mock
+    mock.reset()
+    mock.close()

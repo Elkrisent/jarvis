@@ -5,7 +5,7 @@ import pytest
 
 from tests.conftest import compose
 
-SERVICES = ["gateway", "api", "worker"]
+SERVICES = ["gateway", "api", "worker", "mock-upstream"]
 
 pytestmark = [pytest.mark.security, pytest.mark.usefixtures("compose_stack")]
 
