@@ -10,7 +10,7 @@ Phase 0: Foundations
 
 ## Current Module
 
-M0.4: CI workflows (not started)
+M0.4: CI workflows (workflows written on `feat/m0.4-ci-workflows`, PR pending; gate proof outstanding)
 
 ## Completed
 
@@ -24,11 +24,14 @@ M0.4: CI workflows (not started)
 
 ## In Progress
 
-Nothing.
+M0.4 on `feat/m0.4-ci-workflows`: `ci.yml` (python + integration jobs, per-package coverage gates, job summary), `system.yml`, `security.yml` (bandit, pip-audit, gitleaks, trivy, stack security tests), `docs/contributing.md`. Local checks pass (207 unit, 4 system, 1 chaos, 10 security tests; pip-audit and trivy clean after upgrading vulnerable pins). Not done: workflows green on the PR and on `main`, branch protection applied by the user, and the deliberate failing-PR proof.
 
 ## Next
 
-Start M0.4 on `feat/m0.4-ci-workflows` (see IMPLEMENTATION.md M0.4): extend `ci.yml` (integration with Postgres/Redis service containers, coverage gates, job summary), add `system.yml` (stack, functional, chaos tests) and `security.yml` (bandit, pip-audit, gitleaks, trivy), caching, and `docs/contributing.md` with branch-protection settings for you to apply. Proving the gate blocks needs a deliberately failing PR.
+1. Merge the M0.4 PR once its checks are green, and confirm `system.yml` is green on `main`.
+2. User applies branch protection per `docs/contributing.md`.
+3. Open a deliberately failing PR to prove the gate blocks the merge, then close it.
+4. Record M0.4 complete, then start M0.5 (mock upstream).
 
 ## Blockers / Questions
 
@@ -36,7 +39,7 @@ None.
 
 ## Resume Point
 
-Start M0.4 from `IMPLEMENTATION.md`. Do not begin M0.5 until the M0.4 Definition of Done is satisfied.
+Finish M0.4: PR, green CI, branch protection, failing-PR proof. Do not begin M0.5 until the M0.4 Definition of Done is satisfied.
 
 ## Last Updated
 

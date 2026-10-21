@@ -4,7 +4,7 @@ version = "0.0.0"
 description = "JARVIS worker (telemetry, analytics, AI)."
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi==0.115.12",
+    "fastapi==0.156.5",
     "jarvis-core",
     "uvicorn==0.34.2",
 ]

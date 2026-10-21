@@ -1,0 +1,120 @@
+name: security
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1" # weekly, Monday 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bandit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.11.17"
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --locked
+      - run: make bandit
+
+  pip-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.11.17"
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --locked
+      - run: make pip-audit
+
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  trivy:
+    # Fails on HIGH/CRITICAL findings that have a fix available.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [gateway, api, worker]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/service.Dockerfile
+          build-args: SERVICE=${{ matrix.service }}
+          tags: jarvis-${{ matrix.service }}:dev
+          load: true
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+      - name: Trivy scan (HIGH/CRITICAL with a fix available)
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$HOME/.cache/trivy:/root/.cache/trivy" \
+            aquasec/trivy:0.58.0 image \
+            --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 \
+            jarvis-${{ matrix.service }}:dev
+
+  security-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/service.Dockerfile
+          build-args: SERVICE=gateway
+          tags: jarvis-gateway:dev
+          load: true
+          cache-from: type=gha,scope=gateway
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/service.Dockerfile
+          build-args: SERVICE=api
+          tags: jarvis-api:dev
+          load: true
+          cache-from: type=gha,scope=api
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/service.Dockerfile
+          build-args: SERVICE=worker
+          tags: jarvis-worker:dev
+          load: true
+          cache-from: type=gha,scope=worker
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.11.17"
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --locked
+      - name: Stack security tests
+        env:
+          JARVIS_SKIP_BUILD: "1"
+        run: make test-security

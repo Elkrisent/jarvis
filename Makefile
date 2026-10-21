@@ -1,4 +1,4 @@
-.PHONY: help sync lint format typecheck \
+.PHONY: help sync lint format typecheck security-scan bandit pip-audit \
 	test-unit test-integration test-system test-functional test-e2e test-chaos \
 	test-security test-web test-all bench-micro bench-load bench-soak \
 	bench-checkpoint traceability coverage
@@ -22,11 +22,22 @@ format:
 typecheck:
 	uv run mypy
 
+security-scan: bandit pip-audit
+
+bandit:
+	uv run bandit -q -r packages/core/src services/gateway/src services/api/src services/worker/src tools -ll
+
+pip-audit:
+	mkdir -p build
+	uv export --locked --no-emit-workspace --no-hashes --format requirements-txt > build/requirements-audit.txt
+	uv run pip-audit -r build/requirements-audit.txt --no-deps --disable-pip
+
 test-unit:
 	$(PYTEST) -m unit
 
+# Exit code 5 means "no tests collected": allowed only while no integration suite exists yet.
 test-integration:
-	@echo "placeholder: no integration suites yet (arrives with M0.3/M1.1)"
+	$(PYTEST) -m integration; rc=$$?; if [ $$rc -eq 5 ]; then echo "no integration tests collected yet"; exit 0; fi; exit $$rc
 
 test-system:
 	$(PYTEST) -m system
@@ -68,5 +79,10 @@ traceability:
 	uv run python scripts/traceability.py --junit build/junit.xml \
 		$(if $(COMPLETED_PHASE),--completed-phase $(COMPLETED_PHASE))
 
+# Unit-test coverage, then the per-package gates (B.3). Pass BASELINE=<coverage.json from main> to
+# also fail on a drop of more than 1 point.
+BASELINE ?=
+
 coverage:
-	$(PYTEST) -m unit --cov --cov-report=term-missing --cov-report=xml
+	$(PYTEST) -m unit --cov --cov-report=term-missing --cov-report=json:build/coverage.json
+	uv run python scripts/coverage_gate.py --report build/coverage.json $(if $(BASELINE),--baseline $(BASELINE))
