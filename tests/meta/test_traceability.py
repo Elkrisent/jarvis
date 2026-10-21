@@ -39,6 +39,26 @@ class TestK:
         pass
 """
 
+INHERITED = """\
+import pytest
+
+
+class Base:
+    def test_one(self):
+        pass
+
+
+@pytest.mark.req("REQ-1-2")
+class TestImpl(Base):
+    pass
+
+
+@pytest.mark.req("REQ-2-1")
+class TestHasOwn(Base):
+    def test_own(self):
+        pass
+"""
+
 JUNIT = """\
 <testsuites><testsuite>
 <testcase classname="x" name="test_a[1]"/>
@@ -100,7 +120,8 @@ def test_results_use_worst_outcome_across_parametrizations(
 ) -> None:
     junit = tmp_path / "j.xml"
     junit.write_text(JUNIT)
-    assert trace.read_results(junit) == {"test_a": "fail", "test_b": "skip"}
+    results = trace.read_results(junit)
+    assert (results["test_a"], results["test_b"]) == ("fail", "skip")
 
 
 def test_report_lists_tests_results_and_uncovered(trace: ModuleType, repo: Path) -> None:
@@ -150,3 +171,25 @@ def test_main_writes_report_and_exit_code(
     (repo / "docs" / "requirements.md").write_text(REQS + "| REQ-0-9 | untested | P0 |\n")
     assert trace.main(["--completed-phase", "0"], root=repo) == 1
     assert "REQ-0-9 (P0) has no test" in capsys.readouterr().err
+
+
+def test_class_level_marks_cover_tests_inherited_from_a_base(trace: ModuleType, repo: Path) -> None:
+    (repo / "packages/core/tests/unit/test_inh.py").write_text(INHERITED)
+    found = trace.collect_markers(trace.find_test_files(repo), repo)
+    inherited = [t for t in found["REQ-1-2"] if t.file.endswith("test_inh.py")]
+    assert [(t.name, t.func) for t in inherited] == [("TestImpl", "TestImpl")]
+    # A class with its own tests is still referenced per test, not per class.
+    assert [t.name for t in found["REQ-2-1"] if t.file.endswith("test_inh.py")] == [
+        "TestHasOwn::test_own"
+    ]
+
+
+def test_results_are_also_keyed_by_class(trace: ModuleType, tmp_path: Path) -> None:
+    junit = tmp_path / "j.xml"
+    junit.write_text(
+        "<testsuites><testsuite>"
+        '<testcase classname="pkg.mod.TestImpl" name="test_one"/>'
+        '<testcase classname="pkg.mod.TestImpl" name="test_two"><failure message="x"/></testcase>'
+        "</testsuite></testsuites>"
+    )
+    assert trace.read_results(junit)["TestImpl"] == "fail"

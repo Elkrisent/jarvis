@@ -132,3 +132,34 @@ def mock_upstream(compose_stack: None) -> Iterator[MockUpstream]:
     yield mock
     mock.reset()
     mock.close()
+
+
+def github_repo() -> str:
+    """``owner/name`` of this repository, from the Actions env or the origin remote."""
+    if repo := os.environ.get("GITHUB_REPOSITORY"):
+        return repo
+    url = subprocess.run(
+        ["git", "remote", "get-url", "origin"],
+        check=True,
+        capture_output=True,
+        text=True,
+        cwd=REPO,
+    ).stdout.strip()
+    return url.removesuffix(".git").split("github.com")[-1].lstrip(":/")
+
+
+def github_headers() -> dict[str, str]:
+    """GitHub API headers, authenticated when a token is available (Actions or `gh`)."""
+    headers = {"Accept": "application/vnd.github+json"}
+    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    if not token:
+        gh = subprocess.run(
+            ["gh", "auth", "token"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        token = gh.stdout.strip() if gh.returncode == 0 else ""
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers

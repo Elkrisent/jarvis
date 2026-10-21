@@ -379,7 +379,7 @@ script parses it.
 
 | ID | Requirement | Phase |
 |----|-------------|-------|
-| REQ-15.1-1 | `deploy/docker-compose.yml` defines caddy, gateway, api, worker, postgres and redis in the default profile, and prometheus and grafana in `monitoring`. | P0 |
+| REQ-15.1-1 | `deploy/docker-compose.yml` defines caddy, gateway, api, worker, postgres and redis in the default profile, and prometheus and grafana in `monitoring`. | P4 |
 | REQ-15.1-2 | Every service has a health check, and `depends_on` waits for healthy services. | P0 |
 | REQ-15.1-3 | The default profile idles at ≤ 1.5 GB RAM. | P7 |
 | REQ-15.1-4 | `docker-compose.dev.yml` builds from source with hot reload. | P0 |
