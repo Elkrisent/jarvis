@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 0 in progress. M0.1, M0.2 and M0.3 complete and merged to `main`.
+Phase 0 in progress. M0.1–M0.4 complete and merged to `main`.
 
 ## Current Phase
 
@@ -10,7 +10,7 @@ Phase 0: Foundations
 
 ## Current Module
 
-M0.4: CI workflows (workflows written on `feat/m0.4-ci-workflows`, PR pending; gate proof outstanding)
+M0.5: Mock upstream (not started)
 
 ## Completed
 
@@ -21,17 +21,16 @@ M0.4: CI workflows (workflows written on `feat/m0.4-ci-workflows`, PR pending; g
   * Verified: 173 unit tests pass, `jarvis_core` coverage 99%, lint/mypy/pre-commit clean; CI green on PR #3. 22 of 246 requirements have tests so far (gate not yet enforced).
 * M0.3 Compose skeleton and health (PR #5, merge commit `c00280c`): FastAPI apps for gateway/api/worker with `/healthz` and `/readyz` (ok/degraded/unavailable, shared logic in `jarvis_core.health`), multi-stage non-root Dockerfile, `deploy/docker-compose.yml` + dev and test overrides, documented `.env.example`, system/chaos/security tests, Makefile targets wired.
   * Verified locally on a real Docker stack: 196 unit, 4 system, 1 chaos, 10 security tests pass; lint/mypy clean; CI `python` job green on PR #5. CI does not yet run the stack tests (M0.4).
+* M0.4 CI workflows (PR #7, merge commit `1816e0b`): `ci.yml` (python + integration jobs, per-package coverage gates with 1-point drop rule), `system.yml` (label/main), `security.yml` (bandit, pip-audit, gitleaks, trivy x3, stack security tests), uv and Docker layer caching, `docs/contributing.md`. Pins upgraded to clear pip-audit/trivy findings (fastapi 0.156.5, starlette 1.9.0, pytest 9.1.1, pytest-asyncio 1.4.0, python 3.12.15 base).
+  * Verified: all workflows green on PR #7 and on `main`. Repo ruleset `jarvis` (applied by the user) requires 9 checks. Gate proven: throwaway PR #8 with a failing test was `BLOCKED` (not mergeable even as admin) and closed unmerged.
 
 ## In Progress
 
-M0.4 on `feat/m0.4-ci-workflows`: `ci.yml` (python + integration jobs, per-package coverage gates, job summary), `system.yml`, `security.yml` (bandit, pip-audit, gitleaks, trivy, stack security tests), `docs/contributing.md`. Local checks pass (207 unit, 4 system, 1 chaos, 10 security tests; pip-audit and trivy clean after upgrading vulnerable pins). Not done: workflows green on the PR and on `main`, branch protection applied by the user, and the deliberate failing-PR proof.
+Nothing.
 
 ## Next
 
-1. Merge the M0.4 PR once its checks are green, and confirm `system.yml` is green on `main`.
-2. User applies branch protection per `docs/contributing.md`.
-3. Open a deliberately failing PR to prove the gate blocks the merge, then close it.
-4. Record M0.4 complete, then start M0.5 (mock upstream).
+Start M0.5 on `feat/m0.5-mock-upstream` (see IMPLEMENTATION.md M0.5): `tools/mock_upstream/` FastAPI app with a rule-driven catch-all route and an admin API (`/__admin/rules`, `/__admin/calls`, `/__admin/reset`), deterministic seeded mode, `README.md`, its own unit and integration tests, and inclusion in the compose test override.
 
 ## Blockers / Questions
 
@@ -39,7 +38,7 @@ None.
 
 ## Resume Point
 
-Finish M0.4: PR, green CI, branch protection, failing-PR proof. Do not begin M0.5 until the M0.4 Definition of Done is satisfied.
+Start M0.5 from `IMPLEMENTATION.md`. Do not begin M0.6 until the M0.5 Definition of Done is satisfied. Housekeeping: remove the exit-code-5 allowance in `make test-integration` when the first integration test lands.
 
 ## Last Updated
 
