@@ -48,7 +48,7 @@ test-functional:
 	@echo "placeholder: no functional suites yet (arrives with M0.2)"
 
 test-e2e:
-	@echo "placeholder: no e2e suites yet"
+	$(PYTEST) -m e2e
 
 test-chaos:
 	$(PYTEST) -m chaos
@@ -90,9 +90,11 @@ bench-checkpoint:
 
 # Set COMPLETED_PHASE=<n> (done at each checkpoint) to fail on uncovered requirements of phases <= n.
 COMPLETED_PHASE ?=
+# Which tests feed the last-result column. At a checkpoint use TRACE_MARKERS="not perf" (needs Docker).
+TRACE_MARKERS ?= unit
 
 traceability:
-	$(PYTEST) -m unit -q --junit-xml=build/junit.xml
+	$(PYTEST) -m "$(TRACE_MARKERS)" -q --junit-xml=build/junit.xml
 	uv run python scripts/traceability.py --junit build/junit.xml \
 		$(if $(COMPLETED_PHASE),--completed-phase $(COMPLETED_PHASE))
 

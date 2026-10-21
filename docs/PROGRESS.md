@@ -10,7 +10,7 @@ Phase 0: Foundations
 
 ## Current Module
 
-Phase 0 modules done; Checkpoint 0 pending
+Phase 0 modules done; Checkpoint 0 report awaiting approval
 
 ## Completed
 
@@ -30,11 +30,13 @@ Phase 0 modules done; Checkpoint 0 pending
 
 ## In Progress
 
-Nothing.
+Checkpoint 0 on branch `chore/checkpoint-0`: all Part D steps 1-6 done and verified (317 unit, 9 integration, 7 system, 4 e2e, 1 chaos, 13 security tests pass; coverage gates met; `make bench-checkpoint PHASE=0` run; traceability gate for phase 0 passes with 30/246 covered; report in `docs/checkpoints/P0-foundations.md`). Step 7 (tag `v0.0.0` pre-release) happens after this PR is merged.
 
 ## Next
 
-Run the Checkpoint 0 protocol (IMPLEMENTATION Part D) when the user asks, then stop for approval. Phase 1 (Proxy) does not start without approval.
+1. User merges the checkpoint PR.
+2. Claude creates the `v0.0.0` pre-release on the merge commit (report as notes, `P0.json` attached).
+3. Claude posts the summary and STOPS. User approves before Phase 1 (M1.1) starts; apply any feedback as a follow-up PR first.
 
 ## Blockers / Questions
 
@@ -42,7 +44,7 @@ None.
 
 ## Resume Point
 
-Waiting for "Run the checkpoint protocol" for Checkpoint 0. Do not begin Phase 1 (M1.1) without approval. Housekeeping for Phase 1: system/security stack tests still do not cover gateway behaviour; `make traceability COMPLETED_PHASE=0` currently fails (see traceability.md) and is part of the checkpoint.
+Checkpoint 0 is done pending merge and the release tag. Do not begin Phase 1 (M1.1) until the user approves.
 
 ## Last Updated
 

@@ -67,7 +67,8 @@ jobs:
           enable-cache: true
       - run: uv python install 3.12
       - run: uv sync --locked
-      - name: System, functional and chaos tests
+      - name: System, functional, chaos and e2e tests
         env:
           JARVIS_SKIP_BUILD: "1"
-        run: make test-system test-functional test-chaos
+          GH_TOKEN: ${{ github.token }}
+        run: make test-system test-functional test-chaos test-e2e

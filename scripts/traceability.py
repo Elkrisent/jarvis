@@ -84,6 +84,15 @@ def collect_markers(paths: list[Path], root: Path) -> dict[str, list[TestRef]]:
             for stmt in body:
                 if isinstance(stmt, ast.ClassDef):
                     ids = inherited + [i for d in stmt.decorator_list for i in _req_ids(d)]
+                    has_own_tests = any(
+                        isinstance(b, ast.FunctionDef | ast.AsyncFunctionDef)
+                        and b.name.startswith("test")
+                        for b in stmt.body
+                    )
+                    if ids and stmt.bases and not has_own_tests:
+                        # The tests are inherited from a base class (e.g. a contract suite).
+                        for req_id in dict.fromkeys(ids):
+                            found[req_id].append(TestRef(rel, f"{prefix}{stmt.name}", stmt.name))
                     visit(stmt.body, f"{prefix}{stmt.name}::", ids)
                 elif isinstance(stmt, ast.FunctionDef | ast.AsyncFunctionDef):
                     if not stmt.name.startswith("test"):
@@ -120,14 +129,17 @@ def read_results(junit: Path) -> dict[str, str]:
     out: dict[str, str] = {}
     for case in ET.parse(junit).getroot().iter("testcase"):
         name = case.get("name", "").split("[")[0]
+        # Also key by the test class, for class-level references to inherited tests.
+        keys = [name, case.get("classname", "").rsplit(".", 1)[-1]]
         if case.find("failure") is not None or case.find("error") is not None:
             status = "fail"
         elif case.find("skipped") is not None:
             status = "skip"
         else:
             status = "pass"
-        if name not in out or rank[status] > rank[out[name]]:
-            out[name] = status
+        for key in filter(None, keys):
+            if key not in out or rank[status] > rank[out[key]]:
+                out[key] = status
     return out
 
 
