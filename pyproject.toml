@@ -8,8 +8,8 @@ dependencies = []
 
 [dependency-groups]
 dev = [
-    "pytest==8.3.5",
-    "pytest-asyncio==0.26.0",
+    "pytest==9.1.1",
+    "pytest-asyncio==1.4.0",
     "pytest-cov==6.1.1",
     "hypothesis==6.131.15",
     "ruff==0.11.8",
@@ -21,6 +21,8 @@ dev = [
     "jarvis-worker",
     "jarvis-mock-upstream",
     "httpx==0.28.1",
+    "bandit==1.8.3",
+    "pip-audit==2.9.0",
 ]
 
 [tool.uv]

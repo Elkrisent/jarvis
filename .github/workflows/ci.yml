@@ -8,6 +8,13 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.11.17"
+
 jobs:
   python:
     runs-on: ubuntu-latest
@@ -15,10 +22,60 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
         with:
-          version: "0.11.17"
+          version: ${{ env.UV_VERSION }}
           enable-cache: true
       - run: uv python install 3.12
       - run: uv sync --locked
       - run: make lint
       - run: make typecheck
-      - run: make test-unit
+      - name: Baseline coverage from main
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        run: |
+          mkdir -p build
+          git fetch --depth=1 origin main
+          git worktree add ../base FETCH_HEAD
+          cd ../base
+          uv sync --locked
+          uv run pytest -m unit -q --cov --cov-report=json:$GITHUB_WORKSPACE/build/baseline.json
+      - name: Unit tests and coverage gates
+        run: make coverage BASELINE=$([ -f build/baseline.json ] && echo build/baseline.json)
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: build/coverage.json
+          if-no-files-found: ignore
+          retention-days: 90
+
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: timescale/timescaledb:2.17.2-pg16
+        env:
+          POSTGRES_USER: jarvis
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: jarvis
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U jarvis -d jarvis"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+      redis:
+        image: redis:7.4.1-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+    env:
+      REDIS_URL: redis://localhost:6379/0
+      DATABASE_URL: postgresql://jarvis:ci-only@localhost:5432/jarvis
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --locked
+      - run: make test-integration

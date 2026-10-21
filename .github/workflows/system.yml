@@ -1,0 +1,62 @@
+name: system
+
+# Compose-based system, functional and chaos tests.
+# Runs on pushes to main, and on pull requests that carry the `system` label.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: system-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  system:
+    if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'system')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/service.Dockerfile
+          build-args: SERVICE=gateway
+          tags: jarvis-gateway:dev
+          load: true
+          cache-from: type=gha,scope=gateway
+          cache-to: type=gha,mode=max,scope=gateway
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/service.Dockerfile
+          build-args: SERVICE=api
+          tags: jarvis-api:dev
+          load: true
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/service.Dockerfile
+          build-args: SERVICE=worker
+          tags: jarvis-worker:dev
+          load: true
+          cache-from: type=gha,scope=worker
+          cache-to: type=gha,mode=max,scope=worker
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.11.17"
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --locked
+      - name: System, functional and chaos tests
+        env:
+          JARVIS_SKIP_BUILD: "1"
+        run: make test-system test-functional test-chaos

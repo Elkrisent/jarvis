@@ -19,8 +19,9 @@ make sync           # install the uv workspace
 make lint           # ruff check + format check
 make typecheck      # mypy (strict on packages/core and services/gateway)
 make test-unit      # unit tests
-make coverage       # unit tests with coverage
+make coverage       # unit tests + per-package coverage gates
 make traceability   # requirement -> test report in docs/traceability.md
+make security-scan  # bandit + pip-audit
 pre-commit install  # enable git hooks
 ```
 
@@ -51,5 +52,5 @@ web/                  React app (not started)
 deploy/               compose files (default, dev, test), Dockerfile, env example
 tests/                meta, e2e, load, ai_eval
 scripts/              traceability generator
-docs/                 spec, implementation guide, requirements, ADRs
+docs/                 spec, implementation guide, requirements, contributing, ADRs
 ```

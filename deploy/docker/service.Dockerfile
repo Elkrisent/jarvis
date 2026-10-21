@@ -1,6 +1,6 @@
 # One Dockerfile for the gateway, api and worker images. Build from the repo root:
 #   docker build -f deploy/docker/service.Dockerfile --build-arg SERVICE=gateway .
-ARG PYTHON_IMAGE=python:3.12.8-slim-bookworm
+ARG PYTHON_IMAGE=python:3.12.15-slim-bookworm
 
 FROM ${PYTHON_IMAGE} AS builder
 COPY --from=ghcr.io/astral-sh/uv:0.11.17 /uv /usr/local/bin/uv

@@ -64,7 +64,9 @@ def readyz(service: str) -> httpx.Response:
 @pytest.fixture(scope="session")
 def compose_stack() -> Iterator[None]:
     """Bring up the default profile once per session; tear it down afterwards."""
-    compose("up", "-d", "--build", "--wait", "--wait-timeout", "180")
+    # CI prebuilds the images with a layer cache and sets JARVIS_SKIP_BUILD.
+    build = [] if os.environ.get("JARVIS_SKIP_BUILD") else ["--build"]
+    compose("up", "-d", *build, "--wait", "--wait-timeout", "180")
     try:
         yield
     finally:
