@@ -6,7 +6,8 @@ must do and [`docs/IMPLEMENTATION.md`](docs/IMPLEMENTATION.md) for the build ord
 
 ## Status
 
-Phase 0 (Foundations) in progress. Only the repository scaffold and tooling exist;
+Phase 0 (Foundations) in progress. The repository scaffold, tooling and the `jarvis_core`
+package (config models, errors, interfaces with in-memory implementations) exist;
 there is no runnable gateway yet. Current state: [`docs/PROGRESS.md`](docs/PROGRESS.md).
 
 ## Development setup
@@ -19,6 +20,7 @@ make lint           # ruff check + format check
 make typecheck      # mypy (strict on packages/core and services/gateway)
 make test-unit      # unit tests
 make coverage       # unit tests with coverage
+make traceability   # requirement -> test report in docs/traceability.md
 pre-commit install  # enable git hooks
 ```
 
@@ -35,5 +37,6 @@ tools/mock_upstream/  controllable mock upstream (test asset)
 web/                  React app (not started)
 deploy/               compose files, env example (not started)
 tests/                meta, e2e, load, ai_eval
-docs/                 spec, implementation guide, ADRs
+scripts/              traceability generator
+docs/                 spec, implementation guide, requirements, ADRs
 ```

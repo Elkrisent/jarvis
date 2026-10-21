@@ -3,7 +3,9 @@ name = "jarvis-core"
 version = "0.0.0"
 description = "JARVIS shared models, interfaces and errors."
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "pydantic==2.11.4",
+]
 
 [build-system]
 requires = ["hatchling==1.27.0"]
