@@ -24,6 +24,7 @@ make test-system test-functional test-chaos test-security   # need Docker
 |----------|---------|------|
 | `ci.yml` | every PR, push to `main` | `python` (lint, mypy, unit tests, coverage gates), `integration` (Postgres/Timescale and Redis service containers) |
 | `security.yml` | every PR, push to `main`, weekly (Mon 06:00 UTC) | `bandit`, `pip-audit`, `gitleaks`, `trivy` (gateway, api, worker), `security-tests` |
+| `bench.yml` | nightly, push to `main`, manual | `micro` (pytest-benchmark), `load` (k6 dry run): job summary, artifacts, charts on `gh-pages` |
 | `system.yml` | push to `main`, and PRs labelled `system` | `system`: compose stack, system, functional and chaos tests |
 
 Caching: uv's cache via `setup-uv`; Docker layers via the GitHub Actions cache (one scope per service image).
@@ -59,3 +60,16 @@ would wait forever on unlabelled PRs. It runs on every push to `main`. Label a P
 touches the compose stack, Dockerfiles or anything the stack tests cover.
 
 Check names appear exactly as listed once each workflow has run at least once.
+
+## Benchmarks
+
+- `make bench-micro` and `make bench-load` (after `make bench-up`) are for quick local checks.
+- `make bench-checkpoint PHASE=<n>` produces the **numbers of record** on your machine: it runs
+  everything, enforces the budgets in `benchmarks/budgets.yaml`, writes
+  `benchmarks/checkpoints/P<n>.json` (results, raw data, `env.json`) and regenerates
+  `BENCHMARKS.md`. Commit both.
+- `bench.yml` only tracks trends on hosted runners. It comments on a commit at +20% and fails at
+  +50% against the previous run, and reports (but does not enforce) the absolute budgets.
+- Charts: `https://<owner>.github.io/<repo>/bench/micro/`, `.../bench/load/`,
+  `.../bench/load-throughput/`. One-time setup: after the first `bench.yml` run on `main` has
+  created the `gh-pages` branch, enable Settings → Pages → Deploy from branch `gh-pages` / `/ (root)`.

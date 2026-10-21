@@ -1,9 +1,12 @@
 .PHONY: help sync lint format typecheck security-scan bandit pip-audit \
 	test-unit test-integration test-system test-functional test-e2e test-chaos \
 	test-security test-web test-all bench-micro bench-load bench-soak \
-	bench-checkpoint traceability coverage
+	bench-checkpoint bench-up bench-down traceability coverage
 
 PYTEST = uv run pytest
+BENCH_DIR = build/bench
+COMPOSE_TEST = docker compose -p jarvis-test --profile test -f deploy/docker-compose.yml \
+	-f deploy/docker-compose.test.yml --env-file deploy/.env.example
 
 help:
 	@grep -E '^[a-z-]+:' Makefile | cut -d: -f1 | tr '\n' ' '; echo
@@ -59,16 +62,31 @@ test-web:
 test-all: test-unit test-integration test-system test-functional test-e2e test-web
 
 bench-micro:
-	@echo "placeholder: benchmark infrastructure arrives in M0.6"
+	mkdir -p $(BENCH_DIR)
+	$(PYTEST) -m perf packages/core/tests/bench --benchmark-json=$(BENCH_DIR)/micro.json -q
+	uv run python scripts/bench/micro_results.py $(BENCH_DIR)/micro.json --results $(BENCH_DIR)/results.json
 
+# Needs the mock upstream running: `make bench-up`.
 bench-load:
-	@echo "placeholder: benchmark infrastructure arrives in M0.6"
+	mkdir -p $(BENCH_DIR)/k6
+	scripts/bench/run_k6.sh tests/load/scenarios/dry_run.js $(BENCH_DIR)/k6/dry_run.json
+	uv run python scripts/bench/k6_to_gab.py $(BENCH_DIR)/k6/dry_run.json --prefix mock_direct \
+		--smaller $(BENCH_DIR)/load-smaller.json --bigger $(BENCH_DIR)/load-bigger.json \
+		--results $(BENCH_DIR)/results.json
+
+bench-up:
+	$(COMPOSE_TEST) up -d --build --wait mock-upstream
+
+bench-down:
+	$(COMPOSE_TEST) down -v --remove-orphans
 
 bench-soak:
 	@echo "placeholder: benchmark infrastructure arrives in M0.6"
 
+# Numbers of record, run locally on a documented machine: make bench-checkpoint PHASE=0
 bench-checkpoint:
-	@echo "placeholder: benchmark infrastructure arrives in M0.6"
+	@test -n "$(PHASE)" || { echo "usage: make bench-checkpoint PHASE=<0-7>"; exit 2; }
+	scripts/bench/run_checkpoint.sh $(PHASE)
 
 # Set COMPLETED_PHASE=<n> (done at each checkpoint) to fail on uncovered requirements of phases <= n.
 COMPLETED_PHASE ?=
