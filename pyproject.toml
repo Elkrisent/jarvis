@@ -1,0 +1,101 @@
+[project]
+name = "jarvis"
+version = "0.0.0"
+description = "JARVIS — API reliability gateway and incident analysis."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest==8.3.5",
+    "pytest-asyncio==0.26.0",
+    "pytest-cov==6.1.1",
+    "hypothesis==6.131.15",
+    "ruff==0.11.8",
+    "mypy==1.15.0",
+    "pre-commit==4.2.0",
+    "jarvis-core",
+    "jarvis-gateway",
+    "jarvis-api",
+    "jarvis-worker",
+    "jarvis-mock-upstream",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["packages/core", "services/*", "tools/mock_upstream"]
+
+[tool.uv.sources]
+jarvis-core = { workspace = true }
+jarvis-gateway = { workspace = true }
+jarvis-api = { workspace = true }
+jarvis-worker = { workspace = true }
+jarvis-mock-upstream = { workspace = true }
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["web"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "C4", "RUF", "PT"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_unused_configs = true
+files = [
+    "packages/core/src",
+    "services/gateway/src",
+    "services/api/src",
+    "services/worker/src",
+    "tools/mock_upstream/src",
+    "conftest.py",
+]
+
+[[tool.mypy.overrides]]
+module = ["jarvis_core.*", "jarvis_core", "jarvis_gateway.*", "jarvis_gateway"]
+strict = true
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-ra --strict-markers --strict-config --import-mode=importlib"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+pytester_example_dir = "tests/meta"
+testpaths = [
+    "packages/core/tests",
+    "services/gateway/tests",
+    "services/api/tests",
+    "services/worker/tests",
+    "tools/mock_upstream/tests",
+    "tests",
+]
+markers = [
+    "unit: isolated test of one function/class with fakes for I/O",
+    "integration: module against real Redis/Postgres or another module",
+    "system: whole stack in compose, black-box",
+    "functional: verifies spec requirements (REQ-IDs)",
+    "e2e: user-story acceptance flows",
+    "chaos: behavior under Redis/Postgres/worker/upstream failure",
+    "security: SSRF, secret leakage, auth, vulnerabilities",
+    "perf: latency/throughput/overhead benchmarks",
+    "slow: long-running test",
+    "req(id): links a test to a requirement ID such as REQ-4.7-3",
+]
+
+[tool.coverage.run]
+branch = true
+source = [
+    "packages/core/src",
+    "services/gateway/src",
+    "services/api/src",
+    "services/worker/src",
+    "tools/mock_upstream/src",
+]
+
+[tool.coverage.report]
+show_missing = true
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError"]
