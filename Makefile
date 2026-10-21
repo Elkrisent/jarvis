@@ -60,8 +60,13 @@ bench-soak:
 bench-checkpoint:
 	@echo "placeholder: benchmark infrastructure arrives in M0.6"
 
+# Set COMPLETED_PHASE=<n> (done at each checkpoint) to fail on uncovered requirements of phases <= n.
+COMPLETED_PHASE ?=
+
 traceability:
-	@echo "placeholder: scripts/traceability.py arrives in M0.2"
+	$(PYTEST) -m unit -q --junit-xml=build/junit.xml
+	uv run python scripts/traceability.py --junit build/junit.xml \
+		$(if $(COMPLETED_PHASE),--completed-phase $(COMPLETED_PHASE))
 
 coverage:
 	$(PYTEST) -m unit --cov --cov-report=term-missing --cov-report=xml

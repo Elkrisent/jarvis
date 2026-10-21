@@ -10,7 +10,7 @@ Phase 0: Foundations
 
 ## Current Module
 
-M0.2: Core package: models, interfaces, errors, requirements (not started)
+M0.2: Core package: models, interfaces, errors, requirements (implemented on `feat/m0.2-core-package`, PR pending)
 
 ## Completed
 
@@ -20,11 +20,11 @@ M0.2: Core package: models, interfaces, errors, requirements (not started)
 
 ## In Progress
 
-Nothing.
+M0.2 on branch `feat/m0.2-core-package`: all build items and tests written; local lint, typecheck, 173 unit tests and coverage (core 99%) pass. Awaiting PR, CI and merge before marking complete.
 
 ## Next
 
-Start M0.2 on branch `feat/m0.2-core-package` (see IMPLEMENTATION.md M0.2): Pydantic `ApiDependency` models with cross-field validation, request object and `AuthContext`, core interfaces with in-memory implementations (including `Clock`/`Random`), `JarvisError` hierarchy, `docs/requirements.md` with REQ-IDs, `scripts/traceability.py`. Write tests first for logic.
+Open the M0.2 PR, get CI green, and merge it. Then start M0.3 (compose skeleton and health) on `feat/m0.3-compose-health`.
 
 ## Blockers / Questions
 
@@ -32,7 +32,7 @@ None.
 
 ## Resume Point
 
-Start M0.2 from `IMPLEMENTATION.md`. Do not begin M0.3 until the M0.2 Definition of Done is satisfied.
+Finish M0.2: open PR, wait for green CI, user merges, then record M0.2 complete. Do not begin M0.3 until then.
 
 ## Last Updated
 
