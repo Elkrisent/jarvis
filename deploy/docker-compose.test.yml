@@ -1,0 +1,11 @@
+# Test override: publishes service ports on loopback so tests can reach them.
+# Compose profiles cannot change an existing service's ports, so this is an override file.
+# The mock upstream joins here in M0.5.
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml --env-file .env.example up -d --wait
+services:
+  gateway:
+    ports: ["127.0.0.1:18080:8080"]
+  api:
+    ports: ["127.0.0.1:18081:8080"]
+  worker:
+    ports: ["127.0.0.1:18082:8080"]

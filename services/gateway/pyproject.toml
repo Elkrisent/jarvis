@@ -3,7 +3,12 @@ name = "jarvis-gateway"
 version = "0.0.0"
 description = "JARVIS gateway (data plane)."
 requires-python = ">=3.12"
-dependencies = ["jarvis-core"]
+dependencies = [
+    "fastapi==0.115.12",
+    "jarvis-core",
+    "uvicorn==0.34.2",
+    "uvloop==0.21.0",
+]
 
 [build-system]
 requires = ["hatchling==1.27.0"]

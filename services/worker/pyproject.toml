@@ -3,7 +3,11 @@ name = "jarvis-worker"
 version = "0.0.0"
 description = "JARVIS worker (telemetry, analytics, AI)."
 requires-python = ">=3.12"
-dependencies = ["jarvis-core"]
+dependencies = [
+    "fastapi==0.115.12",
+    "jarvis-core",
+    "uvicorn==0.34.2",
+]
 
 [build-system]
 requires = ["hatchling==1.27.0"]

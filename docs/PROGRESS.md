@@ -10,7 +10,7 @@ Phase 0: Foundations
 
 ## Current Module
 
-M0.3: Compose skeleton and health (not started)
+M0.3: Compose skeleton and health (implemented on `feat/m0.3-compose-health`, PR pending)
 
 ## Completed
 
@@ -22,11 +22,11 @@ M0.3: Compose skeleton and health (not started)
 
 ## In Progress
 
-Nothing.
+M0.3 on branch `feat/m0.3-compose-health`: apps, Dockerfile, compose (default, dev, test override), `.env.example`, system/chaos/security tests written. Verified locally against a real Docker stack: 196 unit tests, 4 system, 1 chaos, 10 security tests pass; lint, mypy clean. Awaiting PR, CI and merge. CI does not run the stack tests until M0.4.
 
 ## Next
 
-Start M0.3 on `feat/m0.3-compose-health` (see IMPLEMENTATION.md M0.3): minimal FastAPI apps for gateway, api and worker with `/healthz` and `/readyz`, multi-stage non-root Dockerfiles, `deploy/docker-compose.yml` (+ dev override and `test` profile), health checks, documented `.env.example`; system, chaos and security tests.
+Open the M0.3 PR and merge it. Then start M0.4 (CI workflows) on `feat/m0.4-ci-workflows`; it must add the system and security workflows that run the stack tests.
 
 ## Blockers / Questions
 
@@ -34,7 +34,7 @@ None.
 
 ## Resume Point
 
-Start M0.3 from `IMPLEMENTATION.md`. Note: M0.3 adds FastAPI and Docker, so confirm pinned versions before adding dependencies. Do not begin M0.4 until the M0.3 Definition of Done is satisfied.
+Finish M0.3: PR, green CI, user merges, then record M0.3 complete. Do not begin M0.4 until then.
 
 ## Last Updated
 

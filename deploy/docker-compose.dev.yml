@@ -1,0 +1,21 @@
+# Development override: hot reload from source, ports published on loopback only.
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+x-dev: &dev
+  command: ["sh", "-c", "exec uvicorn --factory \"$$APP_MODULE\" --host 0.0.0.0 --port 8080 --reload --reload-dir /src"]
+
+services:
+  gateway:
+    <<: *dev
+    ports: ["127.0.0.1:8080:8080"]
+    environment: {PYTHONPATH: /src/core:/src/gateway}
+    volumes: ["../packages/core/src:/src/core:ro", "../services/gateway/src:/src/gateway:ro"]
+  api:
+    <<: *dev
+    ports: ["127.0.0.1:8081:8080"]
+    environment: {PYTHONPATH: /src/core:/src/api}
+    volumes: ["../packages/core/src:/src/core:ro", "../services/api/src:/src/api:ro"]
+  worker:
+    <<: *dev
+    ports: ["127.0.0.1:8082:8080"]
+    environment: {PYTHONPATH: /src/core:/src/worker}
+    volumes: ["../packages/core/src:/src/core:ro", "../services/worker/src:/src/worker:ro"]
