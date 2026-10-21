@@ -2,15 +2,15 @@
 
 ## Status
 
-Phase 0 in progress. M0.1–M0.6 complete (all Phase 0 modules) and merged to `main`.
+Phase 0 (Foundations) complete: M0.1–M0.6 merged, Checkpoint 0 passed, pre-release `v0.0.0` published. Waiting for the user's approval to start Phase 1.
 
 ## Current Phase
 
-Phase 0: Foundations
+Phase 0: Foundations (complete). Phase 1: Proxy (not started).
 
 ## Current Module
 
-Phase 0 modules done; Checkpoint 0 report awaiting approval
+None active. Next is M1.1 (Phase 1), once approved.
 
 ## Completed
 
@@ -27,16 +27,18 @@ Phase 0 modules done; Checkpoint 0 report awaiting approval
   * Verified: all checks green on PR #10 (including `system` and `integration`).
 * M0.6 Benchmark infrastructure (PR #11, merge commit `4763024`): `benchmarks/budgets.yaml` (SPEC §13), pytest-benchmark micro-benchmark, k6 config + dry run, `scripts/bench/` tooling (k6 converter, overhead, budget checker, env.json, docker stats sampler, checkpoint writer), `make bench-*`, `bench.yml`, `BENCHMARKS.md`, `benchmarks/checkpoints/P0.json`.
   * Verified: 62 script tests; `make bench-checkpoint PHASE=0` run locally end to end; `bench.yml` green on `main` (run 39575593691); `gh-pages` created and Pages enabled by the user (https://elkrisent.github.io/jarvis/); `bench/micro`, `bench/load` and `bench/load-throughput` serve data points (e.g. mock_direct_p50 3.3 ms, 2,899 req/s on the hosted runner).
+* Checkpoint 0 (PR #13, merge commit `0ef369e`, tag `v0.0.0` pre-release with `P0.json` attached): report in `docs/checkpoints/P0-foundations.md`. All three acceptance stories automated in `tests/e2e/test_checkpoint_0.py`; `make traceability COMPLETED_PHASE=0 TRACE_MARKERS="not perf"` passes (30/246 requirements covered, all `pass`); budgets in scope met (idle footprint 210 MB vs 1536 MB).
+  * Verified: 317 unit, 9 integration, 7 system, 4 e2e, 1 chaos, 13 security tests; `ci`, `system`, `security` and `bench` all green on `0ef369e`. The user also ran the report's "try it yourself" commands on their machine: all passed.
 
 ## In Progress
 
-Checkpoint 0 on branch `chore/checkpoint-0`: all Part D steps 1-6 done and verified (317 unit, 9 integration, 7 system, 4 e2e, 1 chaos, 13 security tests pass; coverage gates met; `make bench-checkpoint PHASE=0` run; traceability gate for phase 0 passes with 30/246 covered; report in `docs/checkpoints/P0-foundations.md`). Step 7 (tag `v0.0.0` pre-release) happens after this PR is merged.
+Nothing.
 
 ## Next
 
-1. User merges the checkpoint PR.
-2. Claude creates the `v0.0.0` pre-release on the merge commit (report as notes, `P0.json` attached).
-3. Claude posts the summary and STOPS. User approves before Phase 1 (M1.1) starts; apply any feedback as a follow-up PR first.
+1. User approves Phase 1 (apply any feedback on the checkpoint as a follow-up PR first).
+2. Start M1.1 (config repositories and Alembic migrations) on `feat/m1.1-<slug>`; read IMPLEMENTATION.md M1.1 and the SPEC sections it cites first.
+3. M1.1 is the first module with real Postgres code, so the `integration` job and its service containers start doing real work. Remember to check `make test-integration` still fails when a test fails.
 
 ## Blockers / Questions
 
@@ -44,7 +46,7 @@ None.
 
 ## Resume Point
 
-Checkpoint 0 is done pending merge and the release tag. Do not begin Phase 1 (M1.1) until the user approves.
+Wait for the user's go-ahead for Phase 1. Then start M1.1 from `IMPLEMENTATION.md`. Do not begin M1.2 until the M1.1 Definition of Done is satisfied.
 
 ## Last Updated
 
