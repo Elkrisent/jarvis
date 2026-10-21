@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 0 in progress. M0.1 and M0.2 complete and merged to `main`.
+Phase 0 in progress. M0.1, M0.2 and M0.3 complete and merged to `main`.
 
 ## Current Phase
 
@@ -10,7 +10,7 @@ Phase 0: Foundations
 
 ## Current Module
 
-M0.3: Compose skeleton and health (implemented on `feat/m0.3-compose-health`, PR pending)
+M0.4: CI workflows (not started)
 
 ## Completed
 
@@ -19,14 +19,16 @@ M0.3: Compose skeleton and health (implemented on `feat/m0.3-compose-health`, PR
   * Verified: local lint/typecheck/unit tests/coverage/pre-commit clean (7 tests passed); CI `python` job green on PR #1.
 * M0.2 Core package (PR #3, merge commit `d251688`): `ApiDependency` Pydantic models with cross-field validation, `NormalizedRequest`/`AuthContext`, `JarvisError` hierarchy (`JV_*` codes with HTTP statuses), `Clock`/`Random` with fakes, eight core interfaces with in-memory implementations and reusable contract suites, `docs/requirements.md` (246 REQ-IDs), `scripts/traceability.py` + `make traceability`.
   * Verified: 173 unit tests pass, `jarvis_core` coverage 99%, lint/mypy/pre-commit clean; CI green on PR #3. 22 of 246 requirements have tests so far (gate not yet enforced).
+* M0.3 Compose skeleton and health (PR #5, merge commit `c00280c`): FastAPI apps for gateway/api/worker with `/healthz` and `/readyz` (ok/degraded/unavailable, shared logic in `jarvis_core.health`), multi-stage non-root Dockerfile, `deploy/docker-compose.yml` + dev and test overrides, documented `.env.example`, system/chaos/security tests, Makefile targets wired.
+  * Verified locally on a real Docker stack: 196 unit, 4 system, 1 chaos, 10 security tests pass; lint/mypy clean; CI `python` job green on PR #5. CI does not yet run the stack tests (M0.4).
 
 ## In Progress
 
-M0.3 on branch `feat/m0.3-compose-health`: apps, Dockerfile, compose (default, dev, test override), `.env.example`, system/chaos/security tests written. Verified locally against a real Docker stack: 196 unit tests, 4 system, 1 chaos, 10 security tests pass; lint, mypy clean. Awaiting PR, CI and merge. CI does not run the stack tests until M0.4.
+Nothing.
 
 ## Next
 
-Open the M0.3 PR and merge it. Then start M0.4 (CI workflows) on `feat/m0.4-ci-workflows`; it must add the system and security workflows that run the stack tests.
+Start M0.4 on `feat/m0.4-ci-workflows` (see IMPLEMENTATION.md M0.4): extend `ci.yml` (integration with Postgres/Redis service containers, coverage gates, job summary), add `system.yml` (stack, functional, chaos tests) and `security.yml` (bandit, pip-audit, gitleaks, trivy), caching, and `docs/contributing.md` with branch-protection settings for you to apply. Proving the gate blocks needs a deliberately failing PR.
 
 ## Blockers / Questions
 
@@ -34,7 +36,7 @@ None.
 
 ## Resume Point
 
-Finish M0.3: PR, green CI, user merges, then record M0.3 complete. Do not begin M0.4 until then.
+Start M0.4 from `IMPLEMENTATION.md`. Do not begin M0.5 until the M0.4 Definition of Done is satisfied.
 
 ## Last Updated
 
