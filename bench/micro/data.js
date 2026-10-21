@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792574229808,
+  "lastUpdate": 1792575985363,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Micro benchmarks": [
@@ -31,6 +31,37 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 2.8548086472652334e-7",
             "extra": "mean: 1.1819468299351303 usec\nrounds: 36750"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "8f8d301ff583793ebeb86302535e16cc63f4e27e",
+          "message": "Merge pull request #12 from Elkrisent/docs/progress-m0.6-complete\n\ndocs: record M0.6 complete",
+          "timestamp": "2026-10-21T15:15:54+05:30",
+          "tree_id": "346f330c4d61ff3af443cb7b1df591d2b4f83405",
+          "url": "https://github.com/Elkrisent/jarvis/commit/8f8d301ff583793ebeb86302535e16cc63f4e27e"
+        },
+        "date": 1792575984588,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "packages/core/tests/bench/test_bench_token_bucket_take.py::test_bench_token_bucket_take",
+            "value": 839280.7275706312,
+            "unit": "iter/sec",
+            "range": "stddev: 2.6478128124691927e-7",
+            "extra": "mean: 1.191496441118795 usec\nrounds: 37511"
           }
         ]
       }
