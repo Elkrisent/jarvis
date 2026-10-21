@@ -29,7 +29,7 @@ test-integration:
 	@echo "placeholder: no integration suites yet (arrives with M0.3/M1.1)"
 
 test-system:
-	@echo "placeholder: no system suites yet (arrives with M0.3)"
+	$(PYTEST) -m system
 
 test-functional:
 	@echo "placeholder: no functional suites yet (arrives with M0.2)"
@@ -38,10 +38,10 @@ test-e2e:
 	@echo "placeholder: no e2e suites yet"
 
 test-chaos:
-	@echo "placeholder: no chaos suites yet"
+	$(PYTEST) -m chaos
 
 test-security:
-	@echo "placeholder: no security suites yet"
+	$(PYTEST) -m security
 
 test-web:
 	@echo "placeholder: web/ arrives in M4.7"

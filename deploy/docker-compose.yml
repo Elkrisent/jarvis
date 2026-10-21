@@ -1,0 +1,73 @@
+# Default profile: gateway, api, worker, postgres, redis.
+# Caddy + web arrive with the dashboard (M4.x); prometheus/grafana with the monitoring profile.
+name: jarvis
+
+x-service: &service
+  restart: unless-stopped
+  read_only: true
+  tmpfs: [/tmp]
+  security_opt: ["no-new-privileges:true"]
+  environment: &service-env
+    REDIS_URL: redis://redis:6379/0
+    DATABASE_URL: postgresql://${POSTGRES_USER:-jarvis}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}@postgres:5432/${POSTGRES_DB:-jarvis}
+
+services:
+  postgres:
+    image: timescale/timescaledb:2.17.2-pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-jarvis}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+      POSTGRES_DB: ${POSTGRES_DB:-jarvis}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  redis:
+    image: redis:7.4.1-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "no", "--save", ""]  # ephemeral by design
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  gateway:
+    <<: *service
+    image: jarvis-gateway:dev
+    build: {context: .., dockerfile: deploy/docker/service.Dockerfile, args: {SERVICE: gateway}}
+    deploy: {replicas: "${GATEWAY_REPLICAS:-1}"}
+    depends_on:
+      redis: {condition: service_healthy}
+    healthcheck: &healthcheck
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/readyz', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  api:
+    <<: *service
+    image: jarvis-api:dev
+    build: {context: .., dockerfile: deploy/docker/service.Dockerfile, args: {SERVICE: api}}
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    healthcheck: *healthcheck
+
+  worker:
+    <<: *service
+    image: jarvis-worker:dev
+    build: {context: .., dockerfile: deploy/docker/service.Dockerfile, args: {SERVICE: worker}}
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    healthcheck: *healthcheck
+
+volumes:
+  postgres-data:
