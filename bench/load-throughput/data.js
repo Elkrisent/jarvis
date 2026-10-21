@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792576031172,
+  "lastUpdate": 1792578188641,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Load (throughput)": [
@@ -57,6 +57,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "mock_direct_rps",
             "value": 2134.259180063159,
+            "unit": "req/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0ef369eb9fb577bd81120e87ebbd2e605f76b53f",
+          "message": "Merge pull request #13 from Elkrisent/chore/checkpoint-0\n\nchore: Checkpoint 0 (Foundations)",
+          "timestamp": "2026-10-21T15:51:52+05:30",
+          "tree_id": "0702c431bc1abba59dbb4f8ea0bc2e85d3e9531e",
+          "url": "https://github.com/Elkrisent/jarvis/commit/0ef369eb9fb577bd81120e87ebbd2e605f76b53f"
+        },
+        "date": 1792578188192,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "mock_direct_rps",
+            "value": 4281.2867094972,
             "unit": "req/s"
           }
         ]
