@@ -1,0 +1,16 @@
+[project]
+name = "jarvis-gateway"
+version = "0.0.0"
+description = "JARVIS gateway (data plane)."
+requires-python = ">=3.12"
+dependencies = ["jarvis-core"]
+
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/jarvis_gateway"]
+
+[tool.uv.sources]
+jarvis-core = { workspace = true }

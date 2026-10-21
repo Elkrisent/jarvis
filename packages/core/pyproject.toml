@@ -1,0 +1,13 @@
+[project]
+name = "jarvis-core"
+version = "0.0.0"
+description = "JARVIS shared models, interfaces and errors."
+requires-python = ">=3.12"
+dependencies = []
+
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/jarvis_core"]

@@ -1,0 +1,16 @@
+[project]
+name = "jarvis-worker"
+version = "0.0.0"
+description = "JARVIS worker (telemetry, analytics, AI)."
+requires-python = ">=3.12"
+dependencies = ["jarvis-core"]
+
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/jarvis_worker"]
+
+[tool.uv.sources]
+jarvis-core = { workspace = true }
