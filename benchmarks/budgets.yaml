@@ -1,0 +1,45 @@
+# Performance budgets, derived from SPEC §13 (and §15.1, IMPLEMENTATION §C.4).
+# Metric names are the ones used in IMPLEMENTATION §C.1 and in every log and chart.
+# direction: lower = value must be <= budget, higher = value must be >= budget.
+# Absolute budgets are reported on GitHub-hosted runners and enforced in `make bench-checkpoint`.
+# A null budget means the metric is tracked for trend only.
+metrics:
+  # --- Gateway overhead (SPEC §13), measured as proxied minus direct latency
+  gw_overhead_hit_p50:   {unit: ms, direction: lower, budget: 2,  spec: "§13 gateway overhead, cache hit"}
+  gw_overhead_hit_p99:   {unit: ms, direction: lower, budget: 10, spec: "§13 gateway overhead, cache hit"}
+  gw_overhead_miss_p50:  {unit: ms, direction: lower, budget: 3,  spec: "§13 gateway overhead, upstream call"}
+  gw_overhead_miss_p99:  {unit: ms, direction: lower, budget: 15, spec: "§13 gateway overhead, upstream call"}
+  gw_throughput_hit_rps: {unit: req/s, direction: higher, budget: 2000, spec: "§13 throughput, 2 vCPU, cache-hit-heavy"}
+  gw_redis_roundtrips_pre:  {unit: count/req, direction: lower, budget: 2, spec: "§13 hot-path I/O"}
+  gw_redis_roundtrips_post: {unit: count/req, direction: lower, budget: 1, spec: "§13 hot-path I/O"}
+  config_propagation_p99:   {unit: ms, direction: lower, budget: 1000, spec: "§13 config propagation"}
+  circuit_open_fail_fast_p99: {unit: ms, direction: lower, budget: null, spec: "tracked (M2.4)"}
+  dedup_upstream_calls_per_1000_identical: {unit: count, direction: lower, budget: null, spec: "tracked (REQ-4.10-6 expects 1)"}
+  upstream_calls_avoided_ratio: {unit: "%", direction: higher, budget: null, spec: "tracked"}
+  # --- Soak and footprint
+  gw_rss_slope_mb_per_hour:     {unit: MB/h, direction: lower, budget: null, spec: "tracked (M3.x)"}
+  worker_rss_slope_mb_per_hour: {unit: MB/h, direction: lower, budget: null, spec: "tracked (M3.x)"}
+  stack_idle_rss_total_mb:      {unit: MB, direction: lower, budget: 1536, spec: "§15.1 default profile idle <= 1.5 GB"}
+  # --- Telemetry and dashboard API
+  ingest_lag_p99:          {unit: ms, direction: lower, budget: 2000, spec: "§13 live updates <= 2 s event to screen"}
+  telemetry_dropped_ratio: {unit: "%", direction: lower, budget: null, spec: "tracked"}
+  dash_api_p95_overview:   {unit: ms, direction: lower, budget: 200, spec: "§13 dashboard API p95"}
+  dash_api_p95_api_detail: {unit: ms, direction: lower, budget: 200, spec: "§13 dashboard API p95"}
+  # --- Web (Lighthouse CI)
+  web_tti:        {unit: ms, direction: lower, budget: 1500, spec: "§13 dashboard first load"}
+  web_lcp:        {unit: ms, direction: lower, budget: null, spec: "tracked"}
+  web_bundle_js_kb: {unit: KB, direction: lower, budget: null, spec: "set when the web app exists"}
+  web_perf_score: {unit: score, direction: higher, budget: 90, spec: "IMPLEMENTATION §C.4"}
+  web_a11y_score: {unit: score, direction: higher, budget: 95, spec: "IMPLEMENTATION §C.4"}
+  # --- Micro benchmarks (pytest-benchmark), trend only
+  token_bucket_take:      {unit: us/op, direction: lower, budget: null, spec: "micro"}
+  cache_key_build:        {unit: us/op, direction: lower, budget: null, spec: "micro (M3.x)"}
+  route_template_match:   {unit: us/op, direction: lower, budget: null, spec: "micro (M1.x)"}
+  backoff_compute:        {unit: us/op, direction: lower, budget: null, spec: "micro (M2.x)"}
+  redaction_apply:        {unit: us/op, direction: lower, budget: null, spec: "micro (M6.x)"}
+  evidence_bundle_build:  {unit: us/op, direction: lower, budget: null, spec: "micro (M6.x)"}
+  # --- Dry run against the mock upstream (M0.6): proves the pipeline, no budget
+  mock_direct_p50: {unit: ms, direction: lower, budget: null, spec: "M0.6 dry run"}
+  mock_direct_p95: {unit: ms, direction: lower, budget: null, spec: "M0.6 dry run"}
+  mock_direct_p99: {unit: ms, direction: lower, budget: null, spec: "M0.6 dry run"}
+  mock_direct_rps: {unit: req/s, direction: higher, budget: null, spec: "M0.6 dry run"}

@@ -22,6 +22,9 @@ make test-unit      # unit tests
 make coverage       # unit tests + per-package coverage gates
 make traceability   # requirement -> test report in docs/traceability.md
 make security-scan  # bandit + pip-audit
+make bench-micro    # pytest-benchmark micro-benchmarks
+make bench-up bench-load bench-down   # k6 dry run against the mock upstream (needs Docker)
+make bench-checkpoint PHASE=0         # numbers of record -> BENCHMARKS.md (local machine)
 pre-commit install  # enable git hooks
 ```
 
@@ -51,6 +54,8 @@ tools/mock_upstream/  controllable mock upstream (test asset, see its README)
 web/                  React app (not started)
 deploy/               compose files (default, dev, test), Dockerfile, env example
 tests/                meta, e2e, load, ai_eval
-scripts/              traceability generator
+scripts/              traceability, coverage gate, benchmark tooling (scripts/bench)
+benchmarks/           budgets.yaml (from SPEC §13) and per-phase checkpoint snapshots
+tests/load/           k6 scripts and shared config
 docs/                 spec, implementation guide, requirements, contributing, ADRs
 ```

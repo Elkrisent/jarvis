@@ -1,0 +1,166 @@
+name: bench
+
+# Trend benchmarks on hosted runners: relative changes only. Absolute numbers of record come
+# from `make bench-checkpoint` on a documented machine (IMPLEMENTATION §C.3).
+# Jobs soak-short, web and ai-eval join when their suites exist (M3.x, M4.x, M6.x).
+on:
+  schedule:
+    - cron: "0 3 * * *" # nightly
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write # push results to the gh-pages branch
+
+jobs:
+  prepare-pages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create the gh-pages branch if it does not exist
+        run: |
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null; then
+            echo "gh-pages already exists"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan gh-pages
+          git rm -rf . >/dev/null
+          cat > index.html <<'HTML'
+          <!doctype html>
+          <meta charset="utf-8">
+          <title>JARVIS benchmarks</title>
+          <h1>JARVIS benchmarks</h1>
+          <ul>
+            <li><a href="bench/micro/">Micro benchmarks</a></li>
+            <li><a href="bench/load/">Load: latency</a></li>
+            <li><a href="bench/load-throughput/">Load: throughput</a></li>
+          </ul>
+          HTML
+          touch .nojekyll
+          git add index.html .nojekyll
+          git commit -m "chore: create gh-pages for benchmark charts"
+          git push origin gh-pages
+
+  micro:
+    needs: prepare-pages
+    runs-on: ubuntu-latest
+    concurrency: {group: gh-pages-push, cancel-in-progress: false}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.11.17"
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --locked
+      - run: make bench-micro
+      - run: uv run python scripts/bench/write_env.py --out build/bench/env.json --profile micro
+      - name: Baseline from main
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          id=$(gh run list --workflow bench.yml --branch main --status success --limit 1 --json databaseId -q '.[0].databaseId')
+          [ -n "$id" ] && gh run download "$id" -n bench-micro -D build/baseline
+          true
+      - name: Job summary (value, budget, change vs main)
+        run: uv run python scripts/bench/check_budgets.py build/bench/results.json --baseline build/baseline/results.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bench-micro
+          path: |
+            build/bench/micro.json
+            build/bench/results.json
+            build/bench/env.json
+          retention-days: 90
+      - name: Chart on gh-pages
+        uses: benchmark-action/github-action-benchmark@4322e5726e6334590d251fc4f92bec0efafc45dc # v1.22.2
+        with:
+          name: Micro benchmarks
+          tool: pytest
+          output-file-path: build/bench/micro.json
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: bench/micro
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          comment-on-alert: true
+          alert-threshold: "120%"
+          fail-on-alert: true
+          fail-threshold: "150%"
+          summary-always: true
+
+  load:
+    needs: prepare-pages
+    runs-on: ubuntu-latest
+    concurrency: {group: gh-pages-push, cancel-in-progress: false}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.11.17"
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --locked
+      - name: Start the mock upstream
+        run: make bench-up
+      - name: k6 dry run against the mock upstream
+        run: make bench-load
+      - run: uv run python scripts/bench/write_env.py --out build/bench/env.json --profile mock-only --param k6_duration=10s --param k6_vus=10
+      - name: Baseline from main
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          id=$(gh run list --workflow bench.yml --branch main --status success --limit 1 --json databaseId -q '.[0].databaseId')
+          [ -n "$id" ] && gh run download "$id" -n bench-load -D build/baseline
+          true
+      - name: Job summary (value, budget, change vs main)
+        run: uv run python scripts/bench/check_budgets.py build/bench/results.json --baseline build/baseline/results.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bench-load
+          path: |
+            build/bench/k6/
+            build/bench/load-smaller.json
+            build/bench/load-bigger.json
+            build/bench/results.json
+            build/bench/env.json
+          retention-days: 90
+      - name: Chart latency on gh-pages
+        uses: benchmark-action/github-action-benchmark@4322e5726e6334590d251fc4f92bec0efafc45dc # v1.22.2
+        with:
+          name: Load (latency)
+          tool: customSmallerIsBetter
+          output-file-path: build/bench/load-smaller.json
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: bench/load
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          comment-on-alert: true
+          alert-threshold: "120%"
+          fail-on-alert: true
+          fail-threshold: "150%"
+          summary-always: true
+      - name: Chart throughput on gh-pages
+        uses: benchmark-action/github-action-benchmark@4322e5726e6334590d251fc4f92bec0efafc45dc # v1.22.2
+        with:
+          name: Load (throughput)
+          tool: customBiggerIsBetter
+          output-file-path: build/bench/load-bigger.json
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: bench/load-throughput
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          comment-on-alert: true
+          alert-threshold: "120%"
+          fail-on-alert: true
+          fail-threshold: "150%"
+          summary-always: true
+      - name: Stop the stack
+        if: always()
+        run: make bench-down

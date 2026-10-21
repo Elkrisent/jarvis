@@ -23,6 +23,8 @@ dev = [
     "httpx==0.28.1",
     "bandit==1.8.3",
     "pip-audit==2.9.0",
+    "pytest-benchmark==5.1.0",
+    "pyyaml==6.0.2",
 ]
 
 [tool.uv]
@@ -65,7 +67,7 @@ strict = true
 [tool.pytest.ini_options]
 minversion = "8.0"
 addopts = "-ra --strict-markers --strict-config --import-mode=importlib"
-pythonpath = ["."]
+pythonpath = [".", "scripts/bench"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 pytester_example_dir = "tests/meta"
