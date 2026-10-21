@@ -70,13 +70,13 @@ jobs:
           load: true
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
-      - uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
-        with:
-          image-ref: jarvis-${{ matrix.service }}:dev
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "1"
-          format: table
+      - name: Trivy scan (HIGH/CRITICAL with a fix available)
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$HOME/.cache/trivy:/root/.cache/trivy" \
+            aquasec/trivy:0.58.0 image \
+            --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 \
+            jarvis-${{ matrix.service }}:dev
 
   security-tests:
     runs-on: ubuntu-latest
