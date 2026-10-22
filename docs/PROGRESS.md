@@ -47,20 +47,22 @@ None active. Next is M1.3 Minimal management API.
 
 ## In Progress
 
-Nothing.
+M1.3 Minimal management API: planned, no code yet. Branch `feat/m1.3-management-api` holds only the plan, `docs/superpowers/plans/2026-10-23-m1-3-management-api.md`. The user chose subagent-driven execution (`superpowers:subagent-driven-development`).
 
 ## Next
 
-1. Start M1.3 Minimal management API on `feat/m1.3-<slug>` (IMPLEMENTATION.md M1.3, SPEC §10). It is where the master key is first loaded at api startup (fail fast if `JARVIS_MASTER_KEY` is missing or invalid) and where provider secrets first go through `PostgresSecretStore`.
+1. Execute the M1.3 plan task by task (Tasks 1 to 7) with subagent-driven development, on `feat/m1.3-management-api`.
+2. Open the M1.3 PR, get `ci` and `security` green (and `system` on main after merge), then record the merge SHA here in a docs PR.
+3. Then M1.4 Gateway config loader.
 
 ## Blockers / Questions
 
-None.
+Plan decisions the user has not explicitly confirmed (they were told about them and chose the execution method without objecting): the api refuses to start without `JARVIS_MASTER_KEY` and `JARVIS_ADMIN_TOKEN`; key = `jv_live_` + base62 of 32 random bytes; new pinned dependency `redis==8.0.1`. Confirm or adjust at the start of the next session.
 
 ## Resume Point
 
-Start M1.3 from `IMPLEMENTATION.md`.
+Read the M1.3 plan, confirm the open decisions above with the user, then start Task 1 via `superpowers:subagent-driven-development`. Nothing is implemented yet.
 
 ## Last Updated
 
-2026-10-22
+2026-10-23
