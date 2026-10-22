@@ -11,7 +11,6 @@ from alembic import command
 from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
-from alembic.util.exc import CommandError
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, make_url
 from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
@@ -58,15 +57,8 @@ def _needs_upgrade(connection: Connection) -> bool:
     """False when the database is at head, or ahead of this code (a newer instance migrated it)."""
     script = ScriptDirectory.from_config(_config(connection))
     current = MigrationContext.configure(connection).get_current_revision()
-    if current is None:
-        return True
-    if current == script.get_current_head():
-        return False
-    try:
-        script.get_revision(current)
-    except CommandError:
-        return False
-    return True
+    known = {revision.revision for revision in script.walk_revisions()}
+    return current is None or (current != script.get_current_head() and current in known)
 
 
 @asynccontextmanager
