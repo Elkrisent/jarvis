@@ -9,9 +9,8 @@ must do and [`docs/IMPLEMENTATION.md`](docs/IMPLEMENTATION.md) for the build ord
 Phase 1 (Proxy) in progress. The repository scaffold, tooling, CI, benchmark infrastructure and the
 `jarvis_core` package (config models, errors, interfaces with in-memory implementations) exist, and
 the `api` service now owns the Postgres schema: Alembic migrations run at startup under an advisory
-lock, and `PostgresConfigSource` stores API policies as immutable versions. M1.2 (AES-256-GCM `SecretBox`,
-Postgres secret store and the `jarvis rotate-master-key` command) is implemented on its branch and
-awaiting merge; the api does not use the master key at startup yet. The compose stack runs
+lock, and `PostgresConfigSource` stores API policies as immutable versions. M1.2 added the AES-256-GCM `SecretBox`,
+the Postgres secret store and the `jarvis rotate-master-key` command; the api does not use the master key at startup yet. The compose stack runs
 healthy but the gateway does not proxy anything yet. Current state: [`docs/PROGRESS.md`](docs/PROGRESS.md).
 
 ## Development setup
