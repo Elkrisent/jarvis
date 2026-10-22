@@ -94,6 +94,9 @@ markers = [
 
 [tool.coverage.run]
 branch = true
+# SQLAlchemy's asyncio layer runs sync code in greenlets; without this, lines after a
+# ``run_sync`` await are traced incorrectly and show up as missed branches.
+concurrency = ["greenlet", "thread"]
 source = [
     "packages/core/src",
     "services/gateway/src",

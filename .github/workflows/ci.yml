@@ -28,25 +28,7 @@ jobs:
       - run: uv sync --locked
       - run: make lint
       - run: make typecheck
-      - name: Baseline coverage from main
-        if: github.event_name == 'pull_request'
-        continue-on-error: true
-        run: |
-          mkdir -p build
-          git fetch --depth=1 origin main
-          git worktree add ../base FETCH_HEAD
-          cd ../base
-          uv sync --locked
-          uv run pytest -m unit -q --cov --cov-report=json:$GITHUB_WORKSPACE/build/baseline.json
-      - name: Unit tests and coverage gates
-        run: make coverage BASELINE=$([ -f build/baseline.json ] && echo build/baseline.json)
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: coverage
-          path: build/coverage.json
-          if-no-files-found: ignore
-          retention-days: 90
+      - run: make test-unit
 
   integration:
     runs-on: ubuntu-latest
@@ -79,3 +61,23 @@ jobs:
       - run: uv python install 3.12
       - run: uv sync --locked
       - run: make test-integration
+      # Coverage counts unit and integration tests, so it runs where the service containers are.
+      - name: Baseline coverage from main
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        run: |
+          mkdir -p build
+          git fetch --depth=1 origin main
+          git worktree add ../base FETCH_HEAD
+          cd ../base
+          uv sync --locked
+          uv run pytest -m "unit or integration" -q --cov --cov-report=json:$GITHUB_WORKSPACE/build/baseline.json
+      - name: Coverage gates
+        run: make coverage BASELINE=$([ -f build/baseline.json ] && echo build/baseline.json)
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: build/coverage.json
+          if-no-files-found: ignore
+          retention-days: 90

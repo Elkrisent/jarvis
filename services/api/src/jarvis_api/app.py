@@ -1,9 +1,11 @@
-"""Minimal api app: liveness and readiness only (M0.3)."""
+"""Control-plane api app: liveness, readiness and migrations at startup (M0.3, M1.1)."""
 
 from __future__ import annotations
 
+import logging
 import os
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Response
 from jarvis_core.health import (
@@ -13,6 +15,8 @@ from jarvis_core.health import (
     evaluate_readiness,
     tcp_reachable,
 )
+
+from jarvis_api.db.migrate import run_migrations
 
 
 def dependencies_from_env(env: dict[str, str] | None = None) -> list[Dependency]:
@@ -25,8 +29,19 @@ def dependencies_from_env(env: dict[str, str] | None = None) -> list[Dependency]
     return deps
 
 
-def create_app(dependencies: Sequence[Dependency] = (), probe: Probe = tcp_reachable) -> FastAPI:
-    app = FastAPI(title="jarvis-api")
+def create_app(
+    dependencies: Sequence[Dependency] = (),
+    probe: Probe = tcp_reachable,
+    migrate: Callable[[], Awaitable[None]] | None = None,
+) -> FastAPI:
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        # A failed migration raises here, so the app never serves against a stale schema.
+        if migrate is not None:
+            await migrate()
+        yield
+
+    app = FastAPI(title="jarvis-api", lifespan=lifespan)
 
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:
@@ -41,5 +56,21 @@ def create_app(dependencies: Sequence[Dependency] = (), probe: Probe = tcp_reach
     return app
 
 
+def _configure_logging() -> None:
+    """Show this package's INFO logs; uvicorn only sets up handlers for its own loggers."""
+    logger = logging.getLogger("jarvis_api")
+    logger.setLevel(logging.INFO)
+    if not logger.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(levelname)s:     %(name)s: %(message)s"))
+        logger.addHandler(handler)
+
+
 def create_app_from_env() -> FastAPI:
-    return create_app(dependencies_from_env())
+    _configure_logging()
+    database_url = os.environ["DATABASE_URL"]
+
+    async def migrate() -> None:
+        await run_migrations(database_url)
+
+    return create_app(dependencies_from_env(), migrate=migrate)
