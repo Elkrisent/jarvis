@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
@@ -55,7 +56,18 @@ def create_app(
     return app
 
 
+def _configure_logging() -> None:
+    """Show this package's INFO logs; uvicorn only sets up handlers for its own loggers."""
+    logger = logging.getLogger("jarvis_api")
+    logger.setLevel(logging.INFO)
+    if not logger.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(levelname)s:     %(name)s: %(message)s"))
+        logger.addHandler(handler)
+
+
 def create_app_from_env() -> FastAPI:
+    _configure_logging()
     database_url = os.environ["DATABASE_URL"]
 
     async def migrate() -> None:

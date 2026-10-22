@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 import pytest
 from fastapi.testclient import TestClient
 from jarvis_api import app as app_module
@@ -36,6 +38,21 @@ def test_a_failed_migration_stops_startup() -> None:
 def test_app_without_a_migrate_hook_still_starts() -> None:
     with TestClient(create_app()) as client:
         assert client.get("/healthz").status_code == 200
+
+
+def test_env_app_makes_its_info_logs_visible(monkeypatch: pytest.MonkeyPatch) -> None:
+    # uvicorn configures only its own loggers, so without this the migration log lines never show.
+    monkeypatch.setenv("DATABASE_URL", DATABASE_URL)
+    monkeypatch.setenv("REDIS_URL", "redis://redis:6379/0")
+    logger = logging.getLogger("jarvis_api")
+    monkeypatch.setattr(logger, "handlers", [])
+    monkeypatch.setattr(logger, "level", logging.NOTSET)
+
+    create_app_from_env()
+    create_app_from_env()
+
+    assert logger.level == logging.INFO
+    assert len(logger.handlers) == 1
 
 
 def test_env_app_migrates_the_configured_database(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -14,6 +15,8 @@ from alembic.util.exc import CommandError
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, make_url
 from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
+
+logger = logging.getLogger(__name__)
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
@@ -96,12 +99,18 @@ async def run_migrations(url: str, on_upgrade: OnUpgrade | None = None) -> None:
     to apply migrations.
     """
     async with _connection(url) as connection:
+        # Blocks while another instance migrates, so say so: the app serves nothing meanwhile.
+        logger.info("waiting for the migration lock")
         await connection.execute(text("SELECT pg_advisory_lock(:key)"), {"key": MIGRATION_LOCK_KEY})
         try:
             if await connection.run_sync(_needs_upgrade):
+                logger.info("applying migrations")
                 if on_upgrade is not None:
                     await on_upgrade()
                 await connection.run_sync(_upgrade, "head")
+                logger.info("migrations complete")
+            else:
+                logger.info("database already up to date")
             await connection.commit()
         finally:
             await connection.rollback()
