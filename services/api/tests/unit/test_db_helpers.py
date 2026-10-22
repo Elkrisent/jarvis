@@ -28,6 +28,16 @@ def test_to_async_url_keeps_a_percent_encoded_password_intact() -> None:
     assert url == "postgresql+asyncpg://jarvis:p%40ss%2Fword@db/jarvis"
 
 
+def test_to_async_url_translates_the_libpq_sslmode_option_to_asyncpgs_ssl() -> None:
+    url = to_async_url("postgresql://u:p@db/jarvis?sslmode=require&application_name=jarvis")
+    assert url == "postgresql+asyncpg://u:p@db/jarvis?application_name=jarvis&ssl=require"
+
+
+def test_to_async_url_leaves_an_explicit_ssl_option_alone() -> None:
+    url = to_async_url("postgresql://u:p@db/jarvis?ssl=verify-full")
+    assert url == "postgresql+asyncpg://u:p@db/jarvis?ssl=verify-full"
+
+
 def test_api_config_round_trips_through_json() -> None:
     api = ApiDependency(
         slug="weather",
