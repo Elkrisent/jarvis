@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792676737454,
+  "lastUpdate": 1792683699653,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Load (throughput)": [
@@ -115,6 +115,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "mock_direct_rps",
             "value": 2889.0008984297947,
+            "unit": "req/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "7b9e3c6603653150f7c8d6a92e574475ac23ab5a",
+          "message": "Merge pull request #16 from Elkrisent/feat/m1.2-secretbox\n\nfeat: M1.2 SecretBox (AES-256-GCM, rotation CLI)",
+          "timestamp": "2026-10-22T21:10:09+05:30",
+          "tree_id": "7ebd45bd4e0f0e73236346d5fe2bfb948ed90f3a",
+          "url": "https://github.com/Elkrisent/jarvis/commit/7b9e3c6603653150f7c8d6a92e574475ac23ab5a"
+        },
+        "date": 1792683699043,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "mock_direct_rps",
+            "value": 2873.109775842596,
             "unit": "req/s"
           }
         ]
