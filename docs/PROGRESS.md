@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 is implemented on `feat/m1.2-secretbox` and awaiting PR review and merge.
+Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`).
 
 ## Current Phase
 
@@ -10,7 +10,7 @@ Phase 1: Proxy.
 
 ## Current Module
 
-M1.2 SecretBox (implemented, not yet merged).
+None active. Next is M1.3 Minimal management API.
 
 ## Completed
 
@@ -36,23 +36,22 @@ M1.2 SecretBox (implemented, not yet merged).
   * Coverage now counts unit + integration tests (user-approved, thresholds unchanged): the `coverage` step moved from the `python` job to the `integration` job in `ci.yml`, `make coverage` runs `-m "unit or integration"`, and the meta test and `docs/contributing.md` were updated to match.
   * Verified locally against Postgres 16: 373 unit + integration tests pass; ruff, mypy, bandit and pip-audit clean; `services/api` coverage 100% line / 100% branch against 85% / 75% gates, no drop vs `main` (checked locally with a `main` baseline); migrations upgrade, downgrade and upgrade again; two and five concurrent startups apply migrations exactly once (the lock test fails without the lock); a model-vs-migration parity test passes; `make test-integration` exits non-zero when tests fail.
   * Verified with Docker: all 399 non-perf tests pass (unit, integration, system, e2e, chaos, security), including the new `tests/system/test_api_migrations.py`, which shows the compose `api` migrates the stack's Postgres at startup. CI for PR #15 was green before merge.
+* M1.2 SecretBox (PR #16, merge commit `7b9e3c6`):
+  * `jarvis_core.secretbox`: `AesGcmSecretBox` (AES-256-GCM, random 96-bit nonce per record, key ID `k_<16 hex of sha256(key)>` stored with the record and authenticated as associated data), strict `parse_master_key` (32 bytes, standard base64, whitespace tolerated, errors never echo the input), `secret_box_from_env` for `JARVIS_MASTER_KEY`. New pinned dep `cryptography==50.0.2`.
+  * `jarvis_api.db.secrets.PostgresSecretStore` and `jarvis rotate-master-key` (`jarvis_api.cli`): one transaction under `LOCK TABLE secrets`, every row validated before any is rewritten, all-or-nothing; keys come only from `JARVIS_MASTER_KEY` / `JARVIS_NEW_MASTER_KEY`, output shows key IDs and counts only; exit codes 0/1/2.
+  * Docs and config: `docs/secrets-rotation.md` (runbook), `deploy/.env.example`, README, `docs/contributing.md`, `docs/traceability.md` (35/246 covered; REQ-11.2-1 to -4 linked).
+  * Not wired yet: the api does not load the master key at startup (planned for M1.3, where secrets are first used).
+  * Code-review fixes (all applied, each with a regression test): the CLI no longer reports every database error as a connection failure; each record is bound to its row id as associated data (a ciphertext copied to another row fails authentication; `AesGcmSecretBox.seal/open` take an optional `context`, the `SecretBox` protocol is unchanged; `PostgresSecretStore.add(box, plaintext)` / `reveal(box, id)`); key ID widened to 64 bits (`k_` + 16 hex); `to_async_url` maps `connect_timeout` and rejects other libpq-only options by name instead of failing at connect time (M1.1 code); `run_migrations` cleanup no longer masks the real error; `create_app_from_env` reports a missing `DATABASE_URL` clearly; the CI `integration` job runs the integration tests once (via `make coverage`) instead of twice plus a baseline.
+  * Verified locally against Postgres 16 and Redis 7: ruff, mypy, bandit and pip-audit clean; 438 unit + integration tests pass under `make coverage` (core 100% line / 99% branch, api 100% / 100%, gates met); 468 non-perf tests pass in the traceability run; Checkpoint 0 rows still `pass`. Regression tests were checked to fail without their fix (migration cleanup).
+  * `ci` and `security` checks were green on PR #16 before merge; `system` is skipped on PRs without the label (check it on `main`).
+
 ## In Progress
 
-M1.2 SecretBox, branch `feat/m1.2-secretbox` (not yet pushed or merged):
-
-* `jarvis_core.secretbox`: `AesGcmSecretBox` (AES-256-GCM, random 96-bit nonce per record, key ID `k_<8 hex of sha256(key)>` stored with the record and authenticated as associated data), strict `parse_master_key` (32 bytes, standard base64, whitespace tolerated, errors never echo the input), `secret_box_from_env` for `JARVIS_MASTER_KEY`. New pinned dep `cryptography==50.0.2`.
-* `jarvis_api.db.secrets.PostgresSecretStore` and `jarvis rotate-master-key` (`jarvis_api.cli`): one transaction under `LOCK TABLE secrets`, every row validated before any is rewritten, all-or-nothing; keys come only from `JARVIS_MASTER_KEY` / `JARVIS_NEW_MASTER_KEY`, output shows key IDs and counts only; exit codes 0/1/2.
-* Docs and config: `docs/secrets-rotation.md` (runbook), `deploy/.env.example`, README, `docs/contributing.md`, `docs/traceability.md` (35/246 covered; REQ-11.2-1 to -4 linked).
-* Not wired yet: the api does not load the master key at startup (planned for M1.3, where secrets are first used).
-* Code-review fixes (all applied, each with a regression test): the CLI no longer reports every database error as a connection failure; each record is bound to its row id as associated data (a ciphertext copied to another row fails authentication; `AesGcmSecretBox.seal/open` take an optional `context`, the `SecretBox` protocol is unchanged; `PostgresSecretStore.add(box, plaintext)` / `reveal(box, id)`); key ID widened to 64 bits (`k_` + 16 hex); `to_async_url` maps `connect_timeout` and rejects other libpq-only options by name instead of failing at connect time (M1.1 code); `run_migrations` cleanup no longer masks the real error; `create_app_from_env` reports a missing `DATABASE_URL` clearly; the CI `integration` job runs the integration tests once (via `make coverage`) instead of twice plus a baseline.
-* Verified locally against Postgres 16 and Redis 7: ruff, mypy, bandit and pip-audit clean; 438 unit + integration tests pass under `make coverage` (core 100% line / 99% branch, api 100% / 100%, gates met); 468 non-perf tests pass in the traceability run; Checkpoint 0 rows still `pass`. Regression tests were checked to fail without their fix (migration cleanup).
-* Not yet verified: the CI run itself, and the compose-stack system tests (the stack was not started for this run).
+Nothing.
 
 ## Next
 
-1. Push `feat/m1.2-secretbox`, open the M1.2 PR, and get `ci`, `system` and `security` green.
-2. After merge, record the merge SHA here (separate docs PR).
-3. Then start M1.3 Minimal management API (IMPLEMENTATION.md M1.3, SPEC §10); it is where the master key is first loaded at api startup.
+1. Start M1.3 Minimal management API on `feat/m1.3-<slug>` (IMPLEMENTATION.md M1.3, SPEC §10). It is where the master key is first loaded at api startup (fail fast if `JARVIS_MASTER_KEY` is missing or invalid) and where provider secrets first go through `PostgresSecretStore`.
 
 ## Blockers / Questions
 
@@ -60,7 +59,7 @@ None.
 
 ## Resume Point
 
-Open and shepherd the M1.2 PR from `feat/m1.2-secretbox`. Once it is merged and recorded, start M1.3.
+Start M1.3 from `IMPLEMENTATION.md`.
 
 ## Last Updated
 
