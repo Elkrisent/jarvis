@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792586628387,
+  "lastUpdate": 1792657074869,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Micro benchmarks": [
@@ -124,6 +124,35 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 2.8640009808097683e-7",
             "extra": "mean: 1.1890454275199613 usec\nrounds: 36872"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent",
+            "email": "144690045+Elkrisent@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "a0a41ffd2f7cbe0120b1cc21a8cc83c69f7922f4",
+          "message": "Merge pull request #14 from Elkrisent/docs/progress-checkpoint-0-done\n\ndocs: record Checkpoint 0 done",
+          "timestamp": "2026-10-21T12:43:15Z",
+          "url": "https://github.com/Elkrisent/jarvis/commit/a0a41ffd2f7cbe0120b1cc21a8cc83c69f7922f4"
+        },
+        "date": 1792657073999,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "packages/core/tests/bench/test_bench_token_bucket_take.py::test_bench_token_bucket_take",
+            "value": 840387.5641304331,
+            "unit": "iter/sec",
+            "range": "stddev: 3.2587738700450103e-7",
+            "extra": "mean: 1.189927174891886 usec\nrounds: 36416"
           }
         ]
       }
