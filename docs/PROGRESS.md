@@ -2,15 +2,15 @@
 
 ## Status
 
-Phase 0 (Foundations) complete: M0.1–M0.6 merged, Checkpoint 0 passed, pre-release `v0.0.0` published. Waiting for the user's approval to start Phase 1.
+Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 started with the user's approval: M1.1 is implemented on `feat/m1.1-db-schema-migrations` and awaiting PR review and merge.
 
 ## Current Phase
 
-Phase 0: Foundations (complete). Phase 1: Proxy (not started).
+Phase 1: Proxy.
 
 ## Current Module
 
-None active. Next is M1.1 (Phase 1), once approved.
+M1.1 Database schema and migrations (implemented, not yet merged).
 
 ## Completed
 
@@ -32,13 +32,19 @@ None active. Next is M1.1 (Phase 1), once approved.
 
 ## In Progress
 
-Nothing.
+M1.1 Database schema and migrations, branch `feat/m1.1-db-schema-migrations` (not yet pushed or merged):
+
+* `jarvis_api.db`: SQLAlchemy 2.0 models and a hand-written reversible Alembic migration `0001` for `users`, `projects`, `jarvis_keys`, `api_dependencies`, `api_policy_versions`, `secrets`, `settings`, `audit_log`; `run_migrations` under a Postgres advisory lock, called from the api lifespan (a failed migration stops startup); `PostgresConfigSource` behind `ConfigSource` (text prefixed IDs; every `put` is a new immutable policy version).
+* Pinned new deps in `services/api`: sqlalchemy 2.1.6, alembic 1.20.1, asyncpg 0.32.0. `.gitignore` now ignores `.claude/worktrees/`.
+* Coverage now counts unit + integration tests (user-approved, thresholds unchanged): the `coverage` step moved from the `python` job to the `integration` job in `ci.yml`, `make coverage` runs `-m "unit or integration"`, and the meta test and `docs/contributing.md` were updated to match.
+* Verified locally against Postgres 16: 364 tests pass (unit + integration); ruff, mypy, bandit and pip-audit clean; `services/api` coverage 100% line / 87.5% branch against 85% / 75% gates; migrations upgrade, downgrade and upgrade again; two and five concurrent startups apply migrations exactly once (the lock test fails without the lock); a model-vs-migration parity test passes; `make test-integration` exits non-zero when tests fail.
+* Not yet verified: the CI run itself, and the compose `api` container running migrations at startup (no Docker in the dev shell; `system.yml` covers it once the PR is open). `docs/traceability.md` was not regenerated (it needs Docker for the Checkpoint 0 rows); REQ-12-2 is linked in the test markers.
 
 ## Next
 
-1. User approves Phase 1 (apply any feedback on the checkpoint as a follow-up PR first).
-2. Start M1.1 (config repositories and Alembic migrations) on `feat/m1.1-<slug>`; read IMPLEMENTATION.md M1.1 and the SPEC sections it cites first.
-3. M1.1 is the first module with real Postgres code, so the `integration` job and its service containers start doing real work. Remember to check `make test-integration` still fails when a test fails.
+1. Push the branch, open the M1.1 PR, and get `ci`, `system` and `security` green (watch the `integration` job: it now runs the coverage gates, and the compose `api` container now migrates on boot).
+2. After merge, record the merge SHA here (separate docs PR, as for earlier modules).
+3. Then start M1.2 SecretBox (IMPLEMENTATION.md M1.2, SPEC §11.2); do not begin it until M1.1's Definition of Done is confirmed by CI.
 
 ## Blockers / Questions
 
@@ -46,8 +52,8 @@ None.
 
 ## Resume Point
 
-Wait for the user's go-ahead for Phase 1. Then start M1.1 from `IMPLEMENTATION.md`. Do not begin M1.2 until the M1.1 Definition of Done is satisfied.
+Open and shepherd the M1.1 PR from `feat/m1.1-db-schema-migrations`. Once it is merged and recorded, start M1.2.
 
 ## Last Updated
 
-2026-10-21
+2026-10-22

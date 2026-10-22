@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 from jarvis_api.app import create_app_from_env
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.req("REQ-12-2")]
 
 
 async def test_api_startup_migrates_an_empty_database(

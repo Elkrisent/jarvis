@@ -6,9 +6,11 @@ must do and [`docs/IMPLEMENTATION.md`](docs/IMPLEMENTATION.md) for the build ord
 
 ## Status
 
-Phase 0 (Foundations) in progress. The repository scaffold, tooling and the `jarvis_core`
-package (config models, errors, interfaces with in-memory implementations) exist;
-the compose stack runs healthy but the gateway does not proxy anything yet. Current state: [`docs/PROGRESS.md`](docs/PROGRESS.md).
+Phase 1 (Proxy) in progress. The repository scaffold, tooling, CI, benchmark infrastructure and the
+`jarvis_core` package (config models, errors, interfaces with in-memory implementations) exist, and
+the `api` service now owns the Postgres schema: Alembic migrations run at startup under an advisory
+lock, and `PostgresConfigSource` stores API policies as immutable versions. The compose stack runs
+healthy but the gateway does not proxy anything yet. Current state: [`docs/PROGRESS.md`](docs/PROGRESS.md).
 
 ## Development setup
 
@@ -19,7 +21,8 @@ make sync           # install the uv workspace
 make lint           # ruff check + format check
 make typecheck      # mypy (strict on packages/core and services/gateway)
 make test-unit      # unit tests
-make coverage       # unit tests + per-package coverage gates
+make test-integration  # needs Postgres and Redis: set DATABASE_URL, REDIS_URL (see docs/contributing.md)
+make coverage       # unit + integration tests + per-package coverage gates (same requirements)
 make traceability   # requirement -> test report in docs/traceability.md
 make security-scan  # bandit + pip-audit
 make bench-micro    # pytest-benchmark micro-benchmarks

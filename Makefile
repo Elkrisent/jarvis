@@ -98,10 +98,11 @@ traceability:
 	uv run python scripts/traceability.py --junit build/junit.xml \
 		$(if $(COMPLETED_PHASE),--completed-phase $(COMPLETED_PHASE))
 
-# Unit-test coverage, then the per-package gates (B.3). Pass BASELINE=<coverage.json from main> to
-# also fail on a drop of more than 1 point.
+# Unit + integration coverage (needs DATABASE_URL and REDIS_URL, see deploy/.env.example), then the
+# per-package gates (B.3). Pass BASELINE=<coverage.json from main> to also fail on a drop of more
+# than 1 point.
 BASELINE ?=
 
 coverage:
-	$(PYTEST) -m unit --cov --cov-report=term-missing --cov-report=json:build/coverage.json
+	$(PYTEST) -m "unit or integration" --cov --cov-report=term-missing --cov-report=json:build/coverage.json
 	uv run python scripts/coverage_gate.py --report build/coverage.json $(if $(BASELINE),--baseline $(BASELINE))

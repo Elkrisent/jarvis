@@ -5,7 +5,7 @@ import asyncio
 import pytest
 from jarvis_api.db.migrate import run_migrations
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.req("REQ-12-2")]
 
 
 class UpgradeCounter:

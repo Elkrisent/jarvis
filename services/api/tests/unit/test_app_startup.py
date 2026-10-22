@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from jarvis_api import app as app_module
 from jarvis_api.app import create_app, create_app_from_env
 
-pytestmark = pytest.mark.unit
+pytestmark = [pytest.mark.unit, pytest.mark.req("REQ-12-2")]
 
 DATABASE_URL = "postgresql://u:p@postgres:5432/jarvis"
 

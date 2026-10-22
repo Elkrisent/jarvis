@@ -12,7 +12,7 @@ Local checks, the same targets CI calls:
 
 ```bash
 make lint typecheck       # ruff, mypy
-make coverage             # unit tests + per-package coverage gates
+make coverage             # unit + integration tests + per-package gates (needs Postgres and Redis)
 make security-scan        # bandit + pip-audit
 make test-integration     # needs Postgres and Redis (REDIS_URL, DATABASE_URL)
 make test-system test-functional test-chaos test-security   # need Docker
@@ -22,7 +22,7 @@ make test-system test-functional test-chaos test-security   # need Docker
 
 | Workflow | Runs on | Jobs |
 |----------|---------|------|
-| `ci.yml` | every PR, push to `main` | `python` (lint, mypy, unit tests, coverage gates), `integration` (Postgres/Timescale and Redis service containers) |
+| `ci.yml` | every PR, push to `main` | `python` (lint, mypy, unit tests), `integration` (Postgres/Timescale and Redis service containers: integration tests and coverage gates) |
 | `security.yml` | every PR, push to `main`, weekly (Mon 06:00 UTC) | `bandit`, `pip-audit`, `gitleaks`, `trivy` (gateway, api, worker), `security-tests` |
 | `bench.yml` | nightly, push to `main`, manual | `micro` (pytest-benchmark), `load` (k6 dry run): job summary, artifacts, charts on `gh-pages` |
 | `system.yml` | push to `main`, and PRs labelled `system` | `system`: compose stack, system, functional and chaos tests |
@@ -31,8 +31,14 @@ Caching: uv's cache via `setup-uv`; Docker layers via the GitHub Actions cache (
 
 **Coverage gates** (`scripts/coverage_gate.py`): `packages/core` ≥ 95% line / 90% branch,
 `services/gateway` ≥ 90% / 85%, `services/api` and `services/worker` ≥ 85% / 75%. A PR also
-fails if line or branch coverage drops by more than 1 point against `main`. Results go to the
-job summary and the `coverage` artifact.
+fails if line or branch coverage drops by more than 1 point against `main`. Coverage counts unit
+and integration tests (database code can only be exercised against a real Postgres), so the gates
+run in the `integration` job. Results go to the job summary and the `coverage` artifact.
+
+Integration tests that need a database create and drop their own throwaway databases, so the
+`DATABASE_URL` role must be allowed to create databases. For a local Postgres:
+`CREATE ROLE jarvis_test LOGIN PASSWORD 'jarvis-test' CREATEDB;` and
+`export DATABASE_URL=postgresql://jarvis_test:jarvis-test@127.0.0.1:5432/postgres`.
 
 **Security gates:** bandit fails on medium severity or higher. pip-audit fails on any known
 vulnerability in the locked runtime and dev dependencies. trivy fails on HIGH/CRITICAL findings

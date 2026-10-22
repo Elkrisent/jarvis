@@ -94,9 +94,12 @@ def test_ci_runs_on_pull_requests_and_pushes_to_main() -> None:
 def test_ci_runs_lint_typecheck_unit_and_integration_tests() -> None:
     ci = _workflow("ci.yml")
     python_job = _run_steps(ci, "python")
-    for target in ("make lint", "make typecheck", "make coverage"):
+    for target in ("make lint", "make typecheck", "make test-unit"):
         assert target in python_job
-    assert "make test-integration" in _run_steps(ci, "integration")
+    # Coverage counts integration tests too, so the gates run where the service containers are.
+    integration_job = _run_steps(ci, "integration")
+    for target in ("make test-integration", "make coverage"):
+        assert target in integration_job
 
 
 @pytest.mark.req("REQ-16.3-1")
