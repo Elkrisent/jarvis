@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792586671493,
+  "lastUpdate": 1792657045910,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Load (latency)": [
@@ -155,6 +155,43 @@ window.BENCHMARK_DATA = {
           {
             "name": "mock_direct_p99",
             "value": 6.694995000000006,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent",
+            "email": "144690045+Elkrisent@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "a0a41ffd2f7cbe0120b1cc21a8cc83c69f7922f4",
+          "message": "Merge pull request #14 from Elkrisent/docs/progress-checkpoint-0-done\n\ndocs: record Checkpoint 0 done",
+          "timestamp": "2026-10-21T12:43:15Z",
+          "url": "https://github.com/Elkrisent/jarvis/commit/a0a41ffd2f7cbe0120b1cc21a8cc83c69f7922f4"
+        },
+        "date": 1792657044988,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "mock_direct_p50",
+            "value": 5.429682,
+            "unit": "ms"
+          },
+          {
+            "name": "mock_direct_p95",
+            "value": 6.382488599999999,
+            "unit": "ms"
+          },
+          {
+            "name": "mock_direct_p99",
+            "value": 7.43570442,
             "unit": "ms"
           }
         ]
