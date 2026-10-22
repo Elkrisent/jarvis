@@ -4,8 +4,11 @@ version = "0.0.0"
 description = "JARVIS control plane API."
 requires-python = ">=3.12"
 dependencies = [
+    "alembic==1.20.1",
+    "asyncpg==0.32.0",
     "fastapi==0.156.5",
     "jarvis-core",
+    "sqlalchemy[asyncio]==2.1.6",
     "uvicorn==0.34.2",
 ]
 
