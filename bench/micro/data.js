@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792657074869,
+  "lastUpdate": 1792676764922,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Micro benchmarks": [
@@ -153,6 +153,37 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 3.2587738700450103e-7",
             "extra": "mean: 1.189927174891886 usec\nrounds: 36416"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "828922e9efa4b6c715f681cbf2f7d1a677014abd",
+          "message": "Merge pull request #15 from Elkrisent/feat/m1.1-db-schema-migrations\n\nfeat: database schema and migrations (M1.1)",
+          "timestamp": "2026-10-22T19:14:29+05:30",
+          "tree_id": "284b7b3b5ca80f20dfb0af98261a4551cf772537",
+          "url": "https://github.com/Elkrisent/jarvis/commit/828922e9efa4b6c715f681cbf2f7d1a677014abd"
+        },
+        "date": 1792676764305,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "packages/core/tests/bench/test_bench_token_bucket_take.py::test_bench_token_bucket_take",
+            "value": 726799.2372461419,
+            "unit": "iter/sec",
+            "range": "stddev: 2.3802403014551305e-7",
+            "extra": "mean: 1.3758957752749188 usec\nrounds: 44500"
           }
         ]
       }
