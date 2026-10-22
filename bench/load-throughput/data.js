@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792578188641,
+  "lastUpdate": 1792676737454,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Load (throughput)": [
@@ -86,6 +86,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "mock_direct_rps",
             "value": 4281.2867094972,
+            "unit": "req/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "828922e9efa4b6c715f681cbf2f7d1a677014abd",
+          "message": "Merge pull request #15 from Elkrisent/feat/m1.1-db-schema-migrations\n\nfeat: database schema and migrations (M1.1)",
+          "timestamp": "2026-10-22T19:14:29+05:30",
+          "tree_id": "284b7b3b5ca80f20dfb0af98261a4551cf772537",
+          "url": "https://github.com/Elkrisent/jarvis/commit/828922e9efa4b6c715f681cbf2f7d1a677014abd"
+        },
+        "date": 1792676736841,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "mock_direct_rps",
+            "value": 2889.0008984297947,
             "unit": "req/s"
           }
         ]
