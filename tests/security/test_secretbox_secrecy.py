@@ -25,17 +25,26 @@ def _key_forms(key: bytes) -> list[str]:
     ]
 
 
+# Rejected inputs: a tool must never echo back a malformed key a user supplied.
+BAD_SHORT = base64.b64encode(KEY[:16]).decode()
+BAD_SUFFIXED = base64.b64encode(KEY).decode() + "!"
+
+
+def _rejected_forms() -> list[str]:
+    return [BAD_SHORT, BAD_SUFFIXED, *_key_forms(KEY[:16])]
+
+
 def _assert_clean(text: str, key: bytes = KEY) -> None:
     assert PLAINTEXT not in text
     assert PLAINTEXT.encode().hex() not in text
-    for form in _key_forms(key):
+    for form in [*_key_forms(key), *_rejected_forms()]:
         assert form not in text
 
 
 @pytest.mark.req("REQ-11.2-4")
 def test_leak_checker_detects_each_form() -> None:
     # Guards against vacuous assertions: the checker must fire on every form it claims to cover.
-    for form in [PLAINTEXT, *_key_forms(KEY)]:
+    for form in [PLAINTEXT, *_key_forms(KEY), *_rejected_forms()]:
         with pytest.raises(AssertionError):
             _assert_clean(f"prefix {form} suffix")
 
@@ -57,7 +66,6 @@ def test_logs_never_contain_plaintext_or_key(caplog: pytest.LogCaptureFixture) -
     caplog.set_level(logging.DEBUG)
     box = AesGcmSecretBox(KEY)
     other = AesGcmSecretBox(OTHER_KEY)
-    bad_value = base64.b64encode(KEY[:16]).decode()
 
     sealed = box.seal(PLAINTEXT)
     assert box.open(sealed) == PLAINTEXT
@@ -70,7 +78,11 @@ def test_logs_never_contain_plaintext_or_key(caplog: pytest.LogCaptureFixture) -
     with pytest.raises(KeyError):
         other.open(sealed)
     with pytest.raises(MasterKeyError):
-        parse_master_key(bad_value)
+        parse_master_key(BAD_SHORT)
+    with pytest.raises(MasterKeyError):
+        parse_master_key(BAD_SUFFIXED)
+    with pytest.raises(MasterKeyError):
+        AesGcmSecretBox(KEY[:16])
 
     _assert_clean(caplog.text)
     _assert_clean(caplog.text, OTHER_KEY)
@@ -84,14 +96,13 @@ def test_exceptions_never_contain_plaintext_or_key() -> None:
     tampered = SealedSecret(
         sealed.key_id, sealed.nonce, bytes([sealed.ciphertext[0] ^ 1]) + sealed.ciphertext[1:]
     )
-    bad_value = base64.b64encode(KEY[:16]).decode()
 
     errors: list[Exception] = []
     for action in (
         lambda: box.open(tampered),
         lambda: other.open(sealed),
-        lambda: parse_master_key(bad_value),
-        lambda: parse_master_key(base64.b64encode(KEY).decode() + "!"),
+        lambda: parse_master_key(BAD_SHORT),
+        lambda: parse_master_key(BAD_SUFFIXED),
         lambda: AesGcmSecretBox(KEY[:16]),
     ):
         try:
