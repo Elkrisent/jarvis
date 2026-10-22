@@ -36,4 +36,4 @@ def test_api_applies_migrations_to_the_compose_postgres_at_startup() -> None:
         "-Atc",
         "SELECT tablename FROM pg_tables WHERE schemaname = 'public'",
     ).stdout
-    assert M1_1_TABLES <= set(out.split())
+    assert set(out.split()) >= M1_1_TABLES
