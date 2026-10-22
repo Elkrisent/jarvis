@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792676764922,
+  "lastUpdate": 1792683642686,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Micro benchmarks": [
@@ -184,6 +184,37 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 2.3802403014551305e-7",
             "extra": "mean: 1.3758957752749188 usec\nrounds: 44500"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "7b9e3c6603653150f7c8d6a92e574475ac23ab5a",
+          "message": "Merge pull request #16 from Elkrisent/feat/m1.2-secretbox\n\nfeat: M1.2 SecretBox (AES-256-GCM, rotation CLI)",
+          "timestamp": "2026-10-22T21:10:09+05:30",
+          "tree_id": "7ebd45bd4e0f0e73236346d5fe2bfb948ed90f3a",
+          "url": "https://github.com/Elkrisent/jarvis/commit/7b9e3c6603653150f7c8d6a92e574475ac23ab5a"
+        },
+        "date": 1792683642168,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "packages/core/tests/bench/test_bench_token_bucket_take.py::test_bench_token_bucket_take",
+            "value": 631655.7254221815,
+            "unit": "iter/sec",
+            "range": "stddev: 7.236197917143738e-7",
+            "extra": "mean: 1.583140878413834 usec\nrounds: 32127"
           }
         ]
       }
