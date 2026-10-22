@@ -39,7 +39,7 @@ async def engine(database_url: str) -> AsyncIterator[AsyncEngine]:
 
 async def _seed(engine: AsyncEngine, box: AesGcmSecretBox, count: int) -> list[str]:
     store = PostgresSecretStore(engine)
-    return [await store.add(box.seal(f"secret-{i}")) for i in range(count)]
+    return [await store.add(box, f"secret-{i}") for i in range(count)]
 
 
 async def test_rotation_via_main_reencrypts_and_reports(
@@ -56,11 +56,9 @@ async def test_rotation_via_main_reencrypts_and_reports(
     assert captured.err == ""
     store = PostgresSecretStore(engine)
     for i, secret_id in enumerate(ids):
-        sealed = await store.get(secret_id)
-        assert sealed is not None
-        assert new.open(sealed) == f"secret-{i}"
+        assert await store.reveal(new, secret_id) == f"secret-{i}"
         with pytest.raises(KeyError):
-            old.open(sealed)
+            await store.reveal(old, secret_id)
 
 
 async def test_rotation_aborts_with_exit_1_on_an_unknown_key_record(

@@ -5,7 +5,7 @@ import re
 import pytest
 from jarvis_api.db.config_source import api_from_config_json, config_json_from_api
 from jarvis_api.db.ids import new_id
-from jarvis_api.db.migrate import to_async_url
+from jarvis_api.db.migrate import UnsupportedUrlOption, to_async_url
 from jarvis_core.config import ApiDependency, Credential, Route
 
 pytestmark = pytest.mark.unit
@@ -29,8 +29,22 @@ def test_to_async_url_keeps_a_percent_encoded_password_intact() -> None:
 
 
 def test_to_async_url_translates_the_libpq_sslmode_option_to_asyncpgs_ssl() -> None:
-    url = to_async_url("postgresql://u:p@db/jarvis?sslmode=require&application_name=jarvis")
-    assert url == "postgresql+asyncpg://u:p@db/jarvis?application_name=jarvis&ssl=require"
+    url = to_async_url("postgresql://u:p@db/jarvis?sslmode=require")
+    assert url == "postgresql+asyncpg://u:p@db/jarvis?ssl=require"
+
+
+def test_to_async_url_translates_connect_timeout_to_asyncpgs_timeout() -> None:
+    url = to_async_url("postgresql://u:p@db/jarvis?connect_timeout=5")
+    assert url == "postgresql+asyncpg://u:p@db/jarvis?timeout=5"
+
+
+@pytest.mark.parametrize(
+    "option", ["application_name", "sslrootcert", "sslcert", "target_session_attrs"]
+)
+def test_to_async_url_rejects_libpq_options_asyncpg_would_choke_on(option: str) -> None:
+    with pytest.raises(UnsupportedUrlOption, match=option) as excinfo:
+        to_async_url(f"postgresql://u:p@db/jarvis?{option}=SENTINEL-VALUE")
+    assert "SENTINEL-VALUE" not in str(excinfo.value)
 
 
 def test_to_async_url_leaves_an_explicit_ssl_option_alone() -> None:

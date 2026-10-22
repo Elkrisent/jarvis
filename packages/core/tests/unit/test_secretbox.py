@@ -74,7 +74,7 @@ def test_a_box_cannot_open_another_keys_records() -> None:
 def test_key_id_is_derived_from_the_key() -> None:
     box = AesGcmSecretBox(KEY)
     assert box.key_id == key_id_for(KEY)
-    assert re.fullmatch(r"k_[0-9a-f]{8}", box.key_id)
+    assert re.fullmatch(r"k_[0-9a-f]{16}", box.key_id)
     assert AesGcmSecretBox(OTHER_KEY).key_id != box.key_id
     assert AesGcmSecretBox(KEY).key_id == box.key_id
 
@@ -163,3 +163,28 @@ def test_secret_box_from_env_defaults_to_os_environ(monkeypatch: pytest.MonkeyPa
 def test_secret_box_from_env_names_the_variable_when_missing() -> None:
     with pytest.raises(MasterKeyError, match="JARVIS_MASTER_KEY"):
         secret_box_from_env({})
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-11.2-2")
+def test_a_record_opens_only_under_the_context_it_was_sealed_with() -> None:
+    box = AesGcmSecretBox(KEY)
+    sealed = box.seal("s3cret", context="sec_a")
+
+    assert box.open(sealed, context="sec_a") == "s3cret"
+    for wrong in ("sec_b", ""):
+        with pytest.raises(ValueError, match="authentication"):
+            box.open(sealed, context=wrong)
+    with pytest.raises(ValueError, match="authentication"):
+        box.open(box.seal("s3cret"), context="sec_a")
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-11.2-2")
+def test_key_id_and_context_cannot_be_shifted_into_each_other() -> None:
+    box = AesGcmSecretBox(KEY)
+    sealed = box.seal("s3cret", context="x")
+    # ("k_..", "x") must not authenticate as a different split of the same bytes.
+    assert box._associated_data("ab", "c") != box._associated_data("a", "bc")
+    with pytest.raises(ValueError, match="authentication"):
+        box.open(sealed, context="x\0")

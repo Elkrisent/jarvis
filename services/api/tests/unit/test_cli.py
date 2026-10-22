@@ -120,7 +120,32 @@ def test_out_of_range_port_exits_1_with_one_line(capsys: pytest.CaptureFixture[s
     _assert_clean_failure(capsys, "pwRANGE")
 
 
-def test_unknown_query_option_exits_1_with_one_line(capsys: pytest.CaptureFixture[str]) -> None:
-    url = "postgresql://u:pwOPT@127.0.0.1:1/db?bogusopt=1"
-    assert main(["rotate-master-key"], env=_env(DATABASE_URL=url)) == 1
-    _assert_clean_failure(capsys, "pwOPT")
+def test_unsupported_query_option_message_names_the_option(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    url = "postgresql://u:pwOPT@127.0.0.1:1/db?sslrootcert=/secret/path.pem"
+    assert main(["rotate-master-key"], env=_env(DATABASE_URL=url)) == 2
+    err = capsys.readouterr().err
+    assert "sslrootcert" in err
+    assert "/secret/path.pem" not in err
+    assert "pwOPT" not in err
+
+
+def test_a_database_error_that_is_not_a_connection_failure_is_not_reported_as_one(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from jarvis_api import cli
+    from sqlalchemy.exc import ProgrammingError
+
+    async def refuse(*_args: object) -> int:
+        raise ProgrammingError("SELECT secret", {}, Exception('relation "secrets" pwDBERR'))
+
+    monkeypatch.setattr(cli, "_rotate", refuse)
+
+    assert main(["rotate-master-key"], env=_env()) == 1
+    err = capsys.readouterr().err
+    assert len(err.splitlines()) == 1
+    assert "could not connect" not in err
+    assert "ProgrammingError" in err
+    assert "migrated" in err
+    assert "pwDBERR" not in err

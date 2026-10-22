@@ -23,7 +23,9 @@ class MasterKeyError(ValueError):
 
 
 def key_id_for(key: bytes) -> str:
-    return "k_" + hashlib.sha256(key).hexdigest()[:8]
+    # 64 bits: rotation and ``open`` treat key-id equality as key identity, so a collision between
+    # two real keys must be negligible.
+    return "k_" + hashlib.sha256(key).hexdigest()[:16]
 
 
 def parse_master_key(value: str) -> bytes:
@@ -38,7 +40,12 @@ def parse_master_key(value: str) -> bytes:
 
 
 class AesGcmSecretBox:
-    """Seals secrets with AES-256-GCM; the key id is bound in as associated data."""
+    """Seals secrets with AES-256-GCM; the key id is bound in as associated data.
+
+    ``context`` (optional, e.g. the id of the row that holds the record) is bound in too, so a
+    sealed record copied to another row fails authentication. ``seal`` and ``open`` must be given
+    the same ``context``.
+    """
 
     def __init__(self, key: bytes) -> None:
         if len(key) != _KEY_BYTES:
@@ -53,16 +60,25 @@ class AesGcmSecretBox:
     def __repr__(self) -> str:
         return f"AesGcmSecretBox(key_id={self._key_id!r})"
 
-    def seal(self, plaintext: str) -> SealedSecret:
-        nonce = os.urandom(_NONCE_BYTES)
-        ciphertext = self._aead.encrypt(nonce, plaintext.encode(), self._key_id.encode())
-        return SealedSecret(self._key_id, nonce, ciphertext)
+    @staticmethod
+    def _associated_data(key_id: str, context: str) -> bytes:
+        # NUL cannot occur in a key id, so (key_id, context) pairs never collide.
+        return f"{key_id}\0{context}".encode()
 
-    def open(self, sealed: SealedSecret) -> str:
+    def seal(self, plaintext: str, context: str = "") -> SealedSecret:
+        nonce = os.urandom(_NONCE_BYTES)
+        data = self._associated_data(self._key_id, context)
+        return SealedSecret(
+            self._key_id, nonce, self._aead.encrypt(nonce, plaintext.encode(), data)
+        )
+
+    def open(self, sealed: SealedSecret, context: str = "") -> str:
         if sealed.key_id != self._key_id:
             raise KeyError(sealed.key_id)
         try:
-            data = self._aead.decrypt(sealed.nonce, sealed.ciphertext, sealed.key_id.encode())
+            data = self._aead.decrypt(
+                sealed.nonce, sealed.ciphertext, self._associated_data(sealed.key_id, context)
+            )
         except InvalidTag:
             raise ValueError("secret failed authentication") from None
         return data.decode()

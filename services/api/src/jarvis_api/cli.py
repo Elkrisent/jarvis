@@ -19,10 +19,10 @@ from jarvis_core.secretbox import (
     MasterKeyError,
     parse_master_key,
 )
-from sqlalchemy.exc import ArgumentError, SQLAlchemyError
+from sqlalchemy.exc import ArgumentError, InterfaceError, OperationalError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from jarvis_api.db.migrate import to_async_url
+from jarvis_api.db.migrate import UnsupportedUrlOption, to_async_url
 from jarvis_api.db.secrets import PostgresSecretStore, RotationError
 
 NEW_MASTER_KEY_ENV = "JARVIS_NEW_MASTER_KEY"
@@ -32,7 +32,7 @@ EXIT_OK = 0
 EXIT_RETRYABLE = 1
 EXIT_USAGE = 2
 
-_CONNECTION_ERRORS = (OSError, SQLAlchemyError)  # SQLAlchemy wraps asyncpg driver errors
+_CONNECTION_ERRORS = (OSError, OperationalError, InterfaceError)  # SQLAlchemy wraps driver errors
 
 
 class _Parser(argparse.ArgumentParser):
@@ -97,6 +97,8 @@ def _rotate_master_key(env: Mapping[str, str]) -> int:
 
     try:
         async_url = to_async_url(url)
+    except UnsupportedUrlOption as exc:
+        return _fail(f"{DATABASE_URL_ENV} is invalid: {exc}")
     except (ArgumentError, ValueError):
         return _fail(f"{DATABASE_URL_ENV} is invalid")
 
@@ -108,6 +110,14 @@ def _rotate_master_key(env: Mapping[str, str]) -> int:
     except _CONNECTION_ERRORS as exc:
         # Never print the exception text: it can include the database URL or password.
         print(f"could not connect to the database ({type(exc).__name__})", file=sys.stderr)
+        return EXIT_RETRYABLE
+    except SQLAlchemyError as exc:
+        # The database answered but refused: typically an unmigrated schema or missing privileges.
+        print(
+            f"database error ({type(exc).__name__}); is the schema migrated "
+            "and may this user lock the secrets table?",
+            file=sys.stderr,
+        )
         return EXIT_RETRYABLE
     except Exception as exc:
         # Driver errors outside SQLAlchemy (bad port, unknown option): class name only.

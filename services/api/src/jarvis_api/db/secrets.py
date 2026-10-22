@@ -26,8 +26,10 @@ class PostgresSecretStore:
     def __init__(self, engine: AsyncEngine) -> None:
         self._engine = engine
 
-    async def add(self, sealed: SealedSecret) -> str:
+    async def add(self, box: AesGcmSecretBox, plaintext: str) -> str:
+        """Seal ``plaintext`` and store it; the new row's id is bound into the ciphertext."""
         secret_id = new_id("sec")
+        sealed = box.seal(plaintext, context=secret_id)
         async with self._engine.begin() as conn:
             await conn.execute(
                 insert(Secret).values(
@@ -46,6 +48,11 @@ class PostgresSecretStore:
         if row is None:
             return None
         return SealedSecret(row.key_id, bytes(row.nonce), bytes(row.ciphertext))
+
+    async def reveal(self, box: AesGcmSecretBox, secret_id: str) -> str | None:
+        """Decrypt a stored secret; ``None`` if absent. A record moved to another row fails."""
+        sealed = await self.get(secret_id)
+        return None if sealed is None else box.open(sealed, context=secret_id)
 
     async def rotate(self, old: AesGcmSecretBox, new: AesGcmSecretBox) -> int:
         """Re-seal every record under ``new`` in one transaction; return rows rewritten.
@@ -79,14 +86,15 @@ class PostgresSecretStore:
                     continue
                 try:
                     plaintext = old.open(
-                        SealedSecret(row.key_id, bytes(row.nonce), bytes(row.ciphertext))
+                        SealedSecret(row.key_id, bytes(row.nonce), bytes(row.ciphertext)),
+                        context=row.id,
                     )
                 except ValueError:
                     raise RotationError(
                         f"secret {row.id} failed authentication under {old.key_id}; "
                         "nothing was changed"
                     ) from None
-                sealed = new.seal(plaintext)
+                sealed = new.seal(plaintext, context=row.id)
                 await conn.execute(
                     update(Secret)
                     .where(Secret.id == row.id)

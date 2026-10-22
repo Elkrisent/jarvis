@@ -9,8 +9,10 @@ and how to replace the master key. Requirement: SPEC §11.2.
   twice gives different ciphertext. Tampering with the ciphertext or nonce fails authentication.
 * The master key is 32 bytes, supplied as standard base64 in `JARVIS_MASTER_KEY`. Surrounding
   whitespace is tolerated.
-* Key ID: `k_` followed by the first 8 hex characters of the SHA-256 of the key (for example
-  `k_1a2b3c4d`). It is stored on every row in `secrets.key_id`, so JARVIS can tell which key sealed a
+* Each record is also bound to the id of the row that holds it (as AES-GCM associated data), so a
+  ciphertext copied into another row fails authentication instead of decrypting there.
+* Key ID: `k_` followed by the first 16 hex characters of the SHA-256 of the key (for example
+  `k_1a2b3c4d5e6f7a8b`). It is stored on every row in `secrets.key_id`, so JARVIS can tell which key sealed a
   record. A key ID identifies a key; it does not reveal it.
 * Plaintext secrets and keys are never written to logs, `repr`/`str` output, errors or command output.
 
@@ -69,7 +71,13 @@ Failures print one line on stderr. Exit codes:
 | 1 | Rotation refused (`rotation refused: ...`): a record is sealed under an unknown key, or a record fails authentication under the old key. Or a database failure (could not connect, or rotation could not complete). |
 | 2 | Usage or configuration problem: a variable is not set, a key is not 32 bytes of base64, `DATABASE_URL is invalid`, arguments were passed, or the old and new keys are identical. |
 
-Exit 1 is safe to retry once the cause is fixed.
+Exit 1 is safe to retry once the cause is fixed. A message beginning `database error` (rather than
+`could not connect`) means the database answered but refused: usually the schema has not been
+migrated (start the api once) or the database user may not lock the `secrets` table.
+
+`DATABASE_URL` accepts `sslmode` and `connect_timeout`. Other libpq-only options
+(`application_name`, `sslrootcert`, ...) are rejected with exit 2 and the option's name, because the
+async driver cannot take them and ignoring one could weaken TLS verification.
 
 ## Unknown key IDs
 

@@ -25,16 +25,31 @@ MIGRATION_LOCK_KEY = 0x4A56_0001
 OnUpgrade = Callable[[], Awaitable[None]]
 
 
+class UnsupportedUrlOption(ValueError):
+    """The URL carries a libpq option asyncpg cannot take. Names the option, never its value."""
+
+
+# libpq URL options and the keyword asyncpg's connect() takes for them.
+_LIBPQ_RENAMES = {"sslmode": "ssl", "connect_timeout": "timeout"}
+# asyncpg keywords that SQLAlchemy's asyncpg dialect also accepts in the URL query.
+_ASYNCPG_OPTIONS = {"ssl", "timeout"}
+
+
 def to_async_url(url: str) -> str:
     """Rewrite a plain ``postgresql://`` URL to use the asyncpg driver.
 
-    asyncpg spells libpq's ``sslmode`` option ``ssl`` and rejects the former, so it is renamed.
+    asyncpg spells libpq's ``sslmode`` option ``ssl`` and ``connect_timeout`` ``timeout``, so
+    they are renamed. Any other option would reach ``asyncpg.connect`` as an unknown keyword and
+    fail at connect time, so it is rejected here, by name. Dropping one such as ``sslrootcert``
+    silently could weaken TLS verification.
     """
     parsed = make_url(url).set(drivername="postgresql+asyncpg")
-    query = dict(parsed.query)
-    if "sslmode" in query:
-        sslmode = query.pop("sslmode")
-        query.setdefault("ssl", sslmode)
+    query: dict[str, str | tuple[str, ...]] = {}
+    for name, value in parsed.query.items():
+        target = _LIBPQ_RENAMES.get(name, name)
+        if target not in _ASYNCPG_OPTIONS:
+            raise UnsupportedUrlOption(f"option {name!r} is not supported; use sslmode or ssl")
+        query.setdefault(target, value)
     return parsed.set(query=query).render_as_string(hide_password=False)
 
 
@@ -105,8 +120,13 @@ async def run_migrations(url: str, on_upgrade: OnUpgrade | None = None) -> None:
                 logger.info("database already up to date")
             await connection.commit()
         finally:
-            await connection.rollback()
-            await connection.execute(
-                text("SELECT pg_advisory_unlock(:key)"), {"key": MIGRATION_LOCK_KEY}
-            )
-            await connection.commit()
+            # The lock is session-scoped, so closing the connection releases it even if this
+            # cleanup cannot run. Swallow its failure rather than mask the original error.
+            try:
+                await connection.rollback()
+                await connection.execute(
+                    text("SELECT pg_advisory_unlock(:key)"), {"key": MIGRATION_LOCK_KEY}
+                )
+                await connection.commit()
+            except Exception:
+                logger.warning("could not release the migration lock; closing the connection")
