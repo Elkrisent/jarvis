@@ -197,7 +197,8 @@ class InMemoryConfigSource:
 class InMemorySecretBox:
     """A reversible stand-in for tests and fail-open use.
 
-    NOT cryptographically secure. The AES-256-GCM implementation arrives in M1.2.
+    NOT cryptographically secure. Use ``jarvis_core.secretbox.AesGcmSecretBox`` for real
+    AES-256-GCM encryption.
     """
 
     def __init__(self, key_id: str = "mem-1", key: bytes = b"jarvis-in-memory-key") -> None:

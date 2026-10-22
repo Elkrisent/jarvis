@@ -5,6 +5,7 @@ description = "JARVIS shared models, interfaces and errors."
 requires-python = ">=3.12"
 dependencies = [
     "pydantic==2.11.4",
+    "cryptography==50.0.2",
 ]
 
 [build-system]
