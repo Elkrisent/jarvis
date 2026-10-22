@@ -38,11 +38,12 @@ M1.1 Database schema and migrations, branch `feat/m1.1-db-schema-migrations` (no
 * Pinned new deps in `services/api`: sqlalchemy 2.1.6, alembic 1.20.1, asyncpg 0.32.0. `.gitignore` now ignores `.claude/worktrees/`.
 * Coverage now counts unit + integration tests (user-approved, thresholds unchanged): the `coverage` step moved from the `python` job to the `integration` job in `ci.yml`, `make coverage` runs `-m "unit or integration"`, and the meta test and `docs/contributing.md` were updated to match.
 * Verified locally against Postgres 16: 364 tests pass (unit + integration); ruff, mypy, bandit and pip-audit clean; `services/api` coverage 100% line / 87.5% branch against 85% / 75% gates; migrations upgrade, downgrade and upgrade again; two and five concurrent startups apply migrations exactly once (the lock test fails without the lock); a model-vs-migration parity test passes; `make test-integration` exits non-zero when tests fail.
-* Not yet verified: the CI run itself, and the compose `api` container running migrations at startup (no Docker in the dev shell; `system.yml` covers it once the PR is open). `docs/traceability.md` was not regenerated (it needs Docker for the Checkpoint 0 rows); REQ-12-2 is linked in the test markers.
+* Verified with Docker: all 390 non-perf tests pass (unit, integration, system, e2e, chaos, security), including the new `tests/system/test_api_migrations.py`, which shows the compose `api` migrates the stack's Postgres at startup. `docs/traceability.md` regenerated (31/246 covered; REQ-12-2 now linked, Checkpoint 0 rows still `pass`).
+* Not yet verified: the CI run itself.
 
 ## Next
 
-1. Push the branch, open the M1.1 PR, and get `ci`, `system` and `security` green (watch the `integration` job: it now runs the coverage gates, and the compose `api` container now migrates on boot).
+1. Push the branch, open the M1.1 PR, and get `ci`, `system` and `security` green (watch the `integration` job: it now runs the coverage gates).
 2. After merge, record the merge SHA here (separate docs PR, as for earlier modules).
 3. Then start M1.2 SecretBox (IMPLEMENTATION.md M1.2, SPEC §11.2); do not begin it until M1.1's Definition of Done is confirmed by CI.
 
