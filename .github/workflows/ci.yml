@@ -60,8 +60,8 @@ jobs:
           enable-cache: true
       - run: uv python install 3.12
       - run: uv sync --locked
-      - run: make test-integration
-      # Coverage counts unit and integration tests, so it runs where the service containers are.
+      # Coverage runs the unit and integration tests (a failing test fails the step), so they run
+      # once, here where the service containers are, instead of again via test-integration.
       - name: Baseline coverage from main
         if: github.event_name == 'pull_request'
         continue-on-error: true

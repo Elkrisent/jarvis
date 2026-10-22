@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 started with the user's approval: M1.1 is implemented on `feat/m1.1-db-schema-migrations` and awaiting PR review and merge.
+Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 is implemented on `feat/m1.2-secretbox` and awaiting PR review and merge.
 
 ## Current Phase
 
@@ -10,7 +10,7 @@ Phase 1: Proxy.
 
 ## Current Module
 
-M1.1 Database schema and migrations (implemented, not yet merged).
+M1.2 SecretBox (implemented, not yet merged).
 
 ## Completed
 
@@ -30,22 +30,29 @@ M1.1 Database schema and migrations (implemented, not yet merged).
 * Checkpoint 0 (PR #13, merge commit `0ef369e`, tag `v0.0.0` pre-release with `P0.json` attached): report in `docs/checkpoints/P0-foundations.md`. All three acceptance stories automated in `tests/e2e/test_checkpoint_0.py`; `make traceability COMPLETED_PHASE=0 TRACE_MARKERS="not perf"` passes (30/246 requirements covered, all `pass`); budgets in scope met (idle footprint 210 MB vs 1536 MB).
   * Verified: 317 unit, 9 integration, 7 system, 4 e2e, 1 chaos, 13 security tests; `ci`, `system`, `security` and `bench` all green on `0ef369e`. The user also ran the report's "try it yourself" commands on their machine: all passed.
 
+* M1.1 Database schema and migrations (PR #15, merge commit `828922e`):
+  * `jarvis_api.db`: SQLAlchemy 2.0 models and a hand-written reversible Alembic migration `0001` for `users`, `projects`, `jarvis_keys`, `api_dependencies`, `api_policy_versions`, `secrets`, `settings`, `audit_log`; `run_migrations` under a Postgres advisory lock, called from the api lifespan (a failed migration stops startup; `DATABASE_URL` `sslmode` is translated for asyncpg; a database ahead of this code is left alone; each step is logged, including waiting for the lock); `PostgresConfigSource` behind `ConfigSource` (text prefixed IDs; every `put` is a new immutable policy version).
+  * Pinned new deps in `services/api`: sqlalchemy 2.1.6, alembic 1.20.1, asyncpg 0.32.0. `.gitignore` now ignores `.claude/worktrees/`.
+  * Coverage now counts unit + integration tests (user-approved, thresholds unchanged): the `coverage` step moved from the `python` job to the `integration` job in `ci.yml`, `make coverage` runs `-m "unit or integration"`, and the meta test and `docs/contributing.md` were updated to match.
+  * Verified locally against Postgres 16: 373 unit + integration tests pass; ruff, mypy, bandit and pip-audit clean; `services/api` coverage 100% line / 100% branch against 85% / 75% gates, no drop vs `main` (checked locally with a `main` baseline); migrations upgrade, downgrade and upgrade again; two and five concurrent startups apply migrations exactly once (the lock test fails without the lock); a model-vs-migration parity test passes; `make test-integration` exits non-zero when tests fail.
+  * Verified with Docker: all 399 non-perf tests pass (unit, integration, system, e2e, chaos, security), including the new `tests/system/test_api_migrations.py`, which shows the compose `api` migrates the stack's Postgres at startup. CI for PR #15 was green before merge.
 ## In Progress
 
-M1.1 Database schema and migrations, branch `feat/m1.1-db-schema-migrations` (not yet pushed or merged):
+M1.2 SecretBox, branch `feat/m1.2-secretbox` (not yet pushed or merged):
 
-* `jarvis_api.db`: SQLAlchemy 2.0 models and a hand-written reversible Alembic migration `0001` for `users`, `projects`, `jarvis_keys`, `api_dependencies`, `api_policy_versions`, `secrets`, `settings`, `audit_log`; `run_migrations` under a Postgres advisory lock, called from the api lifespan (a failed migration stops startup; `DATABASE_URL` `sslmode` is translated for asyncpg; a database ahead of this code is left alone; each step is logged, including waiting for the lock); `PostgresConfigSource` behind `ConfigSource` (text prefixed IDs; every `put` is a new immutable policy version).
-* Pinned new deps in `services/api`: sqlalchemy 2.1.6, alembic 1.20.1, asyncpg 0.32.0. `.gitignore` now ignores `.claude/worktrees/`.
-* Coverage now counts unit + integration tests (user-approved, thresholds unchanged): the `coverage` step moved from the `python` job to the `integration` job in `ci.yml`, `make coverage` runs `-m "unit or integration"`, and the meta test and `docs/contributing.md` were updated to match.
-* Verified locally against Postgres 16: 373 unit + integration tests pass; ruff, mypy, bandit and pip-audit clean; `services/api` coverage 100% line / 100% branch against 85% / 75% gates, no drop vs `main` (checked locally with a `main` baseline); migrations upgrade, downgrade and upgrade again; two and five concurrent startups apply migrations exactly once (the lock test fails without the lock); a model-vs-migration parity test passes; `make test-integration` exits non-zero when tests fail.
-* Verified with Docker: all 399 non-perf tests pass (unit, integration, system, e2e, chaos, security), including the new `tests/system/test_api_migrations.py`, which shows the compose `api` migrates the stack's Postgres at startup. `docs/traceability.md` regenerated (31/246 covered; REQ-12-2 now linked, Checkpoint 0 rows still `pass`).
-* Not yet verified: the CI run itself.
+* `jarvis_core.secretbox`: `AesGcmSecretBox` (AES-256-GCM, random 96-bit nonce per record, key ID `k_<8 hex of sha256(key)>` stored with the record and authenticated as associated data), strict `parse_master_key` (32 bytes, standard base64, whitespace tolerated, errors never echo the input), `secret_box_from_env` for `JARVIS_MASTER_KEY`. New pinned dep `cryptography==50.0.2`.
+* `jarvis_api.db.secrets.PostgresSecretStore` and `jarvis rotate-master-key` (`jarvis_api.cli`): one transaction under `LOCK TABLE secrets`, every row validated before any is rewritten, all-or-nothing; keys come only from `JARVIS_MASTER_KEY` / `JARVIS_NEW_MASTER_KEY`, output shows key IDs and counts only; exit codes 0/1/2.
+* Docs and config: `docs/secrets-rotation.md` (runbook), `deploy/.env.example`, README, `docs/contributing.md`, `docs/traceability.md` (35/246 covered; REQ-11.2-1 to -4 linked).
+* Not wired yet: the api does not load the master key at startup (planned for M1.3, where secrets are first used).
+* Code-review fixes (all applied, each with a regression test): the CLI no longer reports every database error as a connection failure; each record is bound to its row id as associated data (a ciphertext copied to another row fails authentication; `AesGcmSecretBox.seal/open` take an optional `context`, the `SecretBox` protocol is unchanged; `PostgresSecretStore.add(box, plaintext)` / `reveal(box, id)`); key ID widened to 64 bits (`k_` + 16 hex); `to_async_url` maps `connect_timeout` and rejects other libpq-only options by name instead of failing at connect time (M1.1 code); `run_migrations` cleanup no longer masks the real error; `create_app_from_env` reports a missing `DATABASE_URL` clearly; the CI `integration` job runs the integration tests once (via `make coverage`) instead of twice plus a baseline.
+* Verified locally against Postgres 16 and Redis 7: ruff, mypy, bandit and pip-audit clean; 438 unit + integration tests pass under `make coverage` (core 100% line / 99% branch, api 100% / 100%, gates met); 468 non-perf tests pass in the traceability run; Checkpoint 0 rows still `pass`. Regression tests were checked to fail without their fix (migration cleanup).
+* Not yet verified: the CI run itself, and the compose-stack system tests (the stack was not started for this run).
 
 ## Next
 
-1. Push the branch, open the M1.1 PR, and get `ci`, `system` and `security` green (watch the `integration` job: it now runs the coverage gates).
-2. After merge, record the merge SHA here (separate docs PR, as for earlier modules).
-3. Then start M1.2 SecretBox (IMPLEMENTATION.md M1.2, SPEC §11.2); do not begin it until M1.1's Definition of Done is confirmed by CI.
+1. Push `feat/m1.2-secretbox`, open the M1.2 PR, and get `ci`, `system` and `security` green.
+2. After merge, record the merge SHA here (separate docs PR).
+3. Then start M1.3 Minimal management API (IMPLEMENTATION.md M1.3, SPEC §10); it is where the master key is first loaded at api startup.
 
 ## Blockers / Questions
 
@@ -53,7 +60,7 @@ None.
 
 ## Resume Point
 
-Open and shepherd the M1.1 PR from `feat/m1.1-db-schema-migrations`. Once it is merged and recorded, start M1.2.
+Open and shepherd the M1.2 PR from `feat/m1.2-secretbox`. Once it is merged and recorded, start M1.3.
 
 ## Last Updated
 

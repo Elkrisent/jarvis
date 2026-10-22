@@ -42,3 +42,11 @@ def test_readyz_is_503_when_postgres_is_down() -> None:
     response = _client({"postgres"}).get("/readyz")
     assert response.status_code == 503
     assert response.json()["status"] == "unavailable"
+
+
+def test_create_app_from_env_names_a_missing_database_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    from jarvis_api.app import create_app_from_env
+
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    with pytest.raises(RuntimeError, match="DATABASE_URL is not set"):
+        create_app_from_env()

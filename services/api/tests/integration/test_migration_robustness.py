@@ -52,3 +52,23 @@ async def test_a_dropped_connection_does_not_mask_the_migration_error(
 
     with pytest.raises(RuntimeError, match="migration blew up"):
         await run_migrations(database_url)
+
+
+async def test_a_dead_connection_during_cleanup_does_not_mask_the_migration_error(
+    database_url, monkeypatch
+) -> None:
+    class Boom(Exception):
+        pass
+
+    def fail(connection: Connection, revision: str) -> None:
+        raise Boom
+
+    async def dead(self: object) -> None:
+        raise ConnectionError("connection lost")
+
+    monkeypatch.setattr(migrate, "_upgrade", fail)
+    # The cleanup in ``finally`` then fails too, as it would on a dropped connection.
+    monkeypatch.setattr(migrate.AsyncConnection, "rollback", dead)
+
+    with pytest.raises(Boom):
+        await run_migrations(database_url)

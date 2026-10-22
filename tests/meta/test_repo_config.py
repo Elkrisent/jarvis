@@ -98,8 +98,9 @@ def test_ci_runs_lint_typecheck_unit_and_integration_tests() -> None:
         assert target in python_job
     # Coverage counts integration tests too, so the gates run where the service containers are.
     integration_job = _run_steps(ci, "integration")
-    for target in ("make test-integration", "make coverage"):
-        assert target in integration_job
+    # `make coverage` runs the integration tests itself, so a separate run would only repeat them.
+    assert "make coverage" in integration_job
+    assert "make test-integration" not in integration_job
 
 
 @pytest.mark.req("REQ-16.3-1")

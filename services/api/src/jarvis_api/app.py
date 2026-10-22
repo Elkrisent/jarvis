@@ -68,9 +68,12 @@ def _configure_logging() -> None:
 
 def create_app_from_env() -> FastAPI:
     _configure_logging()
-    database_url = os.environ["DATABASE_URL"]
+    env = dict(os.environ)
+    database_url = env.get("DATABASE_URL")
+    if not database_url:
+        raise RuntimeError("DATABASE_URL is not set (see deploy/.env.example)")
 
     async def migrate() -> None:
         await run_migrations(database_url)
 
-    return create_app(dependencies_from_env(), migrate=migrate)
+    return create_app(dependencies_from_env(env), migrate=migrate)
