@@ -19,7 +19,7 @@ from jarvis_core.secretbox import (
     MasterKeyError,
     parse_master_key,
 )
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import ArgumentError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from jarvis_api.db.migrate import to_async_url
@@ -74,8 +74,8 @@ def _box_from(env: Mapping[str, str], name: str) -> AesGcmSecretBox | str:
         return f"{name} is invalid: expected 32 bytes, base64-encoded"
 
 
-async def _rotate(url: str, old: AesGcmSecretBox, new: AesGcmSecretBox) -> int:
-    engine = create_async_engine(to_async_url(url))
+async def _rotate(async_url: str, old: AesGcmSecretBox, new: AesGcmSecretBox) -> int:
+    engine = create_async_engine(async_url)
     try:
         return await PostgresSecretStore(engine).rotate(old, new)
     finally:
@@ -96,13 +96,22 @@ def _rotate_master_key(env: Mapping[str, str]) -> int:
         return _fail(f"{DATABASE_URL_ENV} is not set")
 
     try:
-        count = asyncio.run(_rotate(url, old, new))
+        async_url = to_async_url(url)
+    except (ArgumentError, ValueError):
+        return _fail(f"{DATABASE_URL_ENV} is invalid")
+
+    try:
+        count = asyncio.run(_rotate(async_url, old, new))
     except RotationError as exc:
         print(f"rotation refused: {' '.join(str(exc).split())}", file=sys.stderr)
         return EXIT_RETRYABLE
     except _CONNECTION_ERRORS as exc:
         # Never print the exception text: it can include the database URL or password.
         print(f"could not connect to the database ({type(exc).__name__})", file=sys.stderr)
+        return EXIT_RETRYABLE
+    except Exception as exc:
+        # Driver errors outside SQLAlchemy (bad port, unknown option): class name only.
+        print(f"rotation could not complete ({type(exc).__name__})", file=sys.stderr)
         return EXIT_RETRYABLE
 
     print(f"re-encrypted {count} secret(s) from {old.key_id} to {new.key_id}")

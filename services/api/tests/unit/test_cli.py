@@ -89,3 +89,38 @@ def test_unknown_argument_is_a_one_line_usage_error(capsys: pytest.CaptureFixtur
 def test_help_exits_zero(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["--help"], env=_env()) == 0
     assert "rotate-master-key" in capsys.readouterr().out
+
+
+def _assert_clean_failure(
+    capsys: pytest.CaptureFixture[str], password: str, expected: str | None = None
+) -> None:
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert len(captured.err.splitlines()) == 1
+    if expected is not None:
+        assert captured.err.strip() == expected
+    for secret in (password, OLD_B64, NEW_B64):
+        assert secret not in captured.out + captured.err
+
+
+def test_non_numeric_port_is_invalid_configuration(capsys: pytest.CaptureFixture[str]) -> None:
+    url = "postgresql://u:pwNONNUM@127.0.0.1:abc/db"
+    assert main(["rotate-master-key"], env=_env(DATABASE_URL=url)) == 2
+    _assert_clean_failure(capsys, "pwNONNUM", "DATABASE_URL is invalid")
+
+
+def test_unparseable_url_is_invalid_configuration(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["rotate-master-key"], env=_env(DATABASE_URL="not a url")) == 2
+    _assert_clean_failure(capsys, "pwUNUSED", "DATABASE_URL is invalid")
+
+
+def test_out_of_range_port_exits_1_with_one_line(capsys: pytest.CaptureFixture[str]) -> None:
+    url = "postgresql://u:pwRANGE@127.0.0.1:99999/db"
+    assert main(["rotate-master-key"], env=_env(DATABASE_URL=url)) == 1
+    _assert_clean_failure(capsys, "pwRANGE")
+
+
+def test_unknown_query_option_exits_1_with_one_line(capsys: pytest.CaptureFixture[str]) -> None:
+    url = "postgresql://u:pwOPT@127.0.0.1:1/db?bogusopt=1"
+    assert main(["rotate-master-key"], env=_env(DATABASE_URL=url)) == 1
+    _assert_clean_failure(capsys, "pwOPT")
