@@ -77,9 +77,16 @@ class PostgresSecretStore:
             for row in rows:
                 if row.key_id == new.key_id:
                     continue
-                sealed = new.seal(
-                    old.open(SealedSecret(row.key_id, bytes(row.nonce), bytes(row.ciphertext)))
-                )
+                try:
+                    plaintext = old.open(
+                        SealedSecret(row.key_id, bytes(row.nonce), bytes(row.ciphertext))
+                    )
+                except ValueError:
+                    raise RotationError(
+                        f"secret {row.id} failed authentication under {old.key_id}; "
+                        "nothing was changed"
+                    ) from None
+                sealed = new.seal(plaintext)
                 await conn.execute(
                     update(Secret)
                     .where(Secret.id == row.id)

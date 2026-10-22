@@ -183,3 +183,40 @@ async def test_rotation_error_and_logs_contain_no_key_material_or_plaintext(
         assert base64.b64encode(key).decode() not in output
         assert base64.urlsafe_b64encode(key).decode() not in output
         assert key.decode("latin-1") not in output
+
+
+@pytest.mark.req("REQ-11.2-3")
+async def test_a_tampered_record_aborts_the_rotation_and_rolls_back_earlier_updates(
+    store: PostgresSecretStore,
+    old: AesGcmSecretBox,
+    new: AesGcmSecretBox,
+    database_url: str,
+    connect,
+) -> None:
+    for n in range(4):
+        await store.add(old.seal(f"plain-tamper-{n}"))
+    before = await _rows(database_url, connect)
+    # Rows are rewritten in id order, so the first two are updated before the third fails.
+    victim_id, _, _, victim_ciphertext = before[2]
+    flipped = bytes([victim_ciphertext[0] ^ 0xFF]) + victim_ciphertext[1:]
+    conn = await connect(database_url)
+    try:
+        await conn.execute("UPDATE secrets SET ciphertext = $1 WHERE id = $2", flipped, victim_id)
+    finally:
+        await conn.close()
+    tampered = await _rows(database_url, connect)
+
+    with pytest.raises(RotationError) as excinfo:
+        await store.rotate(old, new)
+
+    message = str(excinfo.value)
+    assert victim_id in message
+    assert old.key_id in message
+    assert "nothing was changed" in message
+    for secret in (*(f"plain-tamper-{n}" for n in range(4)), *(OLD_KEY, NEW_KEY)):
+        if isinstance(secret, bytes):
+            assert secret.hex() not in message
+            assert base64.b64encode(secret).decode() not in message
+        else:
+            assert secret not in message
+    assert await _rows(database_url, connect) == tampered
