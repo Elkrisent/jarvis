@@ -124,3 +124,37 @@ def test_returned_mappings_cannot_be_mutated() -> None:
     assert store.current is not None
     with pytest.raises(TypeError):
         store.current.apis["a0"] = store.current.apis["a1"]  # type: ignore[index]
+
+
+def test_listeners_see_every_installed_snapshot_and_a_late_one_gets_the_current_one() -> None:
+    store = ConfigStore()
+    seen: list[Snapshot] = []
+    first = Snapshot.empty("postgres", 1.0)
+    store.replace(first)
+    store.add_listener(seen.append)
+    assert seen == [first]  # added late: told about the snapshot already installed
+    second = Snapshot.empty("postgres", 2.0)
+    store.replace(second)
+    third = store.update(lambda s: s.with_changes(synced_at=3.0))
+    assert seen == [first, second, third]
+    assert store.current is third
+
+
+def test_a_failing_listener_does_not_stop_the_swap_or_the_others(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    store = ConfigStore()
+    seen: list[Snapshot] = []
+
+    def broken(snapshot: Snapshot) -> None:
+        raise RuntimeError("boom with a secret value")
+
+    store.add_listener(broken)
+    store.add_listener(seen.append)
+    snap = Snapshot.empty("postgres", 1.0)
+    with caplog.at_level("WARNING"):
+        store.replace(snap)
+    assert store.current is snap
+    assert seen == [snap]
+    assert "RuntimeError" in caplog.text
+    assert "secret value" not in caplog.text

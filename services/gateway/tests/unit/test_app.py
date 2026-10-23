@@ -1,3 +1,4 @@
+import base64
 from typing import Literal, cast
 
 import pytest
@@ -10,6 +11,7 @@ from jarvis_gateway.config.store import ConfigStore
 
 pytestmark = pytest.mark.unit
 
+MASTER_KEY = base64.b64encode(bytes(range(32))).decode()
 ENV = {"REDIS_URL": "redis://redis:6379/0", "DATABASE_URL": "postgresql://u:p@postgres:5432/jarvis"}
 
 
@@ -163,6 +165,7 @@ def test_postgres_source_without_any_recorded_sync_is_degraded() -> None:
 @pytest.mark.req("REQ-8-2")
 def test_create_app_from_env_wires_a_manager(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DATABASE_URL", ENV["DATABASE_URL"])
+    monkeypatch.setenv("JARVIS_MASTER_KEY", MASTER_KEY)
     monkeypatch.setenv("REDIS_URL", ENV["REDIS_URL"])
     monkeypatch.setenv("JARVIS_SNAPSHOT_PATH", "/nonexistent/snapshot.json")
     app = create_app_from_env()
@@ -179,6 +182,7 @@ def test_create_app_from_env_passes_the_snapshot_age_cap(monkeypatch: pytest.Mon
 
     monkeypatch.setattr("jarvis_gateway.app.ConfigManager", spy)
     monkeypatch.setenv("DATABASE_URL", ENV["DATABASE_URL"])
+    monkeypatch.setenv("JARVIS_MASTER_KEY", MASTER_KEY)
     monkeypatch.setenv("REDIS_URL", ENV["REDIS_URL"])
     monkeypatch.setenv("JARVIS_SNAPSHOT_MAX_AGE_S", "600")
     create_app_from_env()

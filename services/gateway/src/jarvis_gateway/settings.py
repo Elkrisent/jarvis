@@ -3,13 +3,17 @@
 import math
 import os
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
+
+from jarvis_core.secretbox import AesGcmSecretBox, MasterKeyError, secret_box_from_env
+from jarvis_core.ssrf import SsrfPolicy
 
 DEFAULT_SNAPSHOT_PATH = "/var/lib/jarvis/gateway/snapshot.json"
 DEFAULT_RESYNC_INTERVAL_S = 60.0
 MIN_RESYNC_INTERVAL_S = 1.0
+DEFAULT_MAX_BODY_BYTES = 10 * 1024 * 1024
 DEFAULT_SNAPSHOT_MAX_AGE_S = 86_400.0
 MIN_SNAPSHOT_MAX_AGE_S = 1.0
 
@@ -37,14 +41,18 @@ class Settings:
     redis_url: str
     snapshot_path: Path
     resync_interval_s: float
+    secret_box: AesGcmSecretBox = field(repr=False)
     snapshot_max_age_s: float = DEFAULT_SNAPSHOT_MAX_AGE_S
+    max_body_bytes: int = DEFAULT_MAX_BODY_BYTES
+    ssrf_policy: SsrfPolicy = field(default_factory=SsrfPolicy, repr=False)
 
     def __repr__(self) -> str:
         return (
             f"Settings(database_url={redact_url(self.database_url)!r}, "
             f"redis_url={redact_url(self.redis_url)!r}, snapshot_path={str(self.snapshot_path)!r}, "
             f"resync_interval_s={self.resync_interval_s!r}, "
-            f"snapshot_max_age_s={self.snapshot_max_age_s!r})"
+            f"snapshot_max_age_s={self.snapshot_max_age_s!r}, "
+            f"max_body_bytes={self.max_body_bytes!r})"
         )
 
     __str__ = __repr__
@@ -89,12 +97,36 @@ def _snapshot_max_age(source: Mapping[str, str]) -> float:
     return value
 
 
+def _max_body_bytes(source: Mapping[str, str]) -> int:
+    raw = source.get("JARVIS_MAX_BODY_BYTES")
+    if raw is None or raw == "":
+        return DEFAULT_MAX_BODY_BYTES
+    try:
+        value = int(raw)
+    except ValueError:
+        raise SettingsError("JARVIS_MAX_BODY_BYTES must be a whole number of bytes") from None
+    if value < 1:
+        raise SettingsError("JARVIS_MAX_BODY_BYTES must be at least 1")
+    return value
+
+
 def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     source = os.environ if env is None else env
+    try:
+        secret_box = secret_box_from_env(source)
+    except MasterKeyError:
+        raise SettingsError("JARVIS_MASTER_KEY is missing or invalid") from None
+    try:
+        ssrf_policy = SsrfPolicy.from_env(source)
+    except ValueError as exc:  # names the variable and the entry number only
+        raise SettingsError(str(exc)) from None
     return Settings(
         database_url=_require(source, "DATABASE_URL"),
         redis_url=_require(source, "REDIS_URL"),
         snapshot_path=Path(source.get("JARVIS_SNAPSHOT_PATH") or DEFAULT_SNAPSHOT_PATH),
         resync_interval_s=_interval(source),
         snapshot_max_age_s=_snapshot_max_age(source),
+        secret_box=secret_box,
+        max_body_bytes=_max_body_bytes(source),
+        ssrf_policy=ssrf_policy,
     )
