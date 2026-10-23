@@ -1,7 +1,9 @@
 # Quickstart: run the stack and use the management API
 
 This walks through starting JARVIS locally and managing a project, an API and a JARVIS key
-through `/api/v1`. The gateway does not proxy requests yet (M1.5), so this covers configuration only.
+through `/api/v1`.
+
+> Note: these commands have not yet been run against a live Docker stack. Remove this note once they have. The gateway does not proxy requests yet (M1.5), so this covers configuration only.
 
 ## Prerequisites
 
@@ -48,9 +50,10 @@ API_ID=$(curl -sS -X POST "$API/projects/$PROJECT_ID/apis" -H "$AUTH" -H 'Conten
        "credential": {"mode": "bearer", "secret": "replace-with-the-provider-secret"}}' | jq -r .id)
 
 # Create a JARVIS key. The full key is in this response only; copy it now.
-curl -sS -X POST "$API/projects/$PROJECT_ID/keys" -H "$AUTH" -H 'Content-Type: application/json' \
-  -d '{"name": "local dev"}' | tee key.json | jq .
-KEY_ID=$(jq -r .id key.json)
+KEY_JSON=$(curl -sS -X POST "$API/projects/$PROJECT_ID/keys" -H "$AUTH" -H 'Content-Type: application/json' \
+  -d '{"name": "local dev"}')
+echo "$KEY_JSON" | jq .
+KEY_ID=$(echo "$KEY_JSON" | jq -r .id)
 
 # List what exists (keys show a prefix only; APIs show has_secret, never the secret)
 curl -sS "$API/projects/$PROJECT_ID/keys" -H "$AUTH" | jq .
@@ -67,14 +70,14 @@ curl -sS -X DELETE "$API/keys/$KEY_ID" -H "$AUTH" -w '%{http_code}\n'
 curl -sS -X DELETE "$API/apis/$API_ID" -H "$AUTH" -w '%{http_code}\n'
 curl -sS -X DELETE "$API/projects/$PROJECT_ID" -H "$AUTH" -w '%{http_code}\n'
 
-rm key.json
+unset KEY_JSON
 ```
 
 ### Things to know
 
 * `credential.secret` is write-only. It is encrypted with the master key before it is stored and is
   never returned. `credential.has_secret` says whether one is stored. In a PATCH, omit
-  `credential.secret` to keep the stored secret, send a new one to replace it, or send `null` to remove it.
+  `credential.secret` to keep the stored secret, send a new one to replace it, or remove it by switching the credential off with `{"credential": {"mode": "none"}}` (or `"credential": null`). Sending `"secret": null` while the mode is `bearer`, `header` or `query` is a 422, because those modes require a secret.
 * A JARVIS key looks like `jv_live_...`. Only its hash is stored, so it cannot be shown again; create
   a new key if you lose it.
 * Every create or change of an API stores a new immutable policy version and publishes
