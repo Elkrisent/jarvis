@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792770696936,
+  "lastUpdate": 1792776723487,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Load (latency)": [
@@ -619,6 +619,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "mock_direct_p99",
             "value": 5.361160599999996,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0ea3df771b18ef6b4c83706e6c8cfefd55a425db",
+          "message": "Merge pull request #25 from Elkrisent/feat/m1.8-forwarding\n\nfeat(gateway): forwarding, credential injection, header hygiene (M1.8)",
+          "timestamp": "2026-10-23T22:59:34+05:30",
+          "tree_id": "2fa91fea9fe14668391286e51f9647df1fbca2f3",
+          "url": "https://github.com/Elkrisent/jarvis/commit/0ea3df771b18ef6b4c83706e6c8cfefd55a425db"
+        },
+        "date": 1792776722823,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "mock_direct_p50",
+            "value": 5.262033499999999,
+            "unit": "ms"
+          },
+          {
+            "name": "mock_direct_p95",
+            "value": 5.78960505,
+            "unit": "ms"
+          },
+          {
+            "name": "mock_direct_p99",
+            "value": 6.551493200000005,
             "unit": "ms"
           }
         ]
