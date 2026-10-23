@@ -1,8 +1,8 @@
-# Extends the default gitleaks rules; only the throwaway test-stack placeholder is allowed.
+# Extends the default gitleaks rules; only throwaway placeholders and made-up test fixtures are allowed.
 [extend]
 useDefault = true
 
-[allowlist]
+[[allowlists]]
 description = "Throwaway placeholder secrets for the test compose stack (protect nothing)"
 condition = "AND"
 regexes = [
@@ -10,4 +10,14 @@ regexes = [
 ]
 paths = [
   '''deploy/docker-compose\.test\.yml''',
+]
+
+[[allowlists]]
+description = "Made-up JARVIS key used as a fixture in the key-extraction unit tests (protects nothing)"
+condition = "AND"
+regexes = [
+  '''jv_live_abc123''',
+]
+paths = [
+  '''services/gateway/tests/unit/test_auth_extraction\.py''',
 ]
