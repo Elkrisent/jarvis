@@ -108,6 +108,13 @@ unset KEY_JSON JARVIS_KEY
   API's `jarvis_key_slot` header (default `x-jarvis-key`; the example above sets `"jarvis_key_slot": "authorization"` so
   `Authorization: Bearer jv_live_...` works). A key with an empty `allowed_api_ids` may call every API in its
   project; otherwise only the listed ones. All failures return the same 401 body.
+* Upstream hosts are checked when an API is saved (and on every gateway connection from M1.8). By
+  default JARVIS refuses loopback, private (RFC 1918), link-local (including `169.254.169.254`),
+  CGNAT, IPv6 ULA/link-local and multicast addresses, the JARVIS containers, and plain `http`; the
+  answer is a 422 on `base_url` with the message `destination is not allowed`. To use an internal
+  upstream, list it in `JARVIS_SSRF_ALLOWLIST` (CIDRs and/or host names, see `deploy/.env.example`)
+  and restart. A host name that does not resolve is accepted at save time; the gateway checks again
+  when it connects.
 * `POST /apis/{id}/test` answers 501 until M4.10.
 
 ## OpenAPI
