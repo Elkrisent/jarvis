@@ -616,7 +616,7 @@ def test_a_non_ascii_provider_secret_is_sent_as_utf8_not_a_crash() -> None:
     sealed = BOX.seal("sécret", context="sec_a1")
     rig = Rig([ApiEntry(api.api_id, api.project_id, api.slug, 1, api.config, sealed)])
     assert rig.call().status_code == 200
-    assert (b"x-key", "sécret".encode()) in rig.requests[0].headers.raw
+    assert (b"X-Key", "sécret".encode()) in rig.requests[0].headers.raw
 
 
 @pytest.mark.req("REQ-4.1-1")
