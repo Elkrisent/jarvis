@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 merged (PR #20, merge commit `b17187d`); M1.5 merged (PR #21, merge commit `d756c4c`); M1.6 merged (PR #23, merge commit `937a936`); M1.7 merged (PR #24, merge commit `a3d3942`); M1.8 implemented on `feat/m1.8-forwarding` (PR pending).
+Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 merged (PR #20, merge commit `b17187d`); M1.5 merged (PR #21, merge commit `d756c4c`); M1.6 merged (PR #23, merge commit `937a936`); M1.7 merged (PR #24, merge commit `a3d3942`); M1.8 merged (PR #25, merge commit `0ea3df7`).
 
 ## Current Phase
 
@@ -10,7 +10,7 @@ Phase 1: Proxy.
 
 ## Current Module
 
-None active. M1.8 Forwarding is implemented and awaiting review and merge; next is M1.9 Telemetry emitter (not planned or started).
+None active. Next is M1.9 Telemetry emitter (not planned or started), the last module before Checkpoint 1.
 
 ## Completed
 
@@ -81,7 +81,7 @@ None active. M1.8 Forwarding is implemented and awaiting review and merge; next 
   * Known minors (reviewer, not fixed): the gateway name check reads `request.url.host` (IDNA 2003) while httpx connects to `raw_host` (IDNA 2008), so plain http to a different IDN host could pass the name check if an IDN host is allowlisted (IP rules still apply at connect); no timeout on the save-time DNS lookup; connect errors may carry the pinned IP, so M1.8 must not return them to clients; `PinnedTransport` skips `super().__init__` (revisit on an httpx upgrade); passing `proxy=` or `mounts=` to a client would bypass the pinned backend (M1.8 must not); SIIT and RFC 8215 IPv6 forms are not unwrapped.
   * Decided in the plan (user not asked): allowlist comes from the environment until the M4.11 settings page; unresolvable hosts are accepted at save time; the allowlist cannot unblock the JARVIS containers; the cap, ranges and host forms listed in the plan.
   * Verified locally: `make lint typecheck` clean; `make coverage` 1176 passed (core 100% line / 99.5% branch, gateway 100/100, api 100/100); `make security-scan` clean; `make traceability COMPLETED_PHASE=0 TRACE_MARKERS="not perf"` 1303 passed, 65/246 covered, REQ-4.13-1 to -7 and REQ-17-2 linked, Checkpoint 0 rows `pass`, no `not run` rows (REQ-3-4 stays uncovered until M1.8). Mutation checks: the unit and security suites fail when pinning, IP validation, numeric-host parsing, embedded-IPv4 handling, the internal-container rule or the all-addresses rule is removed. Quickstart run against a dev stack; the real api answered 422 for `https://169.254.169.254`, `http://example.com` and `https://10.0.0.5`.
-* M1.8 Forwarding, credential injection, header hygiene (branch `feat/m1.8-forwarding`, PR pending; plan `docs/superpowers/plans/2026-10-24-m1-8-forwarding.md`):
+* M1.8 Forwarding, credential injection, header hygiene (PR #25, merge commit `0ea3df7`; plan `docs/superpowers/plans/2026-10-24-m1-8-forwarding.md`):
   * `/gw/{slug}/{path}` now forwards: ingress (ULID request ID, deadline clock from ingress, declared-length and capped-while-read 413 `JV_BODY_TOO_LARGE`, `Accept: text/event-stream` 400 `JV_STREAMING_UNSUPPORTED`) before authentication, then `Forwarder` (one pooled `httpx.AsyncClient` per upstream origin on `PinnedTransport`, no proxies, no redirects followed, no cookie jar, no httpx default headers, `httpx`/`httpcore` loggers pinned to WARNING because httpx logs request URLs and a `query` credential is in the URL) streams the upstream's answer back byte for byte with `X-Jarvis-Request-Id`, `X-Jarvis-Source` and `X-Jarvis-Attempts: 1`. Single attempt; the response must start within `deadline_ms` of ingress (connect and reads use `attempt_timeout_ms`): `JV_UPSTREAM_TIMEOUT` 504, `JV_UPSTREAM_UNREACHABLE` 502 (fixed messages, no address or URL). Retries, circuit breaker, cache headers come later.
   * `jarvis_gateway.forward` (pure): hop-by-hop removal incl. `Connection`-named headers, credential injection for `bearer`/`header`/`query` with the client's value in the slot always removed in any spelling, target URL from the raw request target (percent-encoding kept, dot segments resolved and clamped under the base path, raw query kept except the credential parameter).
   * Provider secrets: `ApiEntry.sealed` (loaded with a `LEFT JOIN secrets`, stored in the snapshot file as base64 ciphertext) and `CredentialVault` (opens them with `JARVIS_MASTER_KEY` into memory on every snapshot install via `ConfigStore.add_listener`; plaintext never in the snapshot file, logs or reprs). The gateway now requires `JARVIS_MASTER_KEY` (compose passes it; the loader's read-only role needs `SELECT` on `secrets`). After `rotate-master-key` the gateway must be restarted with the new key (`docs/secrets-rotation.md`); until then APIs with a stored credential answer 502.
@@ -90,14 +90,15 @@ None active. M1.8 Forwarding is implemented and awaiting review and merge; next 
   * Known minors (reviewer, not fixed): the deadline bounds time-to-headers only, so a trickling body holds a slot (M2.1 owns total-time accounting); an upstream that sends both Content-Length and Transfer-Encoding gives the caller a truncated response; base-path confinement relies on standard URL parsing (`..;`, `%2F..%2F` are not special-cased); query credential stripping splits on `&` only and header mode strips the exact name only; the httpx logger pin is import-time (a later logging config naming httpx at INFO would log URLs, so a redacting filter would be sturdier); changing an API's `base_url` cuts its in-flight responses; client `X-Forwarded-*` and `Via` pass through.
   * Moved from M1.5: the JARVIS key is never forwarded (header, slot, repeated, query), asserted against the real mock upstream's call log and in raw wire tests.
   * Verified locally: `make lint typecheck` clean; `make coverage` 1300+ passed (core 100/99.5, gateway 100/100, api 100/100); `make test-functional` 99 passed; `make traceability COMPLETED_PHASE=0 TRACE_MARKERS="not perf"` 1561 passed, 79/246 covered (system, e2e incl. Checkpoint 0 story 1, chaos, security); REQ-3-4, REQ-4.1-1/-2, REQ-4.3-1/-2/-6, REQ-4.4-1/-5/-7 and REQ-4.5-1 to -7 linked; mutation checks (no dot-segment resolution, client credential kept in headers or query, hop-by-hop kept, httpx default headers or cookie jar kept, logger pin removed, JARVIS key forwarded) each make the suites fail. Quickstart sections 3 and 4 run against a real dev stack (502 for the fake upstream, 200 round trip with a throwaway upstream container).
+  * CI on `main` at `0ea3df7`: `ci`, `security` (gitleaks needed one more narrow allowlist entry for the made-up fixture key in `test_forwarder.py`) and `system` green. `bench` FAILED in its `micro` job: the regression alert fired for `route_template_match` (1.76x slower than the previous run) and `token_bucket_take` (1.64x), whose code has not changed since Phase 0, so this looks like hosted-runner noise rather than a regression, but it is not confirmed. `propagation` and `load` jobs passed. Re-run the bench workflow (or wait for the nightly) and check both numbers recover; if `token_bucket_take` stays slow, investigate before Checkpoint 1.
 
 ## In Progress
 
-M1.8 review and PR.
+Nothing.
 
 ## Next
 
-1. Merge M1.8, then plan and build M1.9 Telemetry emitter (IMPLEMENTATION.md M1.9, SPEC 6.1/6.3), then Checkpoint 1.
+1. Check the `bench` re-run (see the M1.8 entry), then plan and build M1.9 Telemetry emitter (IMPLEMENTATION.md M1.9, SPEC 6.1/6.3), then run Checkpoint 1.
 2. Before the P1 checkpoint: wire `make bench-propagation` (needs `DATABASE_URL`/`REDIS_URL`) into `scripts/bench/run_checkpoint.sh`. Today the checkpoint skips it, so `config_propagation_p99` stays "not measured" in the `BENCHMARKS.md` table and the interim section there is dropped by the next `make bench-checkpoint`.
 
 ## Blockers / Questions
@@ -115,8 +116,8 @@ M1.8 review and PR.
 
 ## Resume Point
 
-Finish the M1.8 review and PR, then read the M1.9 section of `docs/IMPLEMENTATION.md` and SPEC §6.1, §6.3 and write the M1.9 plan.
+Confirm the `bench` micro regression alert was runner noise, then read the M1.9 section of `docs/IMPLEMENTATION.md` and SPEC §6.1, §6.3 and write the M1.9 plan. Open decisions still waiting for the user: Redis-outage revocation window (Blockers), the P5 secret-rollback question.
 
 ## Last Updated
 
-2026-10-23
+2026-10-24
