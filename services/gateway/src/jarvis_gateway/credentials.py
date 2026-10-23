@@ -62,9 +62,8 @@ class CredentialVault:
         credential = api.config.credential
         if credential.mode == "none":
             return None
-        secret = None
-        if credential.secret_ref is not None:
-            secret = self._plain.get((api.api_id, credential.secret_ref))
+        # A credential mode other than "none" always has a secret_ref (ApiDependency validates it).
+        secret = self._plain.get((api.api_id, credential.secret_ref or ""))
         if secret is None:
             raise CredentialUnavailable
         return secret

@@ -126,11 +126,3 @@ def test_repr_has_no_secret() -> None:
     vault.refresh(_snap(_entry()))
     assert PLAINTEXT not in repr(vault)
     assert PLAINTEXT not in str(vault)
-
-
-def test_a_credential_mode_without_any_secret_reference_is_unavailable() -> None:
-    vault = CredentialVault(BOX)
-    entry = _entry(secret_ref=None)
-    vault.refresh(_snap(entry))
-    with pytest.raises(CredentialUnavailable):
-        vault.secret_for(entry)
