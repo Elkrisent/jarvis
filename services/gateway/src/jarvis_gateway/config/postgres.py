@@ -1,7 +1,8 @@
 """Read-only loader of API policies and JARVIS key hashes from Postgres.
 
-The gateway only ever issues ``SELECT`` over ``api_dependencies``, ``api_policy_versions`` and
-``jarvis_keys``. Errors never carry the DSN, a host or a password: only the failure's type name.
+The gateway only ever issues ``SELECT`` over ``api_dependencies``, ``api_policy_versions``,
+``jarvis_keys`` and ``secrets`` (sealed provider secrets, ciphertext only). Errors never carry
+the DSN, a host or a password: only the failure's type name.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit
 
 import asyncpg
 from jarvis_core.config import ApiDependency
+from jarvis_core.interfaces import SealedSecret
 from pydantic import ValidationError
 
 from jarvis_gateway.config.snapshot import ApiEntry, KeyEntry, Snapshot
@@ -41,9 +43,11 @@ _DSN_OPTIONS = frozenset(
 )
 
 _API_SELECT = (
-    "SELECT a.id, a.project_id, a.slug, v.version, v.config_json"
+    "SELECT a.id, a.project_id, a.slug, v.version, v.config_json,"
+    " s.key_id AS secret_key_id, s.nonce AS secret_nonce, s.ciphertext AS secret_ciphertext"
     " FROM api_dependencies a"
     " LEFT JOIN api_policy_versions v ON v.id = a.current_version_id"
+    " LEFT JOIN secrets s ON s.id = v.config_json->'credential'->>'secret_ref'"
 )
 _KEY_SELECT = (
     "SELECT id, project_id, hash, allowed_api_ids, (revoked_at IS NOT NULL) AS revoked"
@@ -220,7 +224,12 @@ def _api_entry(row: asyncpg.Record) -> ApiEntry | InvalidApi:
         # Neither the pydantic detail nor the JSON is logged: they echo config values.
         logger.error("skipping API %s: its current policy is invalid", api_id)
         return InvalidApi(api_id)
-    return ApiEntry(api_id, row["project_id"], row["slug"], row["version"], config)
+    sealed = None
+    if row["secret_key_id"] is not None:
+        sealed = SealedSecret(
+            row["secret_key_id"], bytes(row["secret_nonce"]), bytes(row["secret_ciphertext"])
+        )
+    return ApiEntry(api_id, row["project_id"], row["slug"], row["version"], config, sealed)
 
 
 def _key_entry(row: asyncpg.Record) -> tuple[str, KeyEntry]:

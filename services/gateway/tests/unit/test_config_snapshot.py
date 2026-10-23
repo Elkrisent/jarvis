@@ -3,6 +3,7 @@ from typing import Any
 
 import pytest
 from jarvis_core.config import ApiDependency
+from jarvis_core.interfaces import SealedSecret
 from jarvis_gateway.config.snapshot import ApiEntry, KeyEntry, Snapshot
 
 pytestmark = pytest.mark.unit
@@ -302,3 +303,61 @@ def test_apis_with_slug_returns_every_project_and_duplicates() -> None:
     snap = _snapshot().with_changes(apis={"a4": _api("a4", "p1", "weather", 1)})
     assert {a.api_id for a in snap.apis_with_slug("weather")} == {"a1", "a3", "a4"}
     assert snap.apis_with_slug("nope") == ()
+
+
+# --- sealed provider secrets (M1.8) ---------------------------------------------------------------
+
+SEALED = SealedSecret("k_0123456789abcdef", b"n" * 12, b"cipher-bytes-\x00\xff")
+
+
+def _with_sealed() -> Snapshot:
+    api = _api("a1", "p1", "weather", 3, credential={"mode": "bearer", "secret_ref": "sec_1"})
+    sealed = ApiEntry(api.api_id, api.project_id, api.slug, api.version, api.config, SEALED)
+    return Snapshot.empty("postgres", 1.0).with_changes(apis={"a1": sealed})
+
+
+@pytest.mark.req("REQ-4.5-7")
+def test_sealed_secret_round_trips_as_base64_ciphertext() -> None:
+    snap = _with_sealed()
+    data = json.loads(json.dumps(snap.to_json_dict()))
+    assert data["apis"][0]["sealed"] == {
+        "key_id": SEALED.key_id,
+        "nonce": "bm5ubm5ubm5ubm5u",
+        "ciphertext": "Y2lwaGVyLWJ5dGVzLQD/",
+    }
+    assert Snapshot.from_json_dict(data).apis["a1"].sealed == SEALED
+
+
+@pytest.mark.req("REQ-4.5-7")
+def test_apis_without_a_secret_serialise_sealed_as_null_and_old_files_still_load() -> None:
+    data = _snapshot().to_json_dict()
+    assert {a["sealed"] for a in data["apis"]} == {None}  # type: ignore[attr-defined]
+    for raw in data["apis"]:  # type: ignore[attr-defined]
+        del raw["sealed"]  # a file written before M1.8
+    assert Snapshot.from_json_dict(data).apis["a1"].sealed is None
+
+
+def test_repr_of_an_entry_with_a_sealed_secret_shows_no_ciphertext() -> None:
+    text = repr(_with_sealed().apis["a1"]) + repr(_with_sealed())
+    assert "cipher" not in text
+    assert "Y2lwaG" not in text
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "text",
+        {"key_id": 1, "nonce": "bm5ubm5ubm5ubm5u", "ciphertext": "AAAA"},
+        {"key_id": "k", "nonce": "***", "ciphertext": "AAAA"},
+        {"key_id": "k", "nonce": "bm5ubm5ubm5ubm5u"},
+        {"key_id": "k", "nonce": "bm5ubm5ubm5ubm5u", "ciphertext": 5},
+        {"key_id": "k", "nonce": "bm5ubm5ubm5ubm5u", "ciphertext": "AAAA", "extra": 1},
+    ],
+)
+def test_malformed_sealed_data_is_rejected_without_echoing_it(bad: object) -> None:
+    data = _with_sealed().to_json_dict()
+    data["apis"][0]["sealed"] = bad  # type: ignore[index]
+    with pytest.raises(ValueError, match="sealed") as exc:
+        Snapshot.from_json_dict(data)
+    assert "***" not in str(exc.value)
+    assert "bm5u" not in str(exc.value)

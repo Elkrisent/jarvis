@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -9,6 +11,7 @@ from types import MappingProxyType
 from typing import Any, Literal, cast
 
 from jarvis_core.config import ApiDependency
+from jarvis_core.interfaces import SealedSecret
 from pydantic import ValidationError
 
 Source = Literal["postgres", "file"]
@@ -26,6 +29,8 @@ class ApiEntry:
     slug: str
     version: int
     config: ApiDependency
+    # The provider secret as stored: ciphertext only. The CredentialVault opens it into memory.
+    sealed: SealedSecret | None = None
 
     def __repr__(self) -> str:
         return f"ApiEntry(api_id={self.api_id!r}, version={self.version})"
@@ -143,6 +148,7 @@ class Snapshot:
                     "slug": a.slug,
                     "version": a.version,
                     "config": a.config.model_dump(mode="json"),
+                    "sealed": _sealed_json(a.sealed),
                 }
                 for a in self.apis.values()
             ],
@@ -212,6 +218,34 @@ def _string(raw: dict[str, Any], name: str, what: str) -> str:
     return value
 
 
+def _sealed_json(sealed: SealedSecret | None) -> dict[str, str] | None:
+    if sealed is None:
+        return None
+    return {
+        "key_id": sealed.key_id,
+        "nonce": base64.b64encode(sealed.nonce).decode("ascii"),
+        "ciphertext": base64.b64encode(sealed.ciphertext).decode("ascii"),
+    }
+
+
+def _parse_sealed(raw: object, what: str) -> SealedSecret | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, dict) or set(raw) != {"key_id", "nonce", "ciphertext"}:
+        raise ValueError(f"{what}: invalid sealed secret")
+    key_id, nonce, ciphertext = raw["key_id"], raw["nonce"], raw["ciphertext"]
+    if not all(isinstance(v, str) for v in (key_id, nonce, ciphertext)):
+        raise ValueError(f"{what}: invalid sealed secret")
+    try:
+        return SealedSecret(
+            key_id,
+            base64.b64decode(nonce, validate=True),
+            base64.b64decode(ciphertext, validate=True),
+        )
+    except (binascii.Error, ValueError):
+        raise ValueError(f"{what}: invalid sealed secret") from None
+
+
 def _parse_api(raw: object) -> ApiEntry:
     if not isinstance(raw, dict):
         raise ValueError("api entry is not an object")
@@ -231,7 +265,9 @@ def _parse_api(raw: object) -> ApiEntry:
     except ValidationError:
         # Deliberately drop the pydantic detail: it echoes input values.
         raise ValueError(f"{what}: invalid config") from None
-    return ApiEntry(api_id, project_id, slug, version, config)
+    return ApiEntry(
+        api_id, project_id, slug, version, config, _parse_sealed(raw.get("sealed"), what)
+    )
 
 
 def _parse_key(raw: object) -> tuple[str, KeyEntry]:
