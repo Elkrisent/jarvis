@@ -88,7 +88,7 @@ unset KEY_JSON
 * Every create or change of an API stores a new immutable policy version and publishes
   `config:changed` on Redis. Deleting an API or revoking a key does not publish yet (open question
   in `docs/PROGRESS.md`).
-* Validation errors are 422 with the field path of each problem.
+* Validation errors are 422 with the field path of each problem, in FastAPI's `{"detail": [...]}` shape. Other errors use `{"error": {"code", "message"}}`, so clients must handle both.
 * `POST /apis/{id}/test` answers 501 until M4.10.
 
 ## OpenAPI

@@ -54,6 +54,8 @@ def _property_names(node: Any) -> set[str]:
 
 @pytest.mark.unit
 def test_snapshot_has_no_secret_property_names() -> None:
-    schemas = json.loads((ROOT / "tests/contract/openapi.snapshot.json").read_text())
+    schemas = json.loads(
+        (ROOT / "tests/contract/openapi.snapshot.json").read_text(encoding="utf-8")
+    )
     assert schemas["paths"], "snapshot looks empty"
     assert _property_names(schemas) & FORBIDDEN_PROPERTIES == set()

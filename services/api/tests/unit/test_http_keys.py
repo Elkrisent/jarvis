@@ -35,7 +35,7 @@ async def _api(services: Services, project_id: str, slug: str = "weather") -> st
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-10-1")
+@pytest.mark.req("REQ-10-1", "REQ-10-4")
 def test_created_key_is_shown_once_and_only_its_prefix_is_listed(
     client: TestClient, services: Services
 ) -> None:

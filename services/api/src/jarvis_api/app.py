@@ -106,7 +106,7 @@ def create_app_from_env() -> FastAPI:
     # Settings before any connection, so a missing or invalid key or token stops startup.
     settings = load_settings()
     database_url = settings.database_url
-    engine = create_async_engine(to_async_url(database_url))
+    engine = create_async_engine(to_async_url(database_url), hide_parameters=True)
     publisher = RedisConfigPublisher(settings.redis_url)
     services = Services(
         projects=ProjectRepository(engine),

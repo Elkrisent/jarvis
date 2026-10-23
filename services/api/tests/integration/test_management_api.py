@@ -238,7 +238,7 @@ async def test_deleting_a_project_removes_everything(
     assert (await client.get(f"/api/v1/projects/{pid}")).status_code == 404
 
 
-@pytest.mark.req("REQ-10-1")
+@pytest.mark.req("REQ-10-1", "REQ-10-4")
 async def test_keys_are_hashed_scoped_and_revoked_in_place(
     client: httpx.AsyncClient, engine: AsyncEngine
 ) -> None:

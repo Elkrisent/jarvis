@@ -62,7 +62,11 @@ M1.3 Minimal management API on `feat/m1.3-management-api` (not merged):
 
 ## Blockers / Questions
 
-* No `config:changed` is published on API delete or key revoke. SPEC section 11 says keys are revocable within 1 s and M1.4 subscribes to key revocation: decide who publishes (the api on revoke/delete, or M1.4 polls).
+* Revocation and config propagation gaps (decide who publishes before M1.4/M1.5; REQ-11.1-6 needs revocation in 1 s or less):
+  * `config:changed` is not published on API delete, key revoke, key create or project delete. Project delete cascades to keys and APIs, so it is an implicit revocation: a gateway would keep accepting those keys until its 60 s resync. A new key may take up to 60 s to reach a gateway unless M1.4 falls back to Postgres on a cache miss.
+  * A key's `allowed_api_ids` can name deleted APIs (API delete does not clean them). M1.5 must deny when a restriction no longer matches, and never treat an empty or unknown list as unrestricted.
+  * OPEN, needs a user decision before P5: PATCH deletes the old secret, but older immutable versions still hold its `secret_ref`. A P5 rollback (copy an old version, SPEC section 5.2) would point at a deleted secret, and M1.4 must not read a superseded version's secret.
+  * The traceability row for REQ-11.1-6 shows `pass` but only hashed key storage is implemented; revocation within 1 s is not.
 * System test and quickstart not yet run (see In Progress).
 
 ## Resume Point

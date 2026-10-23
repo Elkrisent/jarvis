@@ -29,7 +29,7 @@ def generate() -> str:
 
 def diff_against_snapshot() -> str:
     """Unified diff of the committed snapshot against the generated document ('' when equal)."""
-    current = SNAPSHOT.read_text() if SNAPSHOT.exists() else ""
+    current = SNAPSHOT.read_text(encoding="utf-8") if SNAPSHOT.exists() else ""
     lines = difflib.unified_diff(
         current.splitlines(keepends=True),
         generate().splitlines(keepends=True),
@@ -45,7 +45,7 @@ def main() -> int:
     args = parser.parse_args()
     if args.write:
         SNAPSHOT.parent.mkdir(parents=True, exist_ok=True)
-        SNAPSHOT.write_text(generate())
+        SNAPSHOT.write_text(generate(), encoding="utf-8")
         print(f"wrote {SNAPSHOT.relative_to(ROOT)}")
         return 0
     diff = diff_against_snapshot()

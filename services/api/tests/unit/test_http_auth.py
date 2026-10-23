@@ -244,6 +244,23 @@ def test_env_app_wires_services_and_disposes_them(monkeypatch: pytest.MonkeyPatc
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-11.2-4")
+def test_engine_hides_sql_parameters(monkeypatch: pytest.MonkeyPatch) -> None:
+    for key, value in ENV.items():
+        monkeypatch.setenv(key, value)
+    seen: dict[str, object] = {}
+    real = app_module.create_async_engine
+
+    def spy(url: str, **kwargs: object) -> AsyncEngine:
+        seen.update(kwargs)
+        return real(url, **kwargs)
+
+    monkeypatch.setattr(app_module, "create_async_engine", spy)
+    create_app_from_env()
+    assert seen.get("hide_parameters") is True
+
+
+@pytest.mark.unit
 @pytest.mark.req("REQ-10-1")
 def test_other_http_errors_keep_their_status_in_the_error_format() -> None:
     from fastapi import HTTPException
