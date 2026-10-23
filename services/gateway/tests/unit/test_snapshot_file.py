@@ -527,3 +527,25 @@ def test_fifo_at_path_is_absent(tmp_path: Path, caplog: pytest.LogCaptureFixture
     with caplog.at_level(logging.WARNING):
         assert SnapshotFile(path).read() is None
     _warned(caplog, path)
+
+
+@pytest.mark.req("REQ-8-9")
+def test_file_that_grows_after_the_size_check_is_absent_with_warning(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The size read from fstat can be stale (the file is appended to meanwhile): the bytes
+    actually read are bounded and checked too."""
+    path = tmp_path / "snap.json"
+    SnapshotFile(path).write(_snap(), written_at=1.0)
+    monkeypatch.setattr(snapshot_file, "MAX_SNAPSHOT_BYTES", 10)
+    real_fstat = os.fstat
+
+    class StaleStat:
+        def __init__(self, real: os.stat_result) -> None:
+            self.st_mode = real.st_mode
+            self.st_size = 0
+
+    monkeypatch.setattr(os, "fstat", lambda fd: StaleStat(real_fstat(fd)))
+    with caplog.at_level(logging.WARNING):
+        assert SnapshotFile(path).read() is None
+    _warned(caplog, path)

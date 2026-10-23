@@ -165,3 +165,11 @@ def test_create_app_from_env_wires_a_manager(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setenv("JARVIS_SNAPSHOT_PATH", "/nonexistent/snapshot.json")
     app = create_app_from_env()
     assert app.title == "jarvis-gateway"
+
+
+def test_the_lifespan_without_a_config_manager_just_serves() -> None:
+    async def probe(host: str, port: int) -> bool:
+        return True
+
+    with TestClient(create_app(dependencies_from_env(ENV), probe)) as client:
+        assert client.get("/healthz").json() == {"status": "ok"}

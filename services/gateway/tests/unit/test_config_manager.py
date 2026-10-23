@@ -885,3 +885,13 @@ async def test_stop_during_start_spawns_nothing(h: Harness) -> None:
     await asyncio.wait_for(start, timeout=2)
     await settle()
     assert [t for t in asyncio.all_tasks() if "ConfigManager" in t.get_name()] == []
+
+
+async def test_an_event_of_an_unknown_kind_is_ignored(h: Harness) -> None:
+    await _started(h)
+    before = h.snap
+    submitted = len(h.fake_writer.submitted)
+    await h.manager.handle_event(Invalidated("tenant", "t1"))  # type: ignore[arg-type]
+    assert h.snap is before
+    assert len(h.fake_writer.submitted) == submitted
+    await h.manager.stop()

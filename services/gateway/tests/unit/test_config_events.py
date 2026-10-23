@@ -516,3 +516,15 @@ async def test_cancellation_inside_a_callback_propagates() -> None:
     with pytest.raises(asyncio.CancelledError):
         await task
     assert conn.closed
+
+
+async def test_cancellation_while_closing_the_connection_propagates() -> None:
+    clock, stop, rec = FakeClock(), asyncio.Event(), Recorder()
+
+    class CancelledClose(FakeConn):
+        async def aclose(self) -> None:
+            raise asyncio.CancelledError
+
+    conn = CancelledClose([stop.set])
+    with pytest.raises(asyncio.CancelledError):
+        await _run(Factory([conn], clock, stop), rec, clock, stop)
