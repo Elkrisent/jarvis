@@ -10,7 +10,7 @@ Phase 1: Proxy.
 
 ## Current Module
 
-None active. Next is M1.4 Gateway config loader (not planned or started).
+M1.4 Gateway config loader: planned, no code yet.
 
 ## Completed
 
@@ -54,16 +54,17 @@ None active. Next is M1.4 Gateway config loader (not planned or started).
 
 ## In Progress
 
-Nothing.
+M1.4 Gateway config loader: planned, no code yet. Branch `feat/m1.4-config-loader` holds only the plan, `docs/superpowers/plans/2026-10-23-m1-4-gateway-config-loader.md` (8 tasks). Execution is subagent-driven (`superpowers:subagent-driven-development`). Decision made: the API publishes on every change (new `config:invalidated` event for key create/revoke, API delete, project delete), so the gateway can meet revocation in 1 s or less.
 
 ## Next
 
-1. Settle who publishes `config:changed` for key revoke, key create, API delete and project delete (below); M1.4 subscribes to key revocation and its DoD needs propagation within 1 s.
-2. Plan and build M1.4 Gateway config loader.
+1. Execute the M1.4 plan task by task (Tasks 1 to 8) on `feat/m1.4-config-loader`.
+2. Open the M1.4 PR, get `ci` and `security` green (and `system` on main after merge), then record the merge SHA here in a docs PR.
+3. Then M1.5 Gateway authentication.
 
 ## Blockers / Questions
 
-* Revocation and config propagation gaps (decide who publishes before M1.4/M1.5; REQ-11.1-6 needs revocation in 1 s or less):
+* Revocation and config propagation gaps (M1.4 Task 1 adds the missing publishes; REQ-11.1-6 needs revocation in 1 s or less):
   * `config:changed` is not published on API delete, key revoke, key create or project delete. Project delete cascades to keys and APIs, so it is an implicit revocation: a gateway would keep accepting those keys until its 60 s resync. A new key may take up to 60 s to reach a gateway unless M1.4 falls back to Postgres on a cache miss.
   * A key's `allowed_api_ids` can name deleted APIs (API delete does not clean them). M1.5 must deny when a restriction no longer matches, and never treat an empty or unknown list as unrestricted.
   * OPEN, needs a user decision before P5: PATCH deletes the old secret, but older immutable versions still hold its `secret_ref`. A P5 rollback (copy an old version, SPEC section 5.2) would point at a deleted secret, and M1.4 must not read a superseded version's secret.
@@ -71,7 +72,7 @@ Nothing.
 
 ## Resume Point
 
-Read the M1.4 section of `docs/IMPLEMENTATION.md` and SPEC §5.2 and §8, resolve the revocation-publishing question with the user, then write the M1.4 plan.
+Read the M1.4 plan, then start Task 1 via `superpowers:subagent-driven-development` on `feat/m1.4-config-loader`. Nothing is implemented yet. Open question for later: the P5 rollback vs old-version `secret_ref` problem below.
 
 ## Last Updated
 
