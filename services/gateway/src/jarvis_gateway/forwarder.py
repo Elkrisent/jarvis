@@ -12,11 +12,13 @@ import http.cookiejar
 import logging
 import time
 from collections.abc import AsyncIterator, Callable
+from urllib.parse import unquote
 
 import httpx
 from fastapi import Request
 from fastapi.responses import Response, StreamingResponse
 from jarvis_core.errors import (
+    AuthInvalidError,
     BodyTooLargeError,
     UpstreamTimeoutError,
     UpstreamUnreachableError,
@@ -54,12 +56,27 @@ def _raw_headers(request: Request) -> list[tuple[str, str]]:
 
 
 def _target_parts(request: Request, api_slug: str) -> tuple[str, str]:
-    """The path after ``/gw/{slug}`` and the query string, exactly as the client sent them."""
+    """The path after ``/gw/{slug}`` and the query string, exactly as the client sent them.
+
+    The slug is the first raw segment. If it only matched the route because of an encoded ``/``
+    in it (``weather%2Fv1``), the split the router used differs from this one: refuse.
+    """
     raw = request.scope.get("raw_path")
     full = raw.decode("latin-1") if isinstance(raw, bytes) else request.url.path
-    prefix = f"/gw/{api_slug}"
-    path = full[len(prefix) :] if full.startswith(prefix) else ""
-    return path, request.scope.get("query_string", b"").decode("latin-1")
+    segment, slash, rest = full.removeprefix("/gw/").partition("/")
+    if not full.startswith("/gw/") or unquote(segment) != api_slug:
+        raise AuthInvalidError("invalid or missing JARVIS key")
+    return slash + rest, request.scope.get("query_string", b"").decode("latin-1")
+
+
+def _wire(headers: list[tuple[str, str]], injected_last: bool) -> list[tuple[bytes, bytes]]:
+    """Header bytes as received (latin-1). The injected credential header (always last, when
+    there is one) is sent as UTF-8, whatever characters the provider secret holds."""
+    out = [(n.encode("latin-1"), v.encode("latin-1")) for n, v in headers]
+    if injected_last and headers:
+        name, value = headers[-1]
+        out[-1] = (name.encode("utf-8"), value.encode("utf-8"))
+    return out
 
 
 class Forwarder:
@@ -156,7 +173,7 @@ class Forwarder:
             upstream_request = client.build_request(
                 request.method,
                 url,
-                headers=headers,
+                headers=_wire(headers, config.credential.mode in ("bearer", "header")),
                 content=body or None,
                 timeout=httpx.Timeout(config.attempt_timeout_ms / 1000),
             )

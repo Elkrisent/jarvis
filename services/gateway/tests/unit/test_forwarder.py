@@ -599,3 +599,37 @@ def test_serving_requests_makes_no_database_query_after_the_config_is_loaded(
             assert response.status_code == 200
         client.get("/gw/weather/x", headers={"X-Jarvis-Key": "jv_live_bad"})
         assert calls == ["load_all"]  # nothing was read from Postgres to serve them
+
+
+# --- review fixes: raw header bytes and the slug segment -----------------------------------------
+
+
+def test_a_header_value_with_non_ascii_bytes_is_forwarded_byte_for_byte() -> None:
+    rig = _rig()
+    response = rig.call(headers={"X-Name": "café".encode()})
+    assert response.status_code == 200
+    assert (b"x-name", "café".encode()) in rig.requests[0].headers.raw
+
+
+def test_a_non_ascii_provider_secret_is_sent_as_utf8_not_a_crash() -> None:
+    api = _api("a1", "weather", {"mode": "header", "header_name": "X-Key"})
+    sealed = BOX.seal("sécret", context="sec_a1")
+    rig = Rig([ApiEntry(api.api_id, api.project_id, api.slug, 1, api.config, sealed)])
+    assert rig.call().status_code == 200
+    assert (b"x-key", "sécret".encode()) in rig.requests[0].headers.raw
+
+
+@pytest.mark.req("REQ-4.1-1")
+def test_an_encoded_character_in_the_slug_does_not_drop_the_path() -> None:
+    rig = _rig()
+    assert rig.call(url="/gw/weath%65r/v1/x?q=1").status_code == 200
+    assert str(rig.requests[0].url) == "https://api.example.com/v1/v1/x?q=1"
+
+
+@pytest.mark.parametrize("target", ["/gw/weather%2Fv1/x", "/gw/weather%2F/x", "/gw/weather%2fv1"])
+def test_an_encoded_slash_in_the_slug_position_is_refused_like_an_unknown_api(target: str) -> None:
+    rig = _rig()
+    response = rig.call(url=target)
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "JV_AUTH_INVALID"
+    assert rig.requests == []
