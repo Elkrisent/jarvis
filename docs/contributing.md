@@ -5,7 +5,7 @@
 - One branch per module: `feat/m<phase>.<n>-<slug>`. Docs-only updates use `docs/…`.
 - Conventional commits: `feat:`, `fix:`, `test:`, `perf:`, `docs:`, `ci:`, `refactor:`, `chore:`.
 - Open a PR from the template, wait for green CI, squash-merge. Never push to `main`.
-- Never commit secrets or `.env`. Pre-commit runs gitleaks; CI runs it again. Master key handling `.gitleaks.toml` allowlists only the throwaway placeholder secret in `deploy/docker-compose.test.yml`.
+- Never commit secrets or `.env`. Pre-commit runs gitleaks; CI runs it again. `.gitleaks.toml` allowlists only the throwaway placeholder secret in `deploy/docker-compose.test.yml`. Master key handling
   and rotation: [`secrets-rotation.md`](secrets-rotation.md).
 - Never delete, skip or loosen a test to get green. `xfail`/`skip` needs a linked issue.
 
