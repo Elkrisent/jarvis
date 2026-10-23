@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792766723627,
+  "lastUpdate": 1792767161458,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Load (latency)": [
@@ -541,6 +541,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "mock_direct_p99",
             "value": 7.750023499999998,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "937a9367a0d7d32efb7e997806bdd0970cd4abd0",
+          "message": "Merge pull request #23 from Elkrisent/feat/m1.6-path-templating\n\nfeat(core): route path templating (M1.6)",
+          "timestamp": "2026-10-23T20:20:08+05:30",
+          "tree_id": "0763c0a3b1d59ce349395a0a450951370497f24f",
+          "url": "https://github.com/Elkrisent/jarvis/commit/937a9367a0d7d32efb7e997806bdd0970cd4abd0"
+        },
+        "date": 1792767160690,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "mock_direct_p50",
+            "value": 4.4176795,
+            "unit": "ms"
+          },
+          {
+            "name": "mock_direct_p95",
+            "value": 4.8357149999999995,
+            "unit": "ms"
+          },
+          {
+            "name": "mock_direct_p99",
+            "value": 5.67606975,
             "unit": "ms"
           }
         ]
