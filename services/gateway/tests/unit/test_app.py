@@ -140,6 +140,19 @@ def test_the_manager_runs_with_the_app_lifespan_and_healthz_is_always_200() -> N
     assert manager.events == ["start", "stop"]
 
 
+def test_stop_still_runs_when_start_fails() -> None:
+    client, manager = _managed(ConfigStatus("none", 0, 0, None, None))
+
+    async def boom() -> None:
+        manager.events.append("start")
+        raise RuntimeError("start failed")
+
+    manager.start = boom  # type: ignore[method-assign]
+    with pytest.raises(RuntimeError, match="start failed"), client:
+        pass
+    assert manager.events == ["start", "stop"]
+
+
 def test_postgres_source_without_any_recorded_sync_is_degraded() -> None:
     client, _ = _managed(_status("postgres", 995.0, None))
     assert client.get("/readyz").json()["status"] == "degraded"

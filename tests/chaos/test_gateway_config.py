@@ -118,19 +118,24 @@ def test_postgres_outage_snapshot_start_and_recovery(
             # 4. No snapshot file and no Postgres: the gateway stays up and reports 503.
             kill("postgres")
             compose("stop", "gateway")
-            _clear_snapshot_volume()
-            # `compose start gateway` would also start its dependency (Postgres): start the
-            # container directly so Postgres stays down.
-            container = compose("ps", "-q", "-a", "gateway").stdout.strip()
-            subprocess.run(["docker", "start", container], check=True, capture_output=True)
-            _wait_config(
-                "unavailable without any config",
-                lambda c, s, cfg: (c, s, cfg["source"], cfg["apis"])
-                == (503, "unavailable", "none", 0),
-                60,
-            )
-            assert _gateway_running()
-            assert httpx.get("http://127.0.0.1:18080/healthz", timeout=3).status_code == 200
+            try:
+                _clear_snapshot_volume()
+                # `compose start gateway` would also start its dependency (Postgres): start
+                # the container directly so Postgres stays down.
+                container = compose("ps", "-q", "-a", "gateway").stdout.strip()
+                subprocess.run(["docker", "start", container], check=True, capture_output=True)
+                _wait_config(
+                    "unavailable without any config",
+                    lambda c, s, cfg: (c, s, cfg["source"], cfg["apis"])
+                    == (503, "unavailable", "none", 0),
+                    60,
+                )
+                assert _gateway_running()
+                assert httpx.get("http://127.0.0.1:18080/healthz", timeout=3).status_code == 200
+            finally:
+                if not _gateway_running():
+                    # Leave the stack as found; Postgres comes back with its dependency.
+                    compose("start", "gateway", check=False)
 
             # 5. Postgres returns: the 5 s retry loads the config.
             revive("postgres")

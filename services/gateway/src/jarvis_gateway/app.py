@@ -73,8 +73,8 @@ def create_app(
         if config is None:
             yield
             return
-        await config.start()
         try:
+            await config.start()
             yield
         finally:
             await config.stop()
