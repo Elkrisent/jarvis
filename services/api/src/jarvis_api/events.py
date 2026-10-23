@@ -10,6 +10,8 @@ import redis
 from redis import asyncio as redis_asyncio
 
 CONFIG_CHANGED_CHANNEL = "config:changed"
+# Redis is optional and best-effort: never let an unreachable host stall an API save.
+SOCKET_TIMEOUT_SECONDS = 2.0
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +24,11 @@ class RedisConfigPublisher:
     """Publishes ``config:changed`` events; a failure is logged and never raised."""
 
     def __init__(self, redis_url: str) -> None:
-        self._client = redis_asyncio.from_url(redis_url)
+        self._client = redis_asyncio.from_url(
+            redis_url,
+            socket_connect_timeout=SOCKET_TIMEOUT_SECONDS,
+            socket_timeout=SOCKET_TIMEOUT_SECONDS,
+        )
 
     async def config_changed(self, api_id: str, version: int) -> None:
         payload = json.dumps({"api_id": api_id, "version": version}, separators=(",", ":"))
