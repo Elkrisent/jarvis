@@ -50,6 +50,9 @@ jobs:
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pinned: the action's default (8.24.3) ignores the AND-condition [[allowlists]] in
+          # .gitleaks.toml; 8.26.0 and later apply them.
+          GITLEAKS_VERSION: 8.30.1
 
   trivy:
     # Fails on HIGH/CRITICAL findings that have a fix available.
