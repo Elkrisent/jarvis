@@ -881,16 +881,20 @@ name = "jarvis-gateway"
 version = "0.0.0"
 source = { editable = "services/gateway" }
 dependencies = [
+    { name = "asyncpg" },
     { name = "fastapi" },
     { name = "jarvis-core" },
+    { name = "redis" },
     { name = "uvicorn" },
     { name = "uvloop" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "asyncpg", specifier = "==0.32.0" },
     { name = "fastapi", specifier = "==0.156.5" },
     { name = "jarvis-core", editable = "packages/core" },
+    { name = "redis", specifier = "==8.0.1" },
     { name = "uvicorn", specifier = "==0.34.2" },
     { name = "uvloop", specifier = "==0.21.0" },
 ]

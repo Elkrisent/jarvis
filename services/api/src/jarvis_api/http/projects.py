@@ -39,4 +39,5 @@ async def update_project(project_id: str, body: ProjectPatch, services: Services
 async def delete_project(project_id: str, services: ServicesDep) -> Response:
     """Delete a project with its keys, APIs, versions and the APIs' sealed secrets."""
     await services.projects.delete(project_id)
+    await services.publisher.invalidated("project", project_id)
     return Response(status_code=204)

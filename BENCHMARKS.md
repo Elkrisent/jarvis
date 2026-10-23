@@ -27,3 +27,21 @@ Budgets come from `benchmarks/budgets.yaml` (SPEC §13).
 | mock_direct_p95 | — | 10.31 | — | — | — | — | — | — | — | no budget |
 | mock_direct_p99 | — | 14.38 | — | — | — | — | — | — | — | no budget |
 | mock_direct_rps | — | 1591 | — | — | — | — | — | — | — | no budget |
+
+## Interim measurements (not a checkpoint)
+
+Taken during M1.4 with `make bench-propagation`, locally (not CI): WSL2 on a 12th Gen Intel Core
+i5-1235U (12 threads, 7 GB RAM), Postgres and Redis on the same machine, real management app plus
+real gateway `ConfigManager` in one process. 200 API PATCHes spaced 20 ms apart; each sample runs
+from just before the request is sent to the moment the gateway store shows the new version, so it
+includes the HTTP request and is an upper bound on commit-to-store latency. The HTTP part runs over an
+in-process ASGI transport (no network hop), so the bound holds for the in-process path only.
+
+| Metric | Budget | p50 | p99 | Status |
+|---|---|---|---|---|
+| config_propagation_p99 | ≤ 1000 ms | 10.8 ms | 20.8 ms | ok |
+
+Three local runs gave p50 10.5 to 10.8 ms and p99 17.7 to 20.8 ms. The table above gets this
+metric only once the checkpoint script runs the propagation benchmark. It does not yet:
+`scripts/bench/run_checkpoint.sh` skips `make bench-propagation` (which needs `DATABASE_URL` and
+`REDIS_URL`), and the next `make bench-checkpoint` regenerates this file and drops this section.

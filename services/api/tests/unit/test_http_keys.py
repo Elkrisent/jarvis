@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from fakes import ADMIN_TOKEN, AUTH, FakeKeys, fake_services
+from fakes import ADMIN_TOKEN, AUTH, FakeKeys, RecordingPublisher, fake_services
 from fastapi.testclient import TestClient
 from jarvis_api.app import create_app
 from jarvis_api.http.deps import Services
@@ -183,3 +183,51 @@ def test_revoking_an_unknown_key_is_404(client: TestClient) -> None:
 )
 def test_key_routes_need_the_token(client: TestClient, method: str, path: str) -> None:
     assert client.request(method, path).status_code == 401
+
+
+def _invalidations(services: Services) -> list[tuple[str, str]]:
+    assert isinstance(services.publisher, RecordingPublisher)
+    return services.publisher.invalidations
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-11.1-6")
+def test_creating_and_revoking_a_key_publish_invalidations(
+    client: TestClient, services: Services
+) -> None:
+    pid = _project(client)
+    key_id = client.post(f"/api/v1/projects/{pid}/keys", json={"name": "k"}, headers=AUTH).json()[
+        "id"
+    ]
+    assert _invalidations(services) == [("key", key_id)]
+    assert client.delete(f"/api/v1/keys/{key_id}", headers=AUTH).status_code == 204
+    assert client.delete(f"/api/v1/keys/{key_id}", headers=AUTH).status_code == 204
+    assert _invalidations(services) == [("key", key_id)] * 3
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-11.1-6")
+async def test_failed_key_operations_publish_nothing(
+    client: TestClient, services: Services
+) -> None:
+    pid = _project(client)
+    other = _project(client, "beta")
+    foreign = await _api(services, other)
+    assert (
+        client.post(f"/api/v1/projects/{pid}/keys", json={"name": ""}, headers=AUTH).status_code
+        == 422
+    )
+    assert (
+        client.post(
+            f"/api/v1/projects/{pid}/keys",
+            json={"name": "k", "allowed_api_ids": [foreign]},
+            headers=AUTH,
+        ).status_code
+        == 422
+    )
+    assert (
+        client.post("/api/v1/projects/prj_x/keys", json={"name": "k"}, headers=AUTH).status_code
+        == 404
+    )
+    assert client.delete("/api/v1/keys/key_missing", headers=AUTH).status_code == 404
+    assert _invalidations(services) == []

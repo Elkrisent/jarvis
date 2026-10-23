@@ -28,6 +28,7 @@ make coverage       # unit + integration tests + per-package coverage gates (sam
 make traceability   # requirement -> test report in docs/traceability.md
 make security-scan  # bandit + pip-audit
 make bench-micro    # pytest-benchmark micro-benchmarks
+make bench-propagation   # config propagation p99 (needs DATABASE_URL and REDIS_URL)
 make bench-up bench-load bench-down   # k6 dry run against the mock upstream (needs Docker)
 make bench-checkpoint PHASE=0         # numbers of record -> BENCHMARKS.md (local machine)
 pre-commit install  # enable git hooks
@@ -47,6 +48,12 @@ cd deploy && docker compose up -d --build --wait
 Gateway, api and worker each serve `/healthz` (liveness) and `/readyz` (dependencies) on
 internal port 8080 and publish no host ports. For development use
 `-f docker-compose.yml -f docker-compose.dev.yml` (hot reload, ports on 127.0.0.1:8080-8082).
+The gateway loads every API policy and key hash from Postgres at startup (`DATABASE_URL`), keeps
+them current through Redis events (within 1 s) and a full resync every `JARVIS_RESYNC_INTERVAL_S`
+(default 60), and writes the last loaded config to `JARVIS_SNAPSHOT_PATH` (the `gateway-snapshot`
+volume) so it can start from that file while Postgres is down. Compose starts the gateway only after Postgres is healthy, so with Postgres down a plain `docker compose up` will not start it; snapshot starts work through the restart policy, `docker compose restart gateway` or `docker start`. A gateway started from an old file serves keys revoked while it was down until Postgres returns (revocation within 1 s does not hold in that mode; the file has no age limit yet). Its `/readyz` adds `config`
+(`source`, `apis`, `keys`, `synced_at`; counts only): `degraded` when serving the snapshot file or
+when no full sync succeeded for 3 intervals, `unavailable` (503) when no config is loaded at all.
 `make test-system`, `make test-chaos` and `make test-security` start their own stack
 (project `jarvis-test`, ports 18080-18082, mock upstream on 19000 via the `test` profile) and need Docker.
 

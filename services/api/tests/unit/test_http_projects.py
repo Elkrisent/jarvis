@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from fakes import ADMIN_TOKEN, AUTH, fake_services
+from fakes import ADMIN_TOKEN, AUTH, RecordingPublisher, fake_services
 from fastapi.testclient import TestClient
 from jarvis_api.app import create_app
 
@@ -129,3 +129,16 @@ def test_empty_patch_returns_the_project_unchanged(client: TestClient) -> None:
 )
 def test_project_item_routes_need_the_token(client: TestClient, method: str, path: str) -> None:
     assert client.request(method, path).status_code == 401
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-11.1-6")
+def test_deleting_a_project_publishes_an_invalidation_only_on_success() -> None:
+    services = fake_services()
+    client = TestClient(create_app(services=services, admin_token=ADMIN_TOKEN))
+    assert isinstance(services.publisher, RecordingPublisher)
+    pid = str(_create(client)["id"])
+    assert client.delete("/api/v1/projects/prj_missing", headers=AUTH).status_code == 404
+    assert services.publisher.invalidations == []
+    assert client.delete(f"/api/v1/projects/{pid}", headers=AUTH).status_code == 204
+    assert services.publisher.invalidations == [("project", pid)]

@@ -19,9 +19,13 @@ class RecordingPublisher:
 
     def __init__(self) -> None:
         self.calls: list[tuple[str, int]] = []
+        self.invalidations: list[tuple[str, str]] = []
 
     async def config_changed(self, api_id: str, version: int) -> None:
         self.calls.append((api_id, version))
+
+    async def invalidated(self, kind: str, id: str) -> None:
+        self.invalidations.append((kind, id))
 
 
 class FakeProjects:

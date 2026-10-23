@@ -88,8 +88,8 @@ unset KEY_JSON
 * A JARVIS key looks like `jv_live_...`. Only its hash is stored, so it cannot be shown again; create
   a new key if you lose it.
 * Every create or change of an API stores a new immutable policy version and publishes
-  `config:changed` on Redis. Deleting an API or revoking a key does not publish yet (open question
-  in `docs/PROGRESS.md`).
+  `config:changed` on Redis. Creating or revoking a key, deleting an API and deleting a project publish
+  `config:invalidated` with `{"kind": "key"|"api"|"project", "id": "..."}`.
 * Validation errors are 422 with the field path of each problem, in FastAPI's `{"detail": [...]}` shape. Other errors use `{"error": {"code", "message"}}`, so clients must handle both.
 * `POST /apis/{id}/test` answers 501 until M4.10.
 

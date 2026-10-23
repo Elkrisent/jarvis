@@ -185,6 +185,7 @@ async def delete_api(api_id: str, services: ServicesDep) -> Response:
     """Delete an API with its versions and its sealed secret."""
     stored = await _stored(services, api_id)
     await services.apis.delete(api_id)
+    await services.publisher.invalidated("api", api_id)
     if stored.config.credential.secret_ref is not None:
         await _discard_secret(services, stored.config.credential.secret_ref)
     return Response(status_code=204)

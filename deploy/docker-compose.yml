@@ -43,7 +43,12 @@ services:
     build: {context: .., dockerfile: deploy/docker/service.Dockerfile, args: {SERVICE: gateway}}
     deploy: {replicas: "${GATEWAY_REPLICAS:-1}"}
     depends_on:
+      postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
+    # The last loaded config, so a gateway can start while Postgres is down (SPEC §8).
+    # The image creates this directory owned by uid 10001, so the volume is writable under read_only.
+    volumes:
+      - gateway-snapshot:/var/lib/jarvis/gateway
     healthcheck: &healthcheck
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/readyz', timeout=2)"]
       interval: 5s
@@ -75,3 +80,4 @@ services:
 
 volumes:
   postgres-data:
+  gateway-snapshot:

@@ -67,6 +67,32 @@ def readyz(service: str) -> httpx.Response:
     return httpx.get(f"http://127.0.0.1:{PORTS[service]}/readyz", timeout=3)
 
 
+def gateway_config() -> dict[str, object]:
+    """The ``config`` object of the gateway's ``/readyz`` (any status code)."""
+    config: dict[str, object] = readyz("gateway").json()["config"]
+    return config
+
+
+def create_project_with_api(client: httpx.Client, slug: str) -> tuple[str, str, str]:
+    """(project_id, api_id, key_id) created through the management API; ``client`` is /api/v1."""
+    project = client.post("/projects", json={"name": slug, "slug": slug})
+    assert project.status_code == 201, project.text
+    pid = project.json()["id"]
+    api = client.post(
+        f"/projects/{pid}/apis",
+        json={
+            "slug": "mock",
+            "name": "Mock",
+            "base_url": "http://mock-upstream:8080",
+            "credential": {"mode": "bearer", "secret": "sk-stack-test-placeholder"},
+        },
+    )
+    assert api.status_code == 201, api.text
+    key = client.post(f"/projects/{pid}/keys", json={"name": "ci"})
+    assert key.status_code == 201, key.text
+    return pid, api.json()["id"], key.json()["id"]
+
+
 @pytest.fixture(scope="session")
 def compose_stack() -> Iterator[None]:
     """Bring up the default profile once per session; tear it down afterwards."""
