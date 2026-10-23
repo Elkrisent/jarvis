@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792749065759,
+  "lastUpdate": 1792759911997,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Micro benchmarks": [
@@ -337,6 +337,37 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 4.0245150029107344e-7",
             "extra": "mean: 1.4824164992328481 usec\nrounds: 40790"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b17187db4a4bdd63ce6386f57eca3af2412bbe0d",
+          "message": "Merge pull request #20 from Elkrisent/feat/m1.4-config-loader\n\nfeat: M1.4 gateway config loader",
+          "timestamp": "2026-10-23T18:21:19+05:30",
+          "tree_id": "88508a6e66a5405216693cfedc4e2edbea5bd49c",
+          "url": "https://github.com/Elkrisent/jarvis/commit/b17187db4a4bdd63ce6386f57eca3af2412bbe0d"
+        },
+        "date": 1792759911385,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "packages/core/tests/bench/test_bench_token_bucket_take.py::test_bench_token_bucket_take",
+            "value": 658094.1030398267,
+            "unit": "iter/sec",
+            "range": "stddev: 4.296830161750209e-7",
+            "extra": "mean: 1.5195395238779121 usec\nrounds: 36927"
           }
         ]
       }
