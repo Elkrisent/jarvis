@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
 from jarvis_core.errors import JarvisError, NotImplementedYetError
@@ -13,7 +15,7 @@ from jarvis_gateway.request_id import new_request_id
 METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
 
 
-def _jarvis_response(status: int, body: dict[str, object], request_id: str) -> JSONResponse:
+def _jarvis_response(status: int, body: Mapping[str, object], request_id: str) -> JSONResponse:
     return JSONResponse(
         body,
         status_code=status,
