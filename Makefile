@@ -45,7 +45,7 @@ test-system:
 	$(PYTEST) -m system
 
 test-functional:
-	@echo "placeholder: no functional suites yet (arrives with M0.2)"
+	$(PYTEST) -m functional
 
 test-e2e:
 	$(PYTEST) -m e2e

@@ -45,6 +45,11 @@ services:
     image: jarvis-gateway:dev
     build: {context: .., dockerfile: deploy/docker/service.Dockerfile, args: {SERVICE: gateway}}
     deploy: {replicas: "${GATEWAY_REPLICAS:-1}"}
+    environment:
+      <<: *service-env
+      # Provider secrets are opened in memory with the master key (SPEC 4.5, 11.2).
+      JARVIS_MASTER_KEY: ${JARVIS_MASTER_KEY:-}
+      JARVIS_MAX_BODY_BYTES: ${JARVIS_MAX_BODY_BYTES:-}
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}

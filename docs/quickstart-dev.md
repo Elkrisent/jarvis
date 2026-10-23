@@ -62,9 +62,10 @@ KEY_ID=$(echo "$KEY_JSON" | jq -r .id)
 curl -sS "$API/projects/$PROJECT_ID/keys" -H "$AUTH" | jq .
 curl -sS "$API/projects/$PROJECT_ID/apis" -H "$AUTH" | jq .
 
-# Call the gateway with the key (the gateway is on 127.0.0.1:8090 in the dev stack). It now
-# authenticates the key; forwarding to the provider arrives in a later module, so a valid key
-# gets 501 JV_NOT_IMPLEMENTED and a missing, unknown or revoked key gets 401 JV_AUTH_INVALID.
+# Call the gateway with the key (the gateway is on 127.0.0.1:8090 in the dev stack). It checks the
+# key and forwards the request to the API's base_url with the real provider credential added.
+# The example upstream api.weather.example does not exist, so a valid key gets 502
+# JV_UPSTREAM_UNREACHABLE; a missing, unknown or revoked key gets 401 JV_AUTH_INVALID.
 JARVIS_KEY=$(echo "$KEY_JSON" | jq -r .key)
 GW=http://127.0.0.1:8090
 sleep 1   # the gateway learns of a new key within 1 s
@@ -108,14 +109,49 @@ unset KEY_JSON JARVIS_KEY
   API's `jarvis_key_slot` header (default `x-jarvis-key`; the example above sets `"jarvis_key_slot": "authorization"` so
   `Authorization: Bearer jv_live_...` works). A key with an empty `allowed_api_ids` may call every API in its
   project; otherwise only the listed ones. All failures return the same 401 body.
-* Upstream hosts are checked when an API is saved (and on every gateway connection from M1.8). By
+* Upstream hosts are checked when an API is saved (and on every gateway connection). By
   default JARVIS refuses loopback, private (RFC 1918), link-local (including `169.254.169.254`),
   CGNAT, IPv6 ULA/link-local and multicast addresses, the JARVIS containers, and plain `http`; the
   answer is a 422 on `base_url` with the message `destination is not allowed`. To use an internal
   upstream, list it in `JARVIS_SSRF_ALLOWLIST` (CIDRs and/or host names, see `deploy/.env.example`)
   and restart. A host name that does not resolve is accepted at save time; the gateway checks again
   when it connects.
+* The gateway forwards `{METHOD} /gw/{slug}/{path}?{query}` to `{base_url}/{path}?{query}`. Before
+  it does, it removes the JARVIS key and any hop-by-hop headers, replaces whatever the client sent in
+  the credential's slot (an `Authorization` header, a custom header or a query parameter) with the
+  stored provider secret, and refuses bodies over `JARVIS_MAX_BODY_BYTES` (default 10 MB, 413) and
+  `Accept: text/event-stream` requests (400). The upstream's answer, including its errors, comes
+  back unchanged with `X-Jarvis-Request-Id`, `X-Jarvis-Source` and `X-Jarvis-Attempts` added.
 * `POST /apis/{id}/test` answers 501 until M4.10.
+
+## 4. Forward to a real upstream
+
+The calls above end in a 502 because the example upstream does not exist. To see a full round trip,
+start a throwaway upstream on the stack's network, allow it, and point an API at it:
+
+```bash
+docker run -d --rm --name demo-upstream --network jarvis_default python:3.12-slim \
+  python -m http.server 8000
+echo 'JARVIS_SSRF_ALLOWLIST=demo-upstream' >> deploy/.env     # plain http to an internal host
+(cd deploy && docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --wait api gateway)
+
+PROJECT_ID=$(curl -sS -X POST "$API/projects" -H "$AUTH" -H 'Content-Type: application/json' \
+  -d '{"name": "Round trip", "slug": "round-trip"}' | jq -r .id)
+curl -sS -X POST "$API/projects/$PROJECT_ID/apis" -H "$AUTH" -H 'Content-Type: application/json' \
+  -d '{"slug": "demo", "name": "Demo", "base_url": "http://demo-upstream:8000",
+       "jarvis_key_slot": "authorization",
+       "credential": {"mode": "bearer", "secret": "the-real-provider-secret"}}' | jq '{slug, version}'
+JARVIS_KEY=$(curl -sS -X POST "$API/projects/$PROJECT_ID/keys" -H "$AUTH" \
+  -H 'Content-Type: application/json' -d '{"name": "demo"}' | jq -r .key)
+sleep 1
+
+# An SDK that only lets you change its base URL and API key would do exactly this:
+curl -sS -i "$GW/gw/demo/" -H "Authorization: Bearer $JARVIS_KEY" | sed -n '1p;/^[Xx]-[Jj]arvis/p'
+docker logs demo-upstream 2>&1 | tail -2     # shows the request; the JARVIS key never arrives
+
+docker rm -f demo-upstream
+curl -sS -X DELETE "$API/projects/$PROJECT_ID" -H "$AUTH" -w '%{http_code}\n'
+```
 
 ## OpenAPI
 
