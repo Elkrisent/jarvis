@@ -299,7 +299,12 @@ def test_other_http_errors_use_the_detail_as_the_message() -> None:
     async def opaque() -> None:
         raise HTTPException(status_code=418, detail={"x": 1})
 
+    @app.get("/odd")
+    async def odd() -> None:
+        raise HTTPException(status_code=599, detail=None)
+
     client = TestClient(app)
+    assert client.get("/odd").json()["error"] == {"code": "JV_INTERNAL", "message": "error"}
     assert client.get("/teapot").json()["error"]["message"] == "short and stout"
     assert client.get("/opaque").json()["error"]["message"] == "I'm a Teapot"
 

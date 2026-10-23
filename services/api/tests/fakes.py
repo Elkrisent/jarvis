@@ -115,6 +115,7 @@ class FakeApis:
     def __init__(self, projects: FakeProjects | None = None) -> None:
         self._projects = projects
         self.rows: dict[str, StoredApi] = {}
+        self.reasons: builtins.list[str | None] = []
 
     async def put_version(
         self,
@@ -138,10 +139,16 @@ class FakeApis:
             )
         elif api_id not in self.rows or self.rows[api_id].project_id != project_id:
             raise NotFound(f"api not found: {api_id}")
+        elif any(
+            r.project_id == project_id and r.config.slug == api.slug and r.id != api_id
+            for r in self.rows.values()
+        ):
+            raise Conflict(f"api slug already exists in project: {api.slug}")
         previous = self.rows.get(api_id) if api_id else None
         api_id = api_id or new_id("api")
         version = previous.version + 1 if previous else 1
         self.rows[api_id] = StoredApi(api_id, project_id, version, api, datetime.now(UTC))
+        self.reasons.append(reason)
         return api_id, version
 
     async def get_by_id(self, api_id: str) -> StoredApi | None:

@@ -72,7 +72,8 @@ def install_error_handlers(app: FastAPI) -> None:
                 require_admin(request, request.headers.get("authorization"))
             except AuthRequiredError as denied:
                 return error_response(denied)
-        message = exc.detail if isinstance(exc.detail, str) else _phrase(exc.status_code)
+        detail = exc.detail
+        message = detail if isinstance(detail, str) and detail else _phrase(exc.status_code)
         cls = _BY_STATUS.get(exc.status_code, JarvisError)
         body = {"error": {"code": cls.code, "message": message}}
         return JSONResponse(body, status_code=exc.status_code, headers=exc.headers)
