@@ -12,7 +12,7 @@ import hmac
 from dataclasses import dataclass
 from typing import Annotated, Protocol
 
-from fastapi import Header
+from fastapi import Depends, Header
 from jarvis_core.config import ApiDependency
 from jarvis_core.errors import AuthRequiredError
 from jarvis_core.keys import GeneratedKey
@@ -71,6 +71,8 @@ class Services:
     publisher: ConfigPublisher
 
 
+API_PREFIX = "/api/v1"
+
 _DENIED = "a valid admin token is required"
 
 
@@ -87,3 +89,6 @@ def require_admin(request: Request, authorization: Annotated[str | None, Header(
 def get_services(request: Request) -> Services:
     services: Services = request.app.state.services
     return services
+
+
+ServicesDep = Annotated[Services, Depends(get_services)]

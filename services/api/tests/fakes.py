@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from jarvis_api.db.config_source import StoredApi
 from jarvis_api.db.ids import new_id
 from jarvis_api.db.repositories import Conflict, KeyRecord, NotFound, ProjectRecord
+from jarvis_api.http.deps import Services
 from jarvis_core.config import ApiDependency
 from jarvis_core.keys import GeneratedKey
 from jarvis_core.secretbox import AesGcmSecretBox
@@ -63,18 +64,29 @@ class FakeProjects:
 
 
 class FakeKeys:
-    """In-memory KeysPort."""
+    """In-memory KeysPort; given projects/apis it checks them like ``KeyRepository``."""
 
-    def __init__(self) -> None:
+    def __init__(self, projects: FakeProjects | None = None, apis: FakeApis | None = None) -> None:
+        self._projects = projects
+        self._apis = apis
         self.rows: dict[str, KeyRecord] = {}
+        self.hashes: dict[str, str] = {}
 
     async def create(
         self, project_id: str, name: str, allowed_api_ids: builtins.list[str], key: GeneratedKey
     ) -> KeyRecord:
+        if self._projects is not None and project_id not in self._projects.rows:
+            raise NotFound(f"project not found: {project_id}")
+        if self._apis is not None and any(
+            a not in self._apis.rows or self._apis.rows[a].project_id != project_id
+            for a in allowed_api_ids
+        ):
+            raise ValueError("allowed_api_ids must belong to the project")
         record = KeyRecord(
             new_id("key"), project_id, name, key.prefix, tuple(allowed_api_ids), None
         )
         self.rows[record.id] = record
+        self.hashes[record.id] = key.hash
         return record
 
     async def list(self, project_id: str) -> builtins.list[KeyRecord]:
@@ -159,3 +171,21 @@ class FakeSecrets:
 
     async def delete(self, secret_id: str) -> None:
         self.rows.pop(secret_id, None)
+
+
+ADMIN_TOKEN = "s3cret-admin-token-" + "x" * 20
+AUTH = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
+
+
+def fake_services() -> Services:
+    """A Services bundle of fakes whose keys and APIs check their project like the repositories."""
+    projects = FakeProjects()
+    apis = FakeApis(projects)
+    return Services(
+        projects=projects,
+        keys=FakeKeys(projects, apis),
+        apis=apis,
+        secrets=FakeSecrets(),
+        secret_box=AesGcmSecretBox(bytes(range(32))),
+        publisher=RecordingPublisher(),
+    )

@@ -257,3 +257,83 @@ def test_other_http_errors_keep_their_status_in_the_error_format() -> None:
     response = TestClient(app).get("/teapot")
     assert response.status_code == 418
     assert set(response.json()["error"]) == {"code", "message"}
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-10-2")
+@pytest.mark.parametrize("method", ["get", "post", "delete"])
+def test_unknown_paths_under_v1_still_need_the_token(client: TestClient, method: str) -> None:
+    response = client.request(method, "/api/v1/does/not/exist")
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "JV_AUTH_REQUIRED"
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-10-2")
+def test_wrong_method_on_a_known_path_needs_the_token(client: TestClient) -> None:
+    assert client.patch("/api/v1/projects").status_code == 401
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-10-1")
+def test_405_carries_the_allow_header(client: TestClient) -> None:
+    response = client.patch("/api/v1/projects", headers={"Authorization": f"Bearer {TOKEN}"})
+    assert response.status_code == 405
+    # Starlette names the methods of the first route matching the path (here GET only).
+    assert "GET" in response.headers["allow"].replace(" ", "").split(",")
+    assert response.json()["error"]["code"] == "JV_NOT_IMPLEMENTED"
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-10-1")
+def test_other_http_errors_use_the_detail_as_the_message() -> None:
+    from fastapi import HTTPException
+
+    app = create_app(services=_services(), admin_token=TOKEN)
+
+    @app.get("/teapot")
+    async def teapot() -> None:
+        raise HTTPException(status_code=418, detail="short and stout")
+
+    @app.get("/opaque")
+    async def opaque() -> None:
+        raise HTTPException(status_code=418, detail={"x": 1})
+
+    client = TestClient(app)
+    assert client.get("/teapot").json()["error"]["message"] == "short and stout"
+    assert client.get("/opaque").json()["error"]["message"] == "I'm a Teapot"
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-10-1")
+@pytest.mark.parametrize(
+    ("status", "code"),
+    [(401, "JV_AUTH_REQUIRED"), (409, "JV_CONFLICT"), (501, "JV_NOT_IMPLEMENTED")],
+)
+def test_http_errors_with_a_matching_jarvis_code_use_it(status: int, code: str) -> None:
+    from fastapi import HTTPException
+
+    app = create_app(services=_services(), admin_token=TOKEN)
+
+    @app.get("/raise")
+    async def raise_it() -> None:
+        raise HTTPException(status_code=status, detail="nope")
+
+    response = TestClient(app).get("/raise")
+    assert response.status_code == status
+    assert response.json()["error"] == {"code": code, "message": "nope"}
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-10-1")
+def test_unexpected_exceptions_return_a_bare_500(caplog: pytest.LogCaptureFixture) -> None:
+    app = create_app(services=_services(), admin_token=TOKEN)
+
+    @app.get("/boom")
+    async def boom() -> None:
+        raise RuntimeError("SENTINEL-DETAIL postgres://u:p@host/db")
+
+    response = TestClient(app, raise_server_exceptions=False).get("/boom")
+    assert response.status_code == 500
+    assert response.json() == {"error": {"code": "JV_INTERNAL", "message": "internal error"}}
+    assert "SENTINEL-DETAIL" not in response.text
