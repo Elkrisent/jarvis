@@ -119,6 +119,7 @@ def test_wrong_project_unknown_slug_and_ambiguous_slug_look_identical() -> None:
     assert bodies[0] == bodies[1] == bodies[2]
 
 
+@pytest.mark.req("REQ-4.2-1")
 def test_the_same_slug_in_two_projects_never_crosses_over() -> None:
     snap = _snap(
         [_api("a1", "p1", "weather"), _api("a2", "p2", "weather")],
@@ -161,6 +162,7 @@ def test_the_error_names_neither_key_nor_hash_nor_slug() -> None:
     assert "weather" not in text
 
 
+@pytest.mark.req("REQ-4.2-1")
 def test_the_snapshot_is_only_ever_asked_about_the_digest_never_the_raw_key() -> None:
     asked: list[str] = []
 

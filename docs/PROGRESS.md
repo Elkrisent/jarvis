@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 merged (PR #20, merge commit `b17187d`).
+Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 merged (PR #20, merge commit `b17187d`); M1.5 implemented on `feat/m1.5-gateway-auth` (PR pending).
 
 ## Current Phase
 
@@ -10,7 +10,7 @@ Phase 1: Proxy.
 
 ## Current Module
 
-None active. Next is M1.5 Gateway authentication (not planned or started).
+M1.5 Gateway authentication: implemented, awaiting final review and PR. Next is M1.6 Path templating.
 
 ## Completed
 
@@ -58,14 +58,20 @@ None active. Next is M1.5 Gateway authentication (not planned or started).
   * Verified locally against Postgres and Redis: `make lint typecheck` clean; 233 gateway unit + integration tests pass; stack suites system, chaos, e2e and security passed earlier on this branch (gateway startup/readiness work); 913 passed (2 perf deselected) in the final `make traceability COMPLETED_PHASE=0 TRACE_MARKERS="not perf"` run (47/246 covered; REQ-13-5 and REQ-5.2-3 rows changed and regenerated); `make bench-propagation` passed 3 times.
   * CI after merge: `ci`, `security`, `system` and `bench` all green on `main` at `b17187d` (the first PR `integration` run failed the no-drop-vs-main coverage gate on gateway branch coverage; fixed with tests, now 100/100). The `bench` run executed the new chained `propagation` job on a hosted runner: `config_propagation_p99` 15.3 ms vs the 1000 ms budget. The dedicated-role least-privilege test ran in CI.
 
+* M1.5 Gateway authentication (branch `feat/m1.5-gateway-auth`, PR pending; plan `docs/superpowers/plans/2026-10-23-m1-5-gateway-authentication.md`):
+  * `jarvis_gateway.auth`: `extract_key` (non-blank `X-Jarvis-Key` wins and is never retried from the slot; repeated header or value over 256 chars is no key; otherwise the API's `jarvis_key_slot` with a leading `Bearer` removed and a `jv_` prefix required) and `authenticate` (SHA-256 digest lookup, then revoked, project and allowed-API checks; every failure is the same `JV_AUTH_INVALID` body). `Snapshot.apis_with_slug` exposes duplicate slugs, which fail closed with a WARNING naming the project only. `Authenticated.forward_headers` drops the key and slot headers for M1.8.
+  * `/gw/{api_slug}[/{path}]` (all methods) authenticates and answers 501 `JV_NOT_IMPLEMENTED` until M1.8 adds forwarding; before the first config load it answers 503 `JV_NOT_READY` (a code outside the SPEC section 4.4 list). Responses carry `X-Jarvis-Request-Id` (ULID, `jarvis_gateway.request_id`) and `X-Jarvis-Source: jarvis`.
+  * Decided with the user: an empty `allowed_api_ids` means every API in the project (the API default is `[]`); a non-empty set restricts to those IDs and a deleted ID never matches.
+  * Moved to M1.8: the security test that the key is never forwarded upstream (asserted through mock upstream `/__admin/calls`) needs a forwarder; M1.5 proves it on `forward_headers()` and with a log/response secrecy test.
+  * Docs: README, `docs/quickstart-dev.md` (gateway calls and the 1 s revoke), `docs/traceability.md`.
 
 ## In Progress
 
-Nothing.
+Final whole-branch review of M1.5 and the PR.
 
 ## Next
 
-1. Plan and build M1.5 Gateway authentication (read the M1.4 hand-off notes under Blockers first).
+1. Finish the M1.5 review, open the PR, then plan M1.6 Path templating.
 2. Before the P1 checkpoint: wire `make bench-propagation` (needs `DATABASE_URL`/`REDIS_URL`) into `scripts/bench/run_checkpoint.sh`. Today the checkpoint skips it, so `config_propagation_p99` stays "not measured" in the `BENCHMARKS.md` table and the interim section there is dropped by the next `make bench-checkpoint`.
 
 ## Blockers / Questions
@@ -73,14 +79,14 @@ Nothing.
 * OPEN, needs a user decision before P5: PATCH deletes the old secret, but older immutable versions still hold its `secret_ref`. A P5 rollback (copy an old version, SPEC section 5.2) would point at a deleted secret. M1.4 reads only the current version.
 * REQ-11.1-6: the revocation push is implemented in M1.4 (`config:invalidated`); the traceability row only becomes meaningful once M1.5 enforces it on requests.
 * For M1.5:
-  * Do not trust a `(project, slug)` lookup blindly: a transient duplicate slug can exist in the snapshot until the next resync (up to 60 s if an event load fails).
+  * Resolved in M1.5: a duplicate `(project, slug)` is denied (fail closed).
   * Revoked keys STAY in `Snapshot.keys` with `revoked=True`: `snapshot.key(h)` being non-None does NOT mean authenticated. Authenticate only when the entry exists and `revoked` is False; deny revoked and unknown identically (`JV_AUTH_INVALID`).
   * Snapshot-file caveat: a gateway restarted from an old snapshot file (Postgres down) serves keys revoked while it was down until Postgres returns. The file has no age limit and events cannot be applied without Postgres. SPEC section 8 allows snapshot starts, but REQ-11.1-6 (1 s or less) does not hold in that mode; `/readyz` shows `degraded` with the file's `synced_at`. Capping the file age is an option for M1.5 or ops.
-  * A key's `allowed_api_ids` can name deleted APIs; deny on an unknown ID, never treat an empty or unknown list as unrestricted.
+  * Resolved in M1.5: an empty `allowed_api_ids` means unrestricted (user decision); a non-empty set that names only deleted APIs denies everything.
 
 ## Resume Point
 
-Read the M1.5 section of `docs/IMPLEMENTATION.md` and SPEC §4.2, then write the M1.5 plan.
+Run the final review of the M1.5 branch, open the PR, then read M1.6 in `docs/IMPLEMENTATION.md` and SPEC §4.14.
 
 ## Last Updated
 

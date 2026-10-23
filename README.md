@@ -12,7 +12,7 @@ the `api` service now owns the Postgres schema: Alembic migrations run at startu
 lock, and `PostgresConfigSource` stores API policies as immutable versions. M1.2 added the AES-256-GCM `SecretBox`,
 the Postgres secret store and the `jarvis rotate-master-key` command; M1.3 added the `/api/v1` management API (projects, JARVIS keys, API dependencies; the api now
 requires `JARVIS_MASTER_KEY` and `JARVIS_ADMIN_TOKEN` at startup). The compose stack runs
-healthy but the gateway does not proxy anything yet. Start with [`docs/quickstart-dev.md`](docs/quickstart-dev.md). Current state: [`docs/PROGRESS.md`](docs/PROGRESS.md).
+healthy. M1.5 added gateway authentication: `/gw/{api_slug}/...` checks the JARVIS key (header or credential slot, project scope, allowed APIs, revocation within 1 s), but the gateway does not forward anything yet (authenticated requests get 501 until M1.8). Start with [`docs/quickstart-dev.md`](docs/quickstart-dev.md). Current state: [`docs/PROGRESS.md`](docs/PROGRESS.md).
 
 ## Development setup
 
