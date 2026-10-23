@@ -2,10 +2,14 @@
 
 Save flow: validate, seal and store a supplied secret, ``put_version`` (commits), then publish
 ``config:changed``. A secret stored for a save that fails is deleted again, so none is orphaned.
+A PATCH saves with ``expected_version`` (409 if another save committed since its read), and a
+POST with ``create_only`` (409 for an existing slug), so concurrent saves never overwrite each
+other or leave the live config pointing at a deleted secret.
 """
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Response
@@ -15,11 +19,12 @@ from jarvis_core.errors import NotImplementedYetError
 from pydantic import SecretStr, ValidationError
 
 from jarvis_api.db.config_source import StoredApi, diff_configs
-from jarvis_api.db.repositories import Conflict, NotFound
+from jarvis_api.db.repositories import NotFound
 from jarvis_api.http.deps import Services, ServicesDep
 from jarvis_api.http.models import SECRET_STORED, ApiIn, ApiOut
 
 router = APIRouter(tags=["apis"])
+logger = logging.getLogger(__name__)
 
 TEST_PLACEHOLDER = "API test requests through the gateway pipeline arrive in M4.10"
 
@@ -69,15 +74,32 @@ async def _save(
     *,
     new_secret_ref: str | None,
     api_id: str | None = None,
+    create_only: bool = False,
+    expected_version: int | None = None,
 ) -> tuple[str, int]:
     try:
         api: ApiDependency = body.to_dependency(secret_ref)
-        saved = await services.apis.put_version(project_id, api, reason=body.reason, api_id=api_id)
+        saved = await services.apis.put_version(
+            project_id,
+            api,
+            reason=body.reason,
+            api_id=api_id,
+            create_only=create_only,
+            expected_version=expected_version,
+        )
     except Exception:
         if new_secret_ref is not None:
             await services.secrets.delete(new_secret_ref)
         raise
     return saved
+
+
+async def _discard_secret(services: Services, secret_id: str) -> None:
+    """Delete a secret the current version no longer uses. Failure only leaves an orphan row."""
+    try:
+        await services.secrets.delete(secret_id)
+    except Exception as exc:
+        logger.warning("could not delete an unused provider secret (%s)", type(exc).__name__)
 
 
 @router.get("/projects/{project_id}/apis")
@@ -91,11 +113,11 @@ async def list_apis(project_id: str, services: ServicesDep) -> list[ApiOut]:
 async def create_api(project_id: str, body: ApiIn, services: ServicesDep) -> ApiOut:
     if await services.projects.get(project_id) is None:
         raise NotFound(f"project not found: {project_id}")
-    # put_version upserts by slug, so an existing slug must be refused here.
-    if any(s.config.slug == body.slug for s in await services.apis.list_stored(project_id)):
-        raise Conflict(f"api slug already exists in project: {body.slug}")
     secret_ref = await _seal(services, body.credential.secret)
-    api_id, version = await _save(services, project_id, body, secret_ref, new_secret_ref=secret_ref)
+    # create_only: an existing slug, even one created concurrently, is a 409 and not an upsert.
+    api_id, version = await _save(
+        services, project_id, body, secret_ref, new_secret_ref=secret_ref, create_only=True
+    )
     await services.publisher.config_changed(api_id, version)
     return ApiOut.of(await _stored(services, api_id))
 
@@ -141,12 +163,20 @@ async def update_api(
     new_ref = await _seal(services, body.credential.secret)
     keep = body.credential.mode != "none" and not secret_cleared
     secret_ref = (new_ref or stored_ref) if keep else None
+    # expected_version: a save that committed since our read makes this one a 409, so a stale
+    # merge never overwrites it and never resurrects a secret that save already deleted.
     _, version = await _save(
-        services, stored.project_id, body, secret_ref, new_secret_ref=new_ref, api_id=api_id
+        services,
+        stored.project_id,
+        body,
+        secret_ref,
+        new_secret_ref=new_ref,
+        api_id=api_id,
+        expected_version=stored.version,
     )
-    if stored_ref is not None and stored_ref != secret_ref:
-        await services.secrets.delete(stored_ref)
     await services.publisher.config_changed(api_id, version)
+    if stored_ref is not None and stored_ref != secret_ref:
+        await _discard_secret(services, stored_ref)
     return ApiOut.of(await _stored(services, api_id))
 
 
@@ -156,7 +186,7 @@ async def delete_api(api_id: str, services: ServicesDep) -> Response:
     stored = await _stored(services, api_id)
     await services.apis.delete(api_id)
     if stored.config.credential.secret_ref is not None:
-        await services.secrets.delete(stored.config.credential.secret_ref)
+        await _discard_secret(services, stored.config.credential.secret_ref)
     return Response(status_code=204)
 
 

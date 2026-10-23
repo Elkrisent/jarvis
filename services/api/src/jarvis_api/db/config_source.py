@@ -95,13 +95,20 @@ class PostgresConfigSource:
         author_id: str | None = None,
         reason: str | None = None,
         api_id: str | None = None,
+        create_only: bool = False,
+        expected_version: int | None = None,
     ) -> tuple[str, int]:
         """Store ``api`` as the next immutable version; return ``(api_id, version)``.
 
-        Without ``api_id`` the API is upserted by slug. With it, that API's slug and name are
-        updated (``Conflict`` on a slug clash, ``NotFound`` for an unknown API). An unknown project
+        Without ``api_id`` the API is upserted by slug, or with ``create_only`` inserted and a
+        ``Conflict`` raised if the slug exists. With ``api_id``, that API's slug and name are
+        updated (``Conflict`` on a slug clash, ``NotFound`` for an unknown API), and with
+        ``expected_version`` the save raises ``Conflict`` unless that is still the current
+        version (optimistic concurrency for read-modify-write callers). An unknown project
         also raises ``NotFound``, so routers map every missing parent to 404.
         """
+        if create_only and api_id is not None:
+            raise ValueError("create_only cannot be combined with api_id")
         try:
             async with self._engine.begin() as conn:
                 exists = await conn.execute(select(Project.id).where(Project.id == project_id))
@@ -111,22 +118,21 @@ class PostgresConfigSource:
                 # The upsert/update takes a row lock held until commit, which serialises
                 # concurrent writes for the same API so each reads a distinct next version.
                 if api_id is None:
-                    api_id = (
-                        await conn.execute(
-                            insert(ApiDependencyRow)
-                            .values(
-                                id=new_id("api"),
-                                project_id=project_id,
-                                slug=api.slug,
-                                name=api.name,
-                            )
-                            .on_conflict_do_update(
-                                constraint="uq_api_dependencies_project_slug",
-                                set_={"name": api.name},
-                            )
-                            .returning(ApiDependencyRow.id)
+                    new_row = insert(ApiDependencyRow).values(
+                        id=new_id("api"), project_id=project_id, slug=api.slug, name=api.name
+                    )
+                    upsert = (
+                        new_row.on_conflict_do_nothing(constraint=API_SLUG_CONSTRAINT)
+                        if create_only
+                        else new_row.on_conflict_do_update(
+                            constraint=API_SLUG_CONSTRAINT, set_={"name": api.name}
                         )
-                    ).scalar_one()
+                    )
+                    api_id = (
+                        await conn.execute(upsert.returning(ApiDependencyRow.id))
+                    ).scalar_one_or_none()
+                    if api_id is None:
+                        raise Conflict(f"api slug already exists in project: {api.slug}")
                 else:
                     updated = (
                         await conn.execute(
@@ -156,6 +162,11 @@ class PostgresConfigSource:
                         )
                     )
                 ).scalar_one()
+                # Read under the row lock taken above, so a concurrent save cannot slip in between.
+                if expected_version is not None and version != expected_version + 1:
+                    raise Conflict(
+                        f"api {api_id} changed since version {expected_version}; reload and retry"
+                    )
                 config_json = config_json_from_api(api)
                 version_id = new_id("ver")
                 await conn.execute(

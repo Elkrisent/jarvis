@@ -130,6 +130,18 @@ class TestKeys:
         with pytest.raises(NotFound):
             await KeyRepository(engine).create("prj_missing", "k", [], generate_jarvis_key())
 
+    async def test_allowed_api_ids_are_deduplicated_in_order(self, engine: AsyncEngine) -> None:
+        project = await ProjectRepository(engine).create("A", "a")
+        source = PostgresConfigSource(engine)
+        first, _ = await source.put_version(project.id, _api("first"))
+        second, _ = await source.put_version(project.id, _api("second"))
+        keys = KeyRepository(engine)
+        record = await keys.create(
+            project.id, "k", [second, first, second, first], generate_jarvis_key()
+        )
+        assert record.allowed_api_ids == (second, first)
+        assert (await keys.list(project.id))[0].allowed_api_ids == (second, first)
+
     async def test_list_is_scoped_to_project(self, engine: AsyncEngine) -> None:
         projects = ProjectRepository(engine)
         one = await projects.create("One", "one")
@@ -233,6 +245,76 @@ class TestApis:
         )
         assert len({api_id for api_id, _ in results}) == 1
         assert sorted(v for _, v in results) == list(range(1, 11))
+
+    async def test_create_only_refuses_an_existing_slug(
+        self, engine: AsyncEngine, project_id: str
+    ) -> None:
+        source = PostgresConfigSource(engine)
+        api_id, version = await source.put_version(project_id, _api(), create_only=True)
+        assert version == 1
+        with pytest.raises(Conflict):
+            await source.put_version(project_id, _api(deadline_ms=4000), create_only=True)
+        stored = await source.get_by_id(api_id)
+        assert stored is not None
+        assert (stored.version, stored.config.deadline_ms) == (1, 5000)
+
+    async def test_concurrent_create_only_puts_conflict_once(
+        self, engine: AsyncEngine, project_id: str
+    ) -> None:
+        source = PostgresConfigSource(engine)
+        results = await asyncio.gather(
+            *(
+                source.put_version(project_id, _api(deadline_ms=3000 + i), create_only=True)
+                for i in range(5)
+            ),
+            return_exceptions=True,
+        )
+        created = [r for r in results if not isinstance(r, BaseException)]
+        assert len(created) == 1
+        assert all(isinstance(r, Conflict) for r in results if isinstance(r, BaseException))
+        assert len(await source.list_stored(project_id)) == 1
+
+    async def test_create_only_with_an_api_id_is_refused(
+        self, engine: AsyncEngine, project_id: str
+    ) -> None:
+        with pytest.raises(ValueError, match="create_only"):
+            await PostgresConfigSource(engine).put_version(
+                project_id, _api(), api_id="api_x", create_only=True
+            )
+
+    async def test_expected_version_must_be_the_current_one(
+        self, engine: AsyncEngine, project_id: str
+    ) -> None:
+        source = PostgresConfigSource(engine)
+        api_id, _ = await source.put_version(project_id, _api())
+        _, v2 = await source.put_version(
+            project_id, _api(deadline_ms=4000), api_id=api_id, expected_version=1
+        )
+        assert v2 == 2
+        with pytest.raises(Conflict, match="changed"):
+            await source.put_version(
+                project_id, _api(deadline_ms=3000), api_id=api_id, expected_version=1
+            )
+        stored = await source.get_by_id(api_id)
+        assert stored is not None
+        assert (stored.version, stored.config.deadline_ms) == (2, 4000)
+
+    async def test_concurrent_expected_version_puts_commit_once(
+        self, engine: AsyncEngine, project_id: str
+    ) -> None:
+        source = PostgresConfigSource(engine)
+        api_id, _ = await source.put_version(project_id, _api())
+        results = await asyncio.gather(
+            *(
+                source.put_version(
+                    project_id, _api(deadline_ms=3000 + i), api_id=api_id, expected_version=1
+                )
+                for i in range(5)
+            ),
+            return_exceptions=True,
+        )
+        assert [r for r in results if not isinstance(r, BaseException)] == [(api_id, 2)]
+        assert all(isinstance(r, Conflict) for r in results if isinstance(r, BaseException))
 
     async def test_get_by_id_and_list_stored(self, engine: AsyncEngine, project_id: str) -> None:
         source = PostgresConfigSource(engine)

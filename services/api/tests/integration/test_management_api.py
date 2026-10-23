@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -309,3 +310,79 @@ async def test_a_save_succeeds_when_redis_is_down(
     finally:
         await client.aclose()
         await publisher.aclose()
+
+
+async def _current_refs(engine: AsyncEngine) -> set[str | None]:
+    async with engine.connect() as conn:
+        rows = await conn.execute(
+            text(
+                "SELECT v.config_json -> 'credential' ->> 'secret_ref' FROM api_dependencies a "
+                "JOIN api_policy_versions v ON v.id = a.current_version_id"
+            )
+        )
+        return set(rows.scalars())
+
+
+@pytest.mark.req("REQ-10-1")
+async def test_concurrent_creates_with_one_slug_give_one_201_and_one_409(
+    client: httpx.AsyncClient, engine: AsyncEngine, box: AesGcmSecretBox
+) -> None:
+    pid = await _project(client)
+    for round_ in range(3):
+        slug = f"race-{round_}"
+        first, second = await asyncio.gather(
+            client.post(f"/api/v1/projects/{pid}/apis", json=_api_body(slug, secret="one")),
+            client.post(f"/api/v1/projects/{pid}/apis", json=_api_body(slug, secret="two")),
+        )
+        assert sorted([first.status_code, second.status_code]) == [201, 409]
+        winner = first if first.status_code == 201 else second
+        assert winner.json()["version"] == 1
+    assert await _count(engine, "api_dependencies") == 3
+    assert await _count(engine, "api_policy_versions") == 3
+    # The losing request's sealed secret was deleted again: one secret per API, all in use.
+    assert set(await _secret_ids(engine)) == await _current_refs(engine)
+
+
+@pytest.mark.req("REQ-11.2-4")
+@pytest.mark.parametrize(
+    "secret_change",
+    [
+        pytest.param({"secret": "SENTINEL-SECRET-NEW"}, id="replace"),
+        pytest.param({"mode": "none"}, id="mode-none"),
+    ],
+)
+async def test_interleaved_patches_lose_no_update_and_leave_no_dangling_secret(
+    client: httpx.AsyncClient,
+    engine: AsyncEngine,
+    box: AesGcmSecretBox,
+    secret_change: dict[str, str],
+) -> None:
+    pid = await _project(client)
+    store = PostgresSecretStore(engine)
+    for round_ in range(3):
+        api_id = (await _api(client, pid, slug=f"api-{round_}"))["id"]
+        changed_secret, changed_deadline = await asyncio.gather(
+            client.patch(f"/api/v1/apis/{api_id}", json={"credential": secret_change}),
+            client.patch(f"/api/v1/apis/{api_id}", json={"deadline_ms": 9000}),
+        )
+        statuses = {changed_secret.status_code, changed_deadline.status_code}
+        assert statuses <= {200, 409}
+        assert 200 in statuses
+        stored = await PostgresConfigSource(engine).get_by_id(api_id)
+        assert stored is not None
+        ref = stored.config.credential.secret_ref
+        if changed_secret.status_code == 200:
+            if "secret" in secret_change:
+                assert ref is not None
+                assert await store.reveal(box, ref) == secret_change["secret"]
+            else:
+                assert ref is None
+        else:
+            assert ref is not None
+            assert await store.reveal(box, ref) == SECRET
+        assert (stored.config.deadline_ms == 9000) == (changed_deadline.status_code == 200)
+        assert stored.version == 1 + sum(
+            r.status_code == 200 for r in (changed_secret, changed_deadline)
+        )
+    # Every live config's secret exists, and no sealed secret is left unreferenced.
+    assert set(await _secret_ids(engine)) == await _current_refs(engine) - {None}

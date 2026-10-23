@@ -17,6 +17,7 @@ from fakes import (
 from fastapi.testclient import TestClient
 from httpx import Response
 from jarvis_api.app import create_app
+from jarvis_api.db.config_source import StoredApi
 from jarvis_api.http.apis import config_diff, merge_patch
 from jarvis_api.http.deps import Services
 from jarvis_core.config import ApiDependency
@@ -475,6 +476,70 @@ def test_failed_patch_deletes_the_new_secret_and_keeps_the_old(
     assert before in _secrets(services).rows
     assert "new" not in _secrets(services).rows.values()
     assert len(_secrets(services).rows) == 2
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-11.2-4")
+def test_patch_from_a_stale_read_is_409_and_keeps_the_newer_save(
+    client: TestClient, services: Services
+) -> None:
+    created = _create(client, _project(client))
+    api_id = created["id"]
+    stale = _apis(services).rows[api_id]
+    assert (
+        _patch(client, api_id, {"credential": {"secret": "SENTINEL-SECRET-2"}}).status_code == 200
+    )
+    newer_ref = _ref(services, api_id)
+
+    async def stale_read(_: str) -> StoredApi:
+        return stale
+
+    services.apis.get_by_id = stale_read  # type: ignore[method-assign]
+    response = _patch(client, api_id, {"deadline_ms": 9000, "credential": {"secret": "x"}})
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "JV_CONFLICT"
+    current = _apis(services).rows[api_id]
+    assert (current.version, current.config.deadline_ms) == (2, 5000)
+    assert _secrets(services).rows == {newer_ref: "SENTINEL-SECRET-2"}
+    assert _published(services) == [(api_id, 1), (api_id, 2)]
+
+
+def _failing_secret_delete(services: Services) -> None:
+    async def delete(secret_id: str) -> None:
+        raise OSError(f"cannot reach the database to delete {secret_id}")
+
+    services.secrets.delete = delete  # type: ignore[method-assign]
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-5.2-3")
+def test_patch_succeeds_and_publishes_when_the_old_secret_cannot_be_deleted(
+    client: TestClient, services: Services, caplog: pytest.LogCaptureFixture
+) -> None:
+    created = _create(client, _project(client))
+    old_ref = _ref(services, created["id"])
+    assert old_ref is not None
+    _failing_secret_delete(services)
+    with caplog.at_level(logging.WARNING, logger="jarvis_api.http.apis"):
+        response = _patch(client, created["id"], {"credential": {"secret": "SENTINEL-SECRET-2"}})
+    assert response.status_code == 200
+    assert _published(services) == [(created["id"], 1), (created["id"], 2)]
+    assert "provider secret" in caplog.text
+    assert old_ref not in caplog.text
+    assert "SENTINEL" not in caplog.text
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-10-1")
+def test_delete_succeeds_when_the_secret_cannot_be_deleted(
+    client: TestClient, services: Services, caplog: pytest.LogCaptureFixture
+) -> None:
+    created = _create(client, _project(client))
+    _failing_secret_delete(services)
+    with caplog.at_level(logging.WARNING, logger="jarvis_api.http.apis"):
+        response = client.delete(f"/api/v1/apis/{created['id']}", headers=AUTH)
+    assert response.status_code == 204
+    assert "sec_" not in caplog.text
 
 
 # --- delete and test ---------------------------------------------------------------------------

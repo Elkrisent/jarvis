@@ -158,6 +158,7 @@ class KeyRepository:
     async def create(
         self, project_id: str, name: str, allowed_api_ids: list[str], key: GeneratedKey
     ) -> KeyRecord:
+        allowed_api_ids = list(dict.fromkeys(allowed_api_ids))  # de-duplicate, keep order
         async with self._engine.begin() as conn:
             if (
                 await conn.execute(select(Project.id).where(Project.id == project_id))

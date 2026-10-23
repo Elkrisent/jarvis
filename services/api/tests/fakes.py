@@ -125,6 +125,8 @@ class FakeApis:
         author_id: str | None = None,
         reason: str | None = None,
         api_id: str | None = None,
+        create_only: bool = False,
+        expected_version: int | None = None,
     ) -> tuple[str, int]:
         if self._projects is not None and project_id not in self._projects.rows:
             raise NotFound(f"unknown project: {project_id}")
@@ -137,6 +139,8 @@ class FakeApis:
                 ),
                 None,
             )
+            if create_only and api_id is not None:
+                raise Conflict(f"api slug already exists in project: {api.slug}")
         elif api_id not in self.rows or self.rows[api_id].project_id != project_id:
             raise NotFound(f"api not found: {api_id}")
         elif any(
@@ -145,6 +149,11 @@ class FakeApis:
         ):
             raise Conflict(f"api slug already exists in project: {api.slug}")
         previous = self.rows.get(api_id) if api_id else None
+        if (
+            expected_version is not None
+            and (previous.version if previous else 0) != expected_version
+        ):
+            raise Conflict(f"api {api_id} changed since version {expected_version}")
         api_id = api_id or new_id("api")
         version = previous.version + 1 if previous else 1
         self.rows[api_id] = StoredApi(api_id, project_id, version, api, datetime.now(UTC))
