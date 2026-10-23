@@ -296,3 +296,9 @@ def test_remove_project_applies_before_adds_in_the_same_call() -> None:
     snap2 = snap.with_changes(remove_project="p1", apis={"a1": readded})
     assert snap2.api_by_id("a1") is readded  # removal first, so the stale-guard sees nothing held
     assert snap2.api_by_id("a2") is None
+
+
+def test_apis_with_slug_returns_every_project_and_duplicates() -> None:
+    snap = _snapshot().with_changes(apis={"a4": _api("a4", "p1", "weather", 1)})
+    assert {a.api_id for a in snap.apis_with_slug("weather")} == {"a1", "a3", "a4"}
+    assert snap.apis_with_slug("nope") == ()
