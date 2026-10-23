@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792743300155,
+  "lastUpdate": 1792747511476,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Load (latency)": [
@@ -346,6 +346,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "mock_direct_p99",
             "value": 4.616482960000001,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "7d8acec5574329aec46195bf744d9c7162c7166e",
+          "message": "Merge pull request #18 from Elkrisent/feat/m1.3-management-api\n\nfeat: M1.3 minimal management API",
+          "timestamp": "2026-10-23T14:54:20+05:30",
+          "tree_id": "949f7a6387617cfaaa0b1417f4f07d43f8d0d8fb",
+          "url": "https://github.com/Elkrisent/jarvis/commit/7d8acec5574329aec46195bf744d9c7162c7166e"
+        },
+        "date": 1792747510637,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "mock_direct_p50",
+            "value": 5.124187,
+            "unit": "ms"
+          },
+          {
+            "name": "mock_direct_p95",
+            "value": 5.7309285999999995,
+            "unit": "ms"
+          },
+          {
+            "name": "mock_direct_p99",
+            "value": 6.337261160000001,
             "unit": "ms"
           }
         ]
