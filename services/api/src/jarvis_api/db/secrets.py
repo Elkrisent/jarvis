@@ -7,7 +7,7 @@ from collections import Counter
 
 from jarvis_core.interfaces import SealedSecret
 from jarvis_core.secretbox import AesGcmSecretBox
-from sqlalchemy import insert, select, text, update
+from sqlalchemy import delete, insert, select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from jarvis_api.db.ids import new_id
@@ -48,6 +48,11 @@ class PostgresSecretStore:
         if row is None:
             return None
         return SealedSecret(row.key_id, bytes(row.nonce), bytes(row.ciphertext))
+
+    async def delete(self, secret_id: str) -> None:
+        """Remove a stored secret; an unknown id is a no-op."""
+        async with self._engine.begin() as conn:
+            await conn.execute(delete(Secret).where(Secret.id == secret_id))
 
     async def reveal(self, box: AesGcmSecretBox, secret_id: str) -> str | None:
         """Decrypt a stored secret; ``None`` if absent. A record moved to another row fails."""
