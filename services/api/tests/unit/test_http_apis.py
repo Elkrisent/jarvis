@@ -435,6 +435,58 @@ def test_patch_with_a_secret_and_mode_none_is_422(client: TestClient, services: 
     assert len(_secrets(services).rows) == 1
 
 
+_FIELD_MODES = [("header", "header_name", "x-api-key"), ("query", "param_name", "api_key")]
+
+
+def _create_field_mode(client: TestClient, mode: str, field: str, value: str) -> dict[str, Any]:
+    credential = {"mode": mode, field: value, "secret": SECRET}
+    return _create(client, _project(client), credential=credential)
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-11.2-4")
+@pytest.mark.parametrize(("mode", "field", "value"), _FIELD_MODES)
+def test_patch_mode_none_alone_keeps_the_field_and_is_422(
+    client: TestClient, services: Services, mode: str, field: str, value: str
+) -> None:
+    created = _create_field_mode(client, mode, field, value)
+    response = _patch(client, created["id"], {"credential": {"mode": "none"}})
+    assert response.status_code == 422
+    assert all(e["loc"][:2] == ["body", "credential"] for e in response.json()["detail"])
+    assert len(_secrets(services).rows) == 1
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-11.2-4")
+@pytest.mark.parametrize(("mode", "field", "value"), _FIELD_MODES)
+def test_patch_mode_none_with_the_field_nulled_removes_the_secret(
+    client: TestClient, services: Services, mode: str, field: str, value: str
+) -> None:
+    created = _create_field_mode(client, mode, field, value)
+    response = _patch(client, created["id"], {"credential": {"mode": "none", field: None}})
+    assert response.status_code == 200, response.text
+    assert response.json()["credential"] == {
+        "mode": "none",
+        "header_name": None,
+        "param_name": None,
+        "has_secret": False,
+    }
+    assert _secrets(services).rows == {}
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-11.2-4")
+@pytest.mark.parametrize(("mode", "field", "value"), _FIELD_MODES)
+def test_patch_null_secret_in_header_or_query_mode_is_422(
+    client: TestClient, services: Services, mode: str, field: str, value: str
+) -> None:
+    created = _create_field_mode(client, mode, field, value)
+    response = _patch(client, created["id"], {"credential": {"secret": None}})
+    assert response.status_code == 422
+    assert ["body", "credential"] in [e["loc"] for e in response.json()["detail"]]
+    assert len(_secrets(services).rows) == 1
+
+
 # --- failed saves leave no orphan secret --------------------------------------------------
 
 

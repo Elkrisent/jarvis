@@ -76,8 +76,13 @@ unset KEY_JSON
 ### Things to know
 
 * `credential.secret` is write-only. It is encrypted with the master key before it is stored and is
-  never returned. `credential.has_secret` says whether one is stored. In a PATCH, omit
-  `credential.secret` to keep the stored secret, send a new one to replace it, or remove it by switching the credential off with `{"credential": {"mode": "none"}}` (or `"credential": null`). Sending `"secret": null` while the mode is `bearer`, `header` or `query` is a 422, because those modes require a secret.
+  never returned. `credential.has_secret` says whether one is stored.
+* In a PATCH, omit `credential.secret` to keep the stored secret, or send a new one to replace it.
+* To remove the provider credential and its secret, send `{"credential": null}`. This works in every mode.
+* Explicit alternative: `{"credential": {"mode": "none"}}` for a bearer API, and
+  `{"credential": {"mode": "none", "header_name": null}}` (or `"param_name": null`) for a header
+  (or query) API. Without the nulled field the stored one is kept and the request is a 422.
+* `"secret": null` in `bearer`, `header` or `query` mode is a 422, because those modes require a secret.
 * A JARVIS key looks like `jv_live_...`. Only its hash is stored, so it cannot be shown again; create
   a new key if you lose it.
 * Every create or change of an API stores a new immutable policy version and publishes
