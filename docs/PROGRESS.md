@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`). M1.3 implemented on `feat/m1.3-management-api`, awaiting final review and the PR.
+Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`). M1.3 implemented and verified on `feat/m1.3-management-api` (including the Docker suites), awaiting the PR.
 
 ## Current Phase
 
@@ -51,13 +51,15 @@ M1.3 Minimal management API on `feat/m1.3-management-api` (not merged):
 
 * `/api/v1` projects, JARVIS keys (`jv_live_` + base62 of 32 random bytes, only the SHA-256 hash stored, shown once) and API dependencies (versioned; provider secrets sealed with the master key, `has_secret` only on output); admin bearer token auth; 422 errors with field paths; `config:changed` published to Redis on API create/update; `/openapi.json` behind the token with a committed snapshot (`make openapi-snapshot`).
 * The api refuses to start without `JARVIS_MASTER_KEY` and `JARVIS_ADMIN_TOKEN`. New pinned dependency `redis==8.0.1`. Compose, `deploy/.env.example`, test override (placeholder secrets), README, `docs/contributing.md` and `docs/quickstart-dev.md` updated.
-* Verified locally against Postgres 16 and Redis: `make lint typecheck`, `make security-scan` clean; 633 unit + integration tests pass under `make coverage` (core 100/99, api 99.7/97.7, gates met; no `main` baseline available locally). `docs/traceability.md` regenerated (41/246 covered; REQ-10-1, -10-2, -5.2-1, -11.2-4 list tests).
-* NOT verified (Docker was unavailable in this environment): `tests/system/test_management_api.py` has never been run, nor the other stack tests against the changed compose files, nor the `docs/quickstart-dev.md` commands against a real stack. The Checkpoint 0 rows in the traceability report keep their earlier `pass` and were not re-run.
+* Verified locally against Postgres 16 and Redis: `make lint typecheck`, `make security-scan` clean; 640 unit + integration tests pass under `make coverage` (core 100/99, api 99.7/97.7, gates met; no `main` baseline available locally). `docs/traceability.md` regenerated (41/246 covered; REQ-10-1, -10-2, -5.2-1, -11.2-4 list tests).
+* Verified on a Docker host (Docker 28.5, Compose 2.40): `make test-system` 10 passed (including `tests/system/test_management_api.py`), `make test-e2e` 4, `make test-chaos` 1, `make test-security` 17; `make traceability COMPLETED_PHASE=0 TRACE_MARKERS="not perf"` 672 passed, Checkpoint 0 rows `pass`, no `not run` rows. Every command in `docs/quickstart-dev.md` was run against a real dev stack and behaved as documented (the gateway container could not bind host port 8080 on this machine, so only the api was used; the quickstart needs only the api).
+* gitleaks (run through its Docker image over `main..HEAD`) flagged the placeholder master key in `deploy/docker-compose.test.yml`; a narrow `.gitleaks.toml` allowlist (that value in that file only; a different key in the same file is still caught) clears it.
+* Still not run: the GitHub `ci`, `security` and `system` workflows (they run on the PR).
 
 ## Next
 
-1. On a machine with Docker: `make test-system` (including the new test) and run every command in `docs/quickstart-dev.md`; fix anything that fails.
-2. Final review, open the M1.3 PR, get `ci` and `security` green (and `system` on main after merge), then record the merge SHA here.
+1. Open the M1.3 PR, get `ci` and `security` green (and `system` on main after merge), then record the merge SHA here.
+2. Decide the open questions below (who publishes `config:changed` for revocations; the P5 rollback secret problem).
 3. Then M1.4 Gateway config loader.
 
 ## Blockers / Questions
@@ -67,11 +69,10 @@ M1.3 Minimal management API on `feat/m1.3-management-api` (not merged):
   * A key's `allowed_api_ids` can name deleted APIs (API delete does not clean them). M1.5 must deny when a restriction no longer matches, and never treat an empty or unknown list as unrestricted.
   * OPEN, needs a user decision before P5: PATCH deletes the old secret, but older immutable versions still hold its `secret_ref`. A P5 rollback (copy an old version, SPEC section 5.2) would point at a deleted secret, and M1.4 must not read a superseded version's secret.
   * The traceability row for REQ-11.1-6 shows `pass` but only hashed key storage is implemented; revocation within 1 s is not.
-* System test and quickstart not yet run (see In Progress).
 
 ## Resume Point
 
-Run the system test and the quickstart on a Docker host, then do the final review and open the M1.3 PR. Do not start M1.4 before the PR is merged.
+Open the M1.3 PR. Do not start M1.4 before the PR is merged.
 
 ## Last Updated
 

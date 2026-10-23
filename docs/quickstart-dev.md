@@ -3,7 +3,7 @@
 This walks through starting JARVIS locally and managing a project, an API and a JARVIS key
 through `/api/v1`.
 
-> Note: these commands have not yet been run against a live Docker stack. Remove this note once they have. The gateway does not proxy requests yet (M1.5), so this covers configuration only.
+> Note: the gateway does not proxy requests yet (M1.5), so this covers configuration only.
 
 ## Prerequisites
 
@@ -31,6 +31,8 @@ cd deploy
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build --wait
 set -a; . ./.env; set +a      # exports JARVIS_ADMIN_TOKEN into this shell
 ```
+
+If another program already holds host port 8080 or 8082 (on Windows with WSL some ports are reserved), `up --wait` reports a bind error for the gateway or worker; the api on 8081 is still usable for everything below, or change the published ports in `deploy/docker-compose.dev.yml`.
 
 ## 3. Use the API
 
