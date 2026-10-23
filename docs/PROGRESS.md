@@ -79,6 +79,8 @@ Final whole-branch review of M1.5 and the PR.
 * OPEN, needs a user decision before P5: PATCH deletes the old secret, but older immutable versions still hold its `secret_ref`. A P5 rollback (copy an old version, SPEC section 5.2) would point at a deleted secret. M1.4 reads only the current version.
 * REQ-11.1-6: the revocation push is implemented in M1.4 (`config:invalidated`); the traceability row only becomes meaningful once M1.5 enforces it on requests.
 * For M1.5:
+  * Known limit (M1.5 review): revocation within 1 s depends on Redis pub/sub. With Redis down (the gateway fails open, SPEC D3) a revoked key keeps working until the next resync, 60 s by default. Needs a user decision if SPEC §4.2 must hold without Redis.
+  * M1.5 dropped `hmac.compare_digest` (the matched entry stores no hash to compare; lookup is by SHA-256 digest the caller cannot steer), a deviation from the M1.5 test-list wording "comparisons are constant-time".
   * Resolved in M1.5: a duplicate `(project, slug)` is denied (fail closed).
   * Revoked keys STAY in `Snapshot.keys` with `revoked=True`: `snapshot.key(h)` being non-None does NOT mean authenticated. Authenticate only when the entry exists and `revoked` is False; deny revoked and unknown identically (`JV_AUTH_INVALID`).
   * Snapshot-file caveat: a gateway restarted from an old snapshot file (Postgres down) serves keys revoked while it was down until Postgres returns. The file has no age limit and events cannot be applied without Postgres. SPEC section 8 allows snapshot starts, but REQ-11.1-6 (1 s or less) does not hold in that mode; `/readyz` shows `degraded` with the file's `synced_at`. Capping the file age is an option for M1.5 or ops.
