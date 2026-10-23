@@ -75,7 +75,7 @@ def _client(
 
 @pytest.mark.req("REQ-4.13-4", "REQ-4.13-5")
 async def test_an_allowlisted_internal_host_works_and_keeps_its_host_header(server: Server) -> None:
-    policy = SsrfPolicy.from_env({"JARVIS_SSRF_ALLOWLIST": "upstream.test"})
+    policy = SsrfPolicy.from_env({"JARVIS_SSRF_ALLOWLIST": "upstream.test, 127.0.0.1/32"})
     async with _client(policy, {"upstream.test": ["127.0.0.1"]}) as client:
         response = await client.get(f"http://upstream.test:{server.port}/v1/ping?x=1")
     assert response.status_code == 200
@@ -121,7 +121,7 @@ async def test_dns_rebinding_public_at_save_private_at_connect_is_blocked(server
 @pytest.mark.req("REQ-4.13-7")
 async def test_redirects_are_not_followed_by_default(server: Server) -> None:
     server.respond = lambda head: _redirect("http://169.254.169.254/latest/meta-data/")
-    policy = SsrfPolicy.from_env({"JARVIS_SSRF_ALLOWLIST": "upstream.test"})
+    policy = SsrfPolicy.from_env({"JARVIS_SSRF_ALLOWLIST": "upstream.test, 127.0.0.1/32"})
     async with _client(policy, {"upstream.test": ["127.0.0.1"]}) as client:
         response = await client.get(f"http://upstream.test:{server.port}/")
     assert response.status_code == 302
@@ -134,15 +134,15 @@ async def test_redirects_are_not_followed_by_default(server: Server) -> None:
     [
         "http://169.254.169.254/latest/meta-data/",
         "https://169.254.169.254/latest/meta-data/",
-        "http://127.0.0.1:1/",
+        "http://127.0.0.2:1/",  # loopback, but not the one allowlisted address
         "https://[::1]/",
-        "http://2130706433/",
+        "http://2130706434/",  # 127.0.0.2 spelled as a decimal number
         "http://not-allowlisted.example/",
     ],
 )
 async def test_every_redirect_hop_is_checked(server: Server, location: str) -> None:
     server.respond = lambda head: _redirect(location)
-    policy = SsrfPolicy.from_env({"JARVIS_SSRF_ALLOWLIST": "upstream.test"})
+    policy = SsrfPolicy.from_env({"JARVIS_SSRF_ALLOWLIST": "upstream.test, 127.0.0.1/32"})
     mapping = {"upstream.test": ["127.0.0.1"], "not-allowlisted.example": [PUBLIC]}
     async with _client(policy, mapping, follow=True) as client:
         with pytest.raises(DestinationBlockedError):
@@ -155,8 +155,22 @@ async def test_a_redirect_to_an_allowlisted_host_is_followed(server: Server) -> 
     server.respond = lambda head: (
         _ok(b"final") if "/final" in head.split("\r\n")[0] else _redirect("/final")
     )
-    policy = SsrfPolicy.from_env({"JARVIS_SSRF_ALLOWLIST": "upstream.test"})
+    policy = SsrfPolicy.from_env({"JARVIS_SSRF_ALLOWLIST": "upstream.test, 127.0.0.1/32"})
     async with _client(policy, {"upstream.test": ["127.0.0.1"]}, follow=True) as client:
         response = await client.get(f"http://upstream.test:{server.port}/start")
     assert response.text == "final"
     assert len(server.heads) == 2
+
+
+@pytest.mark.req("REQ-4.13-3")
+async def test_a_wide_allowlist_does_not_open_loopback_to_a_local_server(server: Server) -> None:
+    policy = SsrfPolicy.from_env({"JARVIS_SSRF_ALLOWLIST": "0.0.0.0/0, ::/0, upstream.test"})
+    async with _client(policy, {"upstream.test": ["127.0.0.1"]}) as client:
+        for url in (
+            f"http://upstream.test:{server.port}/",
+            f"http://127.0.0.1:{server.port}/",
+            f"http://0.0.0.0:{server.port}/",
+        ):
+            with pytest.raises(DestinationBlockedError):
+                await client.get(url)
+    assert server.heads == []

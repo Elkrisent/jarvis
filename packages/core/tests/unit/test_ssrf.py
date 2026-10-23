@@ -422,3 +422,106 @@ async def test_an_ipv4_mapped_answer_matching_an_internal_address_is_blocked() -
 async def test_the_system_resolver_resolves_localhost_and_not_nonsense() -> None:
     assert "127.0.0.1" in await system_resolver("localhost", 80)
     assert await system_resolver("nx.invalid", 80) == []
+
+
+# --- review fixes: loopback and the internal-host check -------------------------------------
+
+
+@pytest.mark.req("REQ-4.13-3")
+@pytest.mark.parametrize(
+    "literal",
+    ["127.0.0.1", "127.1", "0.0.0.0", "[::1]", "[::]", "[::ffff:127.0.0.1]", "2130706433"],
+)
+async def test_a_wide_allowlist_does_not_unblock_loopback_or_the_unspecified_address(
+    literal: str,
+) -> None:
+    policy = SsrfPolicy.from_env({"JARVIS_SSRF_ALLOWLIST": "0.0.0.0/0, ::/0"})
+    resolver, _ = _resolver({}, policy)
+    with pytest.raises(DestinationBlockedError):
+        await resolver.resolve(literal, 8080, on_allowlist=True)
+
+
+@pytest.mark.req("REQ-4.13-3")
+async def test_an_allowlisted_name_that_resolves_to_loopback_is_blocked() -> None:
+    policy = SsrfPolicy.from_env({"JARVIS_SSRF_ALLOWLIST": "self.internal, 0.0.0.0/0"})
+    resolver, _ = _resolver({"self.internal": ["127.0.0.1"], "v6.internal": ["::1"]}, policy)
+    for name in ("self.internal", "v6.internal"):
+        with pytest.raises(DestinationBlockedError):
+            await resolver.resolve(name, 443, on_allowlist=True)
+
+
+@pytest.mark.req("REQ-4.13-4")
+async def test_an_entry_that_names_loopback_specifically_allows_it() -> None:
+    policy = SsrfPolicy.from_env({"JARVIS_SSRF_ALLOWLIST": "127.0.0.0/8, ::1/128"})
+    resolver, _ = _resolver({"dev.test": ["127.0.0.5"]}, policy)
+    assert await resolver.resolve("127.0.0.1", 8080, on_allowlist=True) == ["127.0.0.1"]
+    assert await resolver.resolve("dev.test", 8080, on_allowlist=False) == ["127.0.0.5"]
+    assert await resolver.resolve("[::1]", 8080, on_allowlist=True) == ["::1"]
+    with pytest.raises(DestinationBlockedError):
+        await resolver.resolve("0.0.0.0", 8080, on_allowlist=True)  # not covered by 127.0.0.0/8
+
+
+@pytest.mark.req("REQ-4.13-3")
+async def test_a_failed_internal_lookup_fails_closed_for_allowlisted_private_addresses() -> None:
+    class Down(StubResolver):
+        async def __call__(self, host: str, port: int) -> Sequence[str]:
+            if port == 0 and host == "api":
+                raise OSError("dns hiccup")
+            return await super().__call__(host, port)
+
+    policy = SsrfPolicy.from_env({"JARVIS_SSRF_ALLOWLIST": "172.16.0.0/12"})
+    stub = Down({"by-ip.example": ["172.18.0.3"], "pub.example": [PUBLIC]})
+    resolver = DestinationResolver(policy, stub, FakeClock())
+    with pytest.raises(DestinationBlockedError):
+        await resolver.resolve("by-ip.example", 443, on_allowlist=False)
+    assert await resolver.resolve("pub.example", 443, on_allowlist=False) == [PUBLIC]
+
+
+async def test_an_incomplete_internal_lookup_is_not_cached() -> None:
+    state = {"down": True}
+
+    class Flaky(StubResolver):
+        async def __call__(self, host: str, port: int) -> Sequence[str]:
+            if port == 0 and host == "api":
+                if state["down"]:
+                    raise OSError("dns hiccup")
+                return ["172.18.0.3"]
+            return await super().__call__(host, port)
+
+    policy = SsrfPolicy.from_env({"JARVIS_SSRF_ALLOWLIST": "172.16.0.0/12"})
+    stub = Flaky({"by-ip.example": ["172.18.0.3"], "other.example": ["172.18.0.9"]})
+    resolver = DestinationResolver(policy, stub, FakeClock())
+    with pytest.raises(DestinationBlockedError):
+        await resolver.resolve("other.example", 443, on_allowlist=False)
+    state["down"] = False  # no clock advance: a failed lookup must not have been cached
+    assert await resolver.resolve("other.example", 443, on_allowlist=False) == ["172.18.0.9"]
+    with pytest.raises(DestinationBlockedError):
+        await resolver.resolve("by-ip.example", 443, on_allowlist=False)
+
+
+async def test_the_last_known_internal_addresses_are_kept_when_a_refresh_fails() -> None:
+    clock = FakeClock()
+    state = {"down": False}
+
+    class Flaky(StubResolver):
+        async def __call__(self, host: str, port: int) -> Sequence[str]:
+            if port == 0 and host == "api":
+                if state["down"]:
+                    raise OSError("dns hiccup")
+                return ["172.18.0.3"]
+            return await super().__call__(host, port)
+
+    policy = SsrfPolicy.from_env({"JARVIS_SSRF_ALLOWLIST": "172.16.0.0/12"})
+    resolver = DestinationResolver(policy, Flaky({"by-ip.example": ["172.18.0.3"]}), clock)
+    with pytest.raises(DestinationBlockedError):
+        await resolver.resolve("by-ip.example", 443, on_allowlist=False)
+    state["down"] = True
+    clock.advance(60)  # the cache expired and the refresh fails
+    with pytest.raises(DestinationBlockedError):
+        await resolver.resolve("by-ip.example", 443, on_allowlist=False)
+
+
+@pytest.mark.parametrize("value", [" , ", ",", "  "])
+def test_an_internal_host_list_with_no_entries_is_rejected(value: str) -> None:
+    with pytest.raises(ValueError, match="JARVIS_INTERNAL_HOSTS"):
+        SsrfPolicy.from_env({"JARVIS_INTERNAL_HOSTS": value})

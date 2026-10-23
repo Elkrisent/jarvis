@@ -58,6 +58,11 @@ _BLOCKED = tuple(
         "ff00::/8",
     )
 )
+# The gateway's and api's own listeners. A wide allowlist entry (``0.0.0.0/0``) never covers
+# these; only an entry that lies inside them does (``127.0.0.0/8``, ``::1/128``).
+_LOOPBACK = tuple(
+    ipaddress.ip_network(n) for n in ("0.0.0.0/8", "127.0.0.0/8", "::/128", "::1/128")
+)
 _NAT64 = ipaddress.ip_network("64:ff9b::/96")
 _IPV4_COMPATIBLE = ipaddress.ip_network("::/96")
 _NUMERIC_HOST = re.compile(r"[0-9a-fA-FxX.]+")
@@ -144,9 +149,8 @@ def _embedded_ipv4(ip: IPAddress) -> ipaddress.IPv4Address | None:
 
 
 def _canonical(ip: IPAddress) -> IPAddress:
-    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
-        return ip.ipv4_mapped
-    return ip
+    """The IPv4 address an IPv6 form embeds (mapped, 6to4, NAT64, compatible), else ``ip``."""
+    return _embedded_ipv4(ip) or ip
 
 
 def _in(ip: IPAddress, networks: Sequence[IPNetwork]) -> bool:
@@ -192,6 +196,8 @@ class SsrfPolicy:
                 if not isinstance(name, str):
                     raise ValueError(f"JARVIS_INTERNAL_HOSTS entry {index + 1} is not a host name")
                 names.add(name)
+            if not names:
+                raise ValueError("JARVIS_INTERNAL_HOSTS has no entries")
             internal = frozenset(names)
         return cls(tuple(networks), frozenset(hosts), internal)
 
@@ -239,6 +245,11 @@ class DestinationResolver:
         self._clock = SystemClock() if clock is None else clock
         self._internal: frozenset[IPAddress] = frozenset()
         self._internal_until = float("-inf")
+        self._loopback_allowed = tuple(
+            net
+            for net in policy.allow_networks
+            if any(net.version == lb.version and net.subnet_of(lb) for lb in _LOOPBACK)  # type: ignore[arg-type]
+        )
 
     async def resolve(self, host: str, port: int, *, on_allowlist: bool) -> list[str]:
         normalized = normalize_host(host)
@@ -248,21 +259,31 @@ class DestinationResolver:
                 raise HostNotResolved
         else:
             addresses = [normalized]
-        internal = await self._internal_addresses()
+        internal, complete = await self._internal_addresses()
         for ip in addresses:
             canonical = _canonical(ip)
             if canonical in internal:
                 raise _blocked("internal-host")
-            if on_allowlist or _in(canonical, self.policy.allow_networks):
+            if _in(canonical, _LOOPBACK):
+                if not _in(canonical, self._loopback_allowed):
+                    raise _blocked("loopback")
                 continue
-            if ip_is_blocked(ip):
+            if not ip_is_blocked(ip):
+                continue
+            if not (on_allowlist or _in(canonical, self.policy.allow_networks)):
                 raise _blocked("blocked-address")
+            if not complete:
+                # Allowed only by the allowlist, and the JARVIS containers' addresses could not be
+                # looked up: this might be one of them, so fail closed.
+                raise _blocked("internal-unverified")
         return [str(ip) for ip in addresses]
 
-    async def _internal_addresses(self) -> frozenset[IPAddress]:
+    async def _internal_addresses(self) -> tuple[frozenset[IPAddress], bool]:
+        """The JARVIS containers' addresses, and whether every lookup worked. A lookup that failed
+        or timed out keeps the last known addresses, and nothing is cached until all succeed."""
         now = self._clock.monotonic()
         if now < self._internal_until:
-            return self._internal
+            return self._internal, True
 
         async def lookup(name: str) -> Sequence[str]:
             return await asyncio.wait_for(self._resolver(name, 0), INTERNAL_LOOKUP_TIMEOUT_S)
@@ -270,13 +291,15 @@ class DestinationResolver:
         results = await asyncio.gather(
             *(lookup(n) for n in sorted(self.policy.internal_hosts)), return_exceptions=True
         )
-        found: set[IPAddress] = set()
+        complete = not any(isinstance(r, BaseException) for r in results)
+        found: set[IPAddress] = set() if complete else set(self._internal)
         for result in results:
             if not isinstance(result, BaseException):
                 found.update(_canonical(ip) for ip in _parse_addresses(result))
         self._internal = frozenset(found)
-        self._internal_until = now + INTERNAL_TTL_S
-        return self._internal
+        if complete:
+            self._internal_until = now + INTERNAL_TTL_S
+        return self._internal, complete
 
 
 def _parse_addresses(raw: Sequence[str]) -> list[IPAddress]:

@@ -186,7 +186,7 @@ async def redirecting_server() -> AsyncIterator[int]:
 async def test_a_redirect_to_the_metadata_address_is_blocked_when_redirects_are_followed(
     redirecting_server: int,
 ) -> None:
-    policy = SsrfPolicy.from_env({"JARVIS_SSRF_ALLOWLIST": "upstream.test"})
+    policy = SsrfPolicy.from_env({"JARVIS_SSRF_ALLOWLIST": "upstream.test, 127.0.0.1/32"})
 
     async def resolve(host: str, port: int) -> Sequence[str]:
         return [] if port == 0 else ["127.0.0.1"]
@@ -217,3 +217,34 @@ async def test_errors_and_logs_never_contain_the_host_or_the_resolved_address(
     rendered = "\n".join(r.getMessage() + repr(r.args) for r in caplog.records)
     for needle in ("metadata", "internal", "mixed", "169.254", "10.0.0.5", "192.168", "10.9.0"):
         assert needle not in rendered
+
+
+@pytest.mark.req("REQ-17-2", "REQ-4.13-3")
+@pytest.mark.parametrize(
+    "host",
+    ["127.0.0.1", "127.1", "2130706433", "0.0.0.0", "0", "[::1]", "[::]", "[::ffff:127.0.0.1]"],
+)
+async def test_a_catch_all_allowlist_still_blocks_the_gateways_own_loopback(host: str) -> None:
+    policy = SsrfPolicy.from_env({"JARVIS_SSRF_ALLOWLIST": "0.0.0.0/0, ::/0"})
+    with pytest.raises(DestinationBlockedError) as exc:
+        await DestinationChecker(_destinations(policy)).check_save(f"https://{host}:8080/")
+    _assert_blocked(exc.value)
+    backend = Recorder()
+    transport = PinnedTransport(policy, resolver=_resolve, clock=FakeClock(), backend=backend)
+    async with httpx.AsyncClient(transport=transport) as client:
+        with pytest.raises(DestinationBlockedError):
+            await client.get(f"https://{host}:8080/")
+    assert backend.connected == []
+
+
+@pytest.mark.req("REQ-17-2", "REQ-4.13-3")
+async def test_a_failing_internal_lookup_cannot_be_used_to_reach_a_container() -> None:
+    async def flaky(host: str, port: int) -> Sequence[str]:
+        if port == 0:
+            raise OSError("dns hiccup")
+        return {"sneaky.example": ["172.18.0.3"]}.get(host, [])
+
+    policy = SsrfPolicy.from_env({"JARVIS_SSRF_ALLOWLIST": "172.16.0.0/12"})
+    checker = DestinationChecker(DestinationResolver(policy, flaky, FakeClock()))
+    with pytest.raises(DestinationBlockedError):
+        await checker.check_save("https://sneaky.example/")
