@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792743247060,
+  "lastUpdate": 1792747543560,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Micro benchmarks": [
@@ -275,6 +275,37 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 3.218360894614907e-7",
             "extra": "mean: 1.2416278019519507 usec\nrounds: 49162"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "7d8acec5574329aec46195bf744d9c7162c7166e",
+          "message": "Merge pull request #18 from Elkrisent/feat/m1.3-management-api\n\nfeat: M1.3 minimal management API",
+          "timestamp": "2026-10-23T14:54:20+05:30",
+          "tree_id": "949f7a6387617cfaaa0b1417f4f07d43f8d0d8fb",
+          "url": "https://github.com/Elkrisent/jarvis/commit/7d8acec5574329aec46195bf744d9c7162c7166e"
+        },
+        "date": 1792747542724,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "packages/core/tests/bench/test_bench_token_bucket_take.py::test_bench_token_bucket_take",
+            "value": 838172.2927673071,
+            "unit": "iter/sec",
+            "range": "stddev: 3.089866840227615e-7",
+            "extra": "mean: 1.193072126851632 usec\nrounds: 38155"
           }
         ]
       }
