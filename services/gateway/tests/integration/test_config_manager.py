@@ -30,7 +30,7 @@ from jarvis_core.config import ApiDependency
 from jarvis_core.keys import hash_jarvis_key
 from jarvis_core.secretbox import AesGcmSecretBox
 from jarvis_gateway.config.manager import ConfigManager
-from jarvis_gateway.config.postgres import PostgresLoader
+from jarvis_gateway.config.postgres import ConfigLoadError, PostgresLoader
 from jarvis_gateway.config.snapshot import Snapshot
 from jarvis_gateway.config.snapshot_file import CoalescingWriter, SnapshotFile
 from jarvis_gateway.config.store import ConfigStore
@@ -119,12 +119,17 @@ GatewayFactory = Callable[..., Any]
 async def gateway(database_url: str, tmp_path: Path) -> AsyncIterator[GatewayFactory]:
     started: list[ConfigManager] = []
 
-    async def make(*, redis_url: str | None, resync_interval_s: float = 60.0) -> Gateway:
+    async def make(
+        *,
+        redis_url: str | None,
+        resync_interval_s: float = 60.0,
+        loader: PostgresLoader | None = None,
+    ) -> Gateway:
         clock = SystemClock()
         file = SnapshotFile(tmp_path / "snapshot.json")
         store = ConfigStore()
         manager = ConfigManager(
-            PostgresLoader(database_url, connect_timeout_s=2.0),
+            loader or PostgresLoader(database_url, connect_timeout_s=2.0),
             file,
             CoalescingWriter(file, clock),
             store,
@@ -296,10 +301,8 @@ async def test_postgres_outage_after_startup_serves_the_last_snapshot_and_recove
     pid = (await ProjectRepository(engine).create("Outage", "outage")).id
     source = PostgresConfigSource(engine)
     api_id, _ = await source.put_version(pid, _dependency("weather", 6000))
-    gw: Gateway = await gateway(redis_url=None, resync_interval_s=1.0)
-    before = gw.snap
-    first_ok = gw.manager.status().last_sync_ok
-    assert first_ok is not None
+    loader = CountingLoader(database_url, connect_timeout_s=2.0)
+    gw: Gateway = await gateway(redis_url=None, resync_interval_s=1.0, loader=loader)
 
     url = make_url(database_url)
     name = url.database
@@ -307,19 +310,25 @@ async def test_postgres_outage_after_startup_serves_the_last_snapshot_and_recove
     admin_dsn = url.set(drivername="postgresql", database="postgres")
     admin = await asyncpg.connect(admin_dsn.render_as_string(hide_password=False))
     try:
-        await _block_connections(admin, name, engine)
         with caplog.at_level(logging.INFO, logger="jarvis_gateway.config.manager"):
-            await asyncio.sleep(2.5)  # at least two failed resyncs
+            await _block_connections(admin, name, engine)
+            # Once one resync has failed, no later one can succeed: capture the state then.
+            await _within(lambda: loader.failures >= 1, budget_s=5.0)
+            before = gw.snap
+            first_ok = gw.manager.status().last_sync_ok
+            assert first_ok is not None
+            seen = loader.failures
+            await _within(lambda: loader.failures >= seen + 2, budget_s=5.0)
         failures = [r for r in caplog.records if r.levelno == logging.ERROR]
         assert len(failures) == 1  # once per failure streak
-        assert "configuration refresh failed" in failures[0].getMessage()
+        assert "configuration resync failed" in failures[0].getMessage()
         assert "jarvis-test" not in caplog.text
         assert "127.0.0.1" not in caplog.text
         assert gw.store.current is before  # still serving the last snapshot
         status = gw.manager.status()
         assert status.source == "postgres"
         assert status.last_sync_ok == first_ok
-        assert time.time() - first_ok >= 2.5  # ages while Postgres is away
+        assert time.time() - first_ok >= 1.0  # two failed 1 s resyncs later: it ages
 
         await admin.execute(f'ALTER DATABASE "{name}" ALLOW_CONNECTIONS true')
     finally:
@@ -332,6 +341,21 @@ async def test_postgres_outage_after_startup_serves_the_last_snapshot_and_recove
         return ok is not None and ok > first_ok and _version(gw, api_id) == 2
 
     await _within(recovered, budget_s=3.0)
+
+
+class CountingLoader(PostgresLoader):
+    """The real loader, counting failed full loads."""
+
+    def __init__(self, dsn: str, *, connect_timeout_s: float) -> None:
+        super().__init__(dsn, connect_timeout_s=connect_timeout_s)
+        self.failures = 0
+
+    async def load_all(self, now: float) -> tuple[Snapshot, frozenset[str]]:
+        try:
+            return await super().load_all(now)
+        except ConfigLoadError:
+            self.failures += 1
+            raise
 
 
 async def _block_connections(admin: asyncpg.Connection, name: str, engine: AsyncEngine) -> None:

@@ -13,7 +13,7 @@ from jarvis_core.clock import Clock, FakeClock
 from jarvis_core.config import ApiDependency
 from jarvis_gateway.config.events import ApiChanged, ConfigEvent, Invalidated
 from jarvis_gateway.config.manager import ConfigManager, ConfigStatus
-from jarvis_gateway.config.postgres import ConfigLoadError, InvalidApi, ProjectRows
+from jarvis_gateway.config.postgres import ConfigLoadError, InvalidApi, PostgresLoader, ProjectRows
 from jarvis_gateway.config.snapshot import ApiEntry, KeyEntry, Snapshot
 from jarvis_gateway.config.snapshot_file import CoalescingWriter, SnapshotFile
 from jarvis_gateway.config.store import ConfigStore
@@ -84,6 +84,7 @@ class FakeLoader:
         self.calls: list[str] = []
         self.closed = False
         self.gate: asyncio.Event | None = None
+        self.all_gate: asyncio.Event | None = None
         self.in_flight = 0
         self.max_in_flight = 0
 
@@ -101,10 +102,15 @@ class FakeLoader:
             raise ConfigLoadError(LOAD_ERROR)
 
     async def load_all(self, now: float) -> tuple[Snapshot, frozenset[str]]:
-        await self._enter("all")
+        # Rows are read first, then ``all_gate`` holds the result in flight (a slow resync).
         valid = {k: v for k, v in self.apis.items() if isinstance(v, ApiEntry)}
         invalid = frozenset(k for k, v in self.apis.items() if isinstance(v, InvalidApi))
-        return Snapshot(valid, self.keys, "postgres", now), invalid
+        keys = dict(self.keys)
+        if self.all_gate is not None:
+            self.calls.append("all:read")
+            await self.all_gate.wait()
+        await self._enter("all")
+        return Snapshot(valid, keys, "postgres", now), invalid
 
     async def load_api(self, api_id: str) -> ApiEntry | InvalidApi | None:
         await self._enter(f"api:{api_id}")
@@ -311,7 +317,7 @@ async def test_failed_resync_keeps_the_snapshot_and_logs_once_per_streak(
         assert h.manager.status().last_sync_ok == synced
         assert h.manager.status().source == "postgres"
         errors = [r.getMessage() for r in caplog.records if r.levelno == logging.ERROR]
-        assert errors == [f"configuration refresh failed: {LOAD_ERROR}; serving the last snapshot"]
+        assert errors == [f"configuration resync failed: {LOAD_ERROR}; serving the last snapshot"]
 
         h.loader.fail = False
         await h.clock.step(INTERVAL)
@@ -661,3 +667,196 @@ async def test_project_reload_drops_a_bad_rows_entry_whose_slug_was_taken(h: Har
     assert h.snap.api_by_id("a1") is None
     assert h.snap.api("p1", "a1") == _api("a3", 1, "p1", slug="a1")
     await h.manager.stop()
+
+
+# --- fix round 1 ----------------------------------------------------------------------------
+
+
+async def test_startup_logs_the_loader_reason_never_the_dsn(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A misconfigured DSN is reported by its (DSN-free) reason, not as "unreachable"."""
+    h = Harness(tmp_path)
+    loader = PostgresLoader("postgresql://u:pw-SECRET-MARKER@db.internal:5432/jarvis?options=x")
+    manager = ConfigManager(
+        loader, h.file, h.fake_writer, h.store, h.clock, resync_interval_s=INTERVAL, redis_url=None
+    )
+    with caplog.at_level(logging.INFO, logger=LOGGER):
+        await manager.start()
+        await h.clock.step(15.0)  # three more failed attempts, same reason
+    errors = [r.getMessage() for r in caplog.records if r.levelno == logging.ERROR]
+    assert len(errors) == 1
+    assert "no configuration available" in errors[0]
+    assert "unsupported DSN option: options" in errors[0]
+    assert "pw-SECRET-MARKER" not in caplog.text
+    assert "db.internal" not in caplog.text
+    assert "postgresql://" not in caplog.text
+    await manager.stop()
+
+
+async def test_startup_from_the_file_names_the_reason(
+    h: Harness, caplog: pytest.LogCaptureFixture
+) -> None:
+    h.file.write(Snapshot({}, {}, "postgres", 5.0), written_at=5.0)
+    h.loader.fail = True
+    with caplog.at_level(logging.WARNING, logger=LOGGER):
+        await h.manager.start()
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert LOAD_ERROR in warnings[0]
+    assert str(h.file.path) in warnings[0]
+    await h.manager.stop()
+
+
+async def test_a_changed_failure_reason_is_logged_again(
+    h: Harness, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    reasons = iter(["reason A", "reason A", "reason B", "reason B"])
+
+    async def failing(now: float) -> tuple[Snapshot, frozenset[str]]:
+        raise ConfigLoadError(next(reasons))
+
+    monkeypatch.setattr(h.loader, "load_all", failing)
+    with caplog.at_level(logging.ERROR, logger=LOGGER):
+        await h.manager.start()
+        for _ in range(3):
+            await h.clock.step(5.0)
+    errors = [r.getMessage() for r in caplog.records if r.levelno == logging.ERROR]
+    assert len(errors) == 2
+    assert "reason A" in errors[0]
+    assert "reason B" in errors[1]
+    await h.manager.stop()
+
+
+async def test_a_targeted_success_never_reports_full_resyncs_recovered(
+    h: Harness, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await _started(h)
+    real_all = h.loader.load_all
+
+    async def failing(now: float) -> tuple[Snapshot, frozenset[str]]:
+        raise ConfigLoadError(LOAD_ERROR)
+
+    monkeypatch.setattr(h.loader, "load_all", failing)
+    with caplog.at_level(logging.INFO, logger=LOGGER):
+        await h.clock.step(INTERVAL)  # full resync fails
+        h.loader.apis["a1"] = _api("a1", 5)
+        await h.manager.handle_event(ApiChanged("a1", 5))  # targeted read works
+        assert h.snap.api_by_id("a1") == _api("a1", 5)
+        assert "recovered" not in caplog.text
+        monkeypatch.setattr(h.loader, "load_all", real_all)
+        await h.clock.step(INTERVAL)
+    recovered = [r.getMessage() for r in caplog.records if "recovered" in r.getMessage()]
+    assert recovered == ["configuration resync from Postgres recovered"]
+    await h.manager.stop()
+
+
+async def test_file_mode_does_not_report_recovered_before_a_full_load(
+    h: Harness, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    h.file.write(Snapshot({"a1": _api("a1", 1)}, {}, "postgres", 5.0), written_at=5.0)
+    real_all = h.loader.load_all
+
+    async def failing(now: float) -> tuple[Snapshot, frozenset[str]]:
+        raise ConfigLoadError(LOAD_ERROR)
+
+    monkeypatch.setattr(h.loader, "load_all", failing)
+    with caplog.at_level(logging.INFO, logger=LOGGER):
+        await h.manager.start()
+        await h.manager.handle_event(ApiChanged("a1", 4))  # targeted refresh succeeds
+        assert h.snap.api_by_id("a1") == _api("a1", 4)
+        assert h.snap.source == "file"
+        assert "recovered" not in caplog.text
+        monkeypatch.setattr(h.loader, "load_all", real_all)
+        await h.clock.step(5.0)
+    assert h.snap.source == "postgres"
+    assert "configuration resync from Postgres recovered" in caplog.text
+    await h.manager.stop()
+
+
+@pytest.mark.req("REQ-4.2-6", "REQ-11.1-6")
+async def test_a_failed_targeted_refresh_triggers_an_early_resync(
+    h: Harness, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A revoke that hits a transient Postgres error lands within ~5 s, not the 60 s resync."""
+    await _started(h)
+    await h.clock.step(10.0)
+    real_key = h.loader.load_key
+
+    async def failing_key(key_id: str) -> tuple[str, KeyEntry] | None:
+        raise ConfigLoadError(LOAD_ERROR)
+
+    monkeypatch.setattr(h.loader, "load_key", failing_key)
+    h.loader.keys["h1"] = _key("k1", revoked=True)
+    with caplog.at_level(logging.ERROR, logger=LOGGER):
+        await h.manager.handle_event(Invalidated("key", "k1"))
+    assert h.snap.key("h1") == _key("k1")  # not applied yet
+    assert "a full resync will follow" in caplog.text
+    with caplog.at_level(logging.INFO, logger=LOGGER):
+        await settle()  # 10 s since the last supervised run: the early resync may run at once
+    assert "config event refresh from Postgres recovered" in caplog.text
+    revoked = h.snap.key("h1")
+    assert revoked is not None
+    assert revoked.revoked is True
+    monkeypatch.setattr(h.loader, "load_key", real_key)
+    await h.manager.stop()
+
+
+async def test_early_resyncs_are_rate_limited_and_retried_until_one_succeeds(
+    h: Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await _started(h)
+
+    async def failing_key(key_id: str) -> tuple[str, KeyEntry] | None:
+        raise ConfigLoadError(LOAD_ERROR)
+
+    monkeypatch.setattr(h.loader, "load_key", failing_key)
+    h.loader.keys["h1"] = _key("k1", revoked=True)
+    h.loader.fail = True  # the full resyncs fail too, for a while
+    await h.manager.handle_event(Invalidated("key", "k1"))
+    await h.manager.handle_event(Invalidated("key", "k1"))
+    await h.clock.step(4.9)
+    assert h.loader.calls == ["all"]  # started 0 s ago: the first early resync waits 5 s
+    await h.clock.step(0.1)
+    assert h.loader.calls == ["all", "all"]
+    await h.clock.step(5.0)  # still pending: retried every 5 s, not every 60 s
+    assert h.loader.calls == ["all", "all", "all"]
+    h.loader.fail = False
+    await h.clock.step(5.0)
+    entry = h.snap.key("h1")
+    assert entry is not None
+    assert entry.revoked is True
+    calls = len(h.loader.calls)
+    await h.clock.step(INTERVAL - 1)  # back to the normal cadence
+    assert len(h.loader.calls) == calls
+    await h.manager.stop()
+
+
+@pytest.mark.req("REQ-4.2-6", "REQ-11.1-6")
+async def test_a_revoke_during_an_in_flight_resync_is_not_lost(h: Harness) -> None:
+    """The resync read old rows; the revoke event must apply after it, re-reading the key."""
+    await _started(h)
+    h.loader.all_gate = asyncio.Event()
+    resync = asyncio.create_task(h.manager.resync())
+    await settle()
+    assert h.loader.calls[-1] == "all:read"  # old, non-revoked rows are in flight
+    h.loader.keys["h1"] = _key("k1", revoked=True)
+    event = asyncio.create_task(h.manager.handle_event(Invalidated("key", "k1")))
+    await settle()
+    h.loader.all_gate.set()
+    await asyncio.gather(resync, event)
+    entry = h.snap.key("h1")
+    assert entry is not None
+    assert entry.revoked is True
+    await h.manager.stop()
+
+
+async def test_stop_during_start_spawns_nothing(h: Harness) -> None:
+    h.loader.all_gate = asyncio.Event()
+    start = asyncio.create_task(h.manager.start())
+    await settle()
+    await h.manager.stop()
+    h.loader.all_gate.set()
+    await asyncio.wait_for(start, timeout=2)
+    await settle()
+    assert [t for t in asyncio.all_tasks() if "ConfigManager" in t.get_name()] == []

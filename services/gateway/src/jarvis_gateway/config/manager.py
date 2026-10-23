@@ -101,7 +101,14 @@ class ConfigManager:
         self._tasks: list[asyncio.Task[None]] = []
         self._started = False
         self._last_sync_ok: float | None = None
-        self._failing = False
+        # Failure streaks: full loads remember the reason (logged when it changes); targeted
+        # refreshes have their own streak so one never reports the other as recovered.
+        self._full_error: str | None = None
+        self._refresh_failing = False
+        # A failed targeted refresh asks the supervisor for an early full resync.
+        self._resync_pending = False
+        self._wake = asyncio.Event()
+        self._last_supervised: float = 0.0
 
     @property
     def store(self) -> ConfigStore:
@@ -124,25 +131,31 @@ class ConfigManager:
         if self._started:
             raise RuntimeError("config manager already started")
         self._started = True
-        if not await self._load(log_failure=False):
-            self._failing = True
+        error = await self._load(log_failure=False)
+        if error is not None:
+            self._full_error = error  # later failures with the same reason stay quiet
             fallback = await asyncio.to_thread(self._file.read)
             if fallback is not None:
                 self._store.replace(fallback)
                 log.warning(
-                    "Postgres is unreachable at startup; serving %d APIs and %d keys from the "
-                    "snapshot file %s until it is back",
+                    "Postgres is unavailable at startup (%s); serving %d APIs and %d keys from "
+                    "the snapshot file %s until it is back",
+                    error,
                     len(fallback.apis),
                     len(fallback.keys),
                     self._file.path,
                 )
             else:
                 log.error(
-                    "no configuration available: Postgres is unreachable and there is no usable "
-                    "snapshot file at %s; retrying every %.0f s",
+                    "no configuration available: Postgres is unavailable (%s) and there is no "
+                    "usable snapshot file at %s; retrying every %.0f s",
+                    error,
                     self._file.path,
                     RETRY_INTERVAL_S,
                 )
+        if self._stop.is_set():
+            return  # stop() ran while the first load was in flight: start nothing
+        self._last_supervised = self._clock.monotonic()
         self._spawn(self._supervise(), "supervisor")
         if self._redis_url is not None:
             self._spawn(self._subscribe(self._redis_url), "subscriber")
@@ -164,7 +177,7 @@ class ConfigManager:
     async def resync(self) -> bool:
         """Full reload from Postgres. False (old snapshot kept) when Postgres cannot be read."""
         async with self._lock:
-            return await self._load(log_failure=True)
+            return await self._load(log_failure=True) is None
 
     async def handle_event(self, event: ConfigEvent) -> None:
         async with self._lock:
@@ -173,9 +186,13 @@ class ConfigManager:
             try:
                 await self._refresh(event)
             except ConfigLoadError as exc:
-                self._failed(exc)
+                if not self._refresh_failing:
+                    log.error("config event refresh failed: %s; a full resync will follow", exc)
+                self._refresh_failing = True
+                self._resync_pending = True
+                self._wake.set()
                 return
-            self._succeeded()
+            self._refresh_ok()
 
     # --- internals ---------------------------------------------------------------------------
 
@@ -184,14 +201,33 @@ class ConfigManager:
 
     async def _supervise(self) -> None:
         while True:
-            delay = RETRY_INTERVAL_S if self._last_sync_ok is None else self._interval
+            urgent = self._last_sync_ok is None or self._resync_pending
+            delay = RETRY_INTERVAL_S if urgent else self._interval
             try:
-                await self._clock.sleep(delay)
+                await self._pause(delay)
+                self._last_supervised = self._clock.monotonic()
                 await self.resync()
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
                 log.error("config resync crashed (%s); will retry", type(exc).__name__)
+
+    async def _pause(self, delay: float) -> None:
+        """Sleep ``delay``, or until woken for an early resync (at most one per 5 s)."""
+        sleeper = asyncio.ensure_future(self._clock.sleep(delay))
+        waker = asyncio.ensure_future(self._wake.wait())
+        try:
+            await asyncio.wait({sleeper, waker}, return_when=asyncio.FIRST_COMPLETED)
+            woken = not sleeper.done()
+        finally:
+            for task in (sleeper, waker):
+                task.cancel()
+            await asyncio.gather(sleeper, waker, return_exceptions=True)
+        if woken:
+            self._wake.clear()
+            remaining = self._last_supervised + RETRY_INTERVAL_S - self._clock.monotonic()
+            if remaining > 0:
+                await self._clock.sleep(remaining)
 
     async def _subscribe(self, redis_url: str) -> None:
         async def on_connected() -> None:
@@ -209,14 +245,18 @@ class ConfigManager:
                 type(exc).__name__,
             )
 
-    async def _load(self, *, log_failure: bool) -> bool:
+    async def _load(self, *, log_failure: bool) -> str | None:
+        """A full load; None on success, else the loader's (DSN-free) error message."""
         now = self._clock.now()
         try:
             fresh, invalid = await self._loader.load_all(now)
         except ConfigLoadError as exc:
+            error = str(exc)
+            if log_failure and error != self._full_error:
+                log.error("configuration resync failed: %s; serving the last snapshot", error)
             if log_failure:
-                self._failed(exc)
-            return False
+                self._full_error = error
+            return error
         previous = self._store.current
         if previous is not None and invalid:
             fresh = fresh.with_changes(apis=_carried(previous, fresh, invalid))
@@ -224,8 +264,12 @@ class ConfigManager:
         self._store.replace(snapshot)
         self._writer.submit(snapshot)
         self._last_sync_ok = now
-        self._succeeded()
-        return True
+        self._resync_pending = False
+        if self._full_error is not None:
+            log.info("configuration resync from Postgres recovered")
+        self._full_error = None
+        self._refresh_ok()
+        return None
 
     async def _refresh(self, event: ConfigEvent) -> None:
         current = self._store.current
@@ -263,15 +307,10 @@ class ConfigManager:
         if after is not before:
             self._writer.submit(after)
 
-    def _failed(self, exc: ConfigLoadError) -> None:
-        if not self._failing:
-            log.error("configuration refresh failed: %s; serving the last snapshot", exc)
-        self._failing = True
-
-    def _succeeded(self) -> None:
-        if self._failing:
-            log.info("configuration refresh from Postgres recovered")
-        self._failing = False
+    def _refresh_ok(self) -> None:
+        if self._refresh_failing:
+            log.info("config event refresh from Postgres recovered")
+        self._refresh_failing = False
 
 
 def _carried(previous: Snapshot, fresh: Snapshot, invalid: frozenset[str]) -> dict[str, ApiEntry]:
