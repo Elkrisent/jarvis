@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import http.cookiejar
 import logging
+import time
 from collections.abc import AsyncIterator, Callable
 
 import httpx
@@ -123,8 +124,14 @@ class Forwarder:
         return b"".join(chunks)
 
     async def forward(
-        self, request: Request, authenticated: Authenticated, request_id: str
+        self,
+        request: Request,
+        authenticated: Authenticated,
+        request_id: str,
+        started: float | None = None,
     ) -> Response:
+        """``started`` is the ``time.monotonic()`` of ingress: the deadline runs from there."""
+        started = time.monotonic() if started is None else started
         api = authenticated.api
         config = api.config
         # No await between the caller's snapshot read and this lookup: the secret is the one that
@@ -141,6 +148,9 @@ class Forwarder:
             secret,
         )
         body = await self._read_body(request)
+        remaining = config.deadline_ms / 1000 - (time.monotonic() - started)
+        if remaining <= 0:
+            raise UpstreamTimeoutError("the upstream did not answer in time")
         try:
             client = self._client(httpx.URL(url))
             upstream_request = client.build_request(
@@ -150,7 +160,7 @@ class Forwarder:
                 content=body or None,
                 timeout=httpx.Timeout(config.attempt_timeout_ms / 1000),
             )
-            async with asyncio.timeout(config.deadline_ms / 1000):
+            async with asyncio.timeout(remaining):
                 upstream = await client.send(upstream_request, stream=True)
         except (TimeoutError, httpx.TimeoutException):
             raise UpstreamTimeoutError("the upstream did not answer in time") from None

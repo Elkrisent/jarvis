@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Mapping
 
 from fastapi import APIRouter, Request
@@ -61,6 +62,7 @@ def build_gw_router(store: ConfigStore, forwarder: Forwarder | None = None) -> A
 
     async def gateway(api_slug: str, request: Request, path: str = "") -> Response:
         request_id = new_request_id()
+        started = time.monotonic()  # the deadline clock starts at ingress (SPEC 4.3)
         try:
             if forwarder is not None:
                 _ingress(request, forwarder)
@@ -74,7 +76,7 @@ def build_gw_router(store: ConfigStore, forwarder: Forwarder | None = None) -> A
             authenticated = authenticate(snapshot, api_slug, headers)
             if forwarder is None:
                 raise NotImplementedYetError("forwarding is not implemented yet")
-            return await forwarder.forward(request, authenticated, request_id)
+            return await forwarder.forward(request, authenticated, request_id, started)
         except JarvisError as error:
             return _error(error, request_id)
 

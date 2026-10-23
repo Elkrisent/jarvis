@@ -8,6 +8,7 @@ pytestmark = pytest.mark.unit
 ULID = re.compile(r"^[0-9A-HJKMNP-TV-Z]{26}$")
 
 
+@pytest.mark.req("REQ-4.3-1")
 def test_shape_is_a_26_char_crockford_ulid() -> None:
     assert ULID.match(new_request_id())
 

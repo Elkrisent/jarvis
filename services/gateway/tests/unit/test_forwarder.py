@@ -6,12 +6,15 @@ import asyncio
 import gzip
 import http.cookiejar
 import logging
+import time
 from collections.abc import AsyncIterator, Callable, Mapping
+from pathlib import Path
 from typing import Any, cast
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from jarvis_core.clock import SystemClock
 from jarvis_core.config import ApiDependency
 from jarvis_core.errors import DestinationBlockedError
 from jarvis_core.keys import hash_jarvis_key
@@ -20,6 +23,7 @@ from jarvis_core.ssrf import SsrfPolicy
 from jarvis_gateway.app import create_app
 from jarvis_gateway.config.manager import ConfigManager
 from jarvis_gateway.config.snapshot import ApiEntry, KeyEntry, Snapshot
+from jarvis_gateway.config.snapshot_file import CoalescingWriter, SnapshotFile
 from jarvis_gateway.config.store import ConfigStore
 from jarvis_gateway.credentials import CredentialVault
 from jarvis_gateway.forwarder import Forwarder, UpstreamBodyError
@@ -454,7 +458,7 @@ def test_nothing_secret_is_logged_on_success_or_failure(caplog: pytest.LogCaptur
         assert needle not in caplog.text
 
 
-# --- lifecycle and interruptions ---------------------------------------------------------------
+# --- lifecycle and interruptions --------------------------------------------------------------
 
 
 class _Interrupted(httpx.AsyncByteStream):
@@ -511,3 +515,87 @@ async def test_closing_an_unused_client_happens_on_the_running_loop() -> None:
     await forwarder.aclose()  # also waits for the close that retain scheduled
     assert closed == ["closed"]
     assert forwarder.origins() == []
+
+
+# --- the request clock and the hot path (REQ-4.3-1, REQ-4.3-6) --------------------------------
+
+
+@pytest.mark.req("REQ-4.3-1")
+def test_every_response_carries_its_own_ulid_request_id() -> None:
+    rig = _rig()
+    ids = {rig.call().headers["x-jarvis-request-id"] for _ in range(20)}
+    ids |= {rig.call(url="/gw/nope/x").headers["x-jarvis-request-id"] for _ in range(20)}
+    assert len(ids) == 40
+    assert all(len(i) == 26 and i.isalnum() for i in ids)
+
+
+@pytest.mark.req("REQ-4.3-1")
+def test_the_deadline_starts_at_ingress_so_a_slow_upload_uses_it_up() -> None:
+    async def quick(request: httpx.Request) -> httpx.Response:
+        await asyncio.sleep(0.15)
+        return _resp(200)
+
+    rig = Rig(
+        [_api("a1", "weather", deadline_ms=400, attempt_timeout_ms=300, min_attempt_ms=50)], quick
+    )
+
+    def slow_body() -> Any:
+        for _ in range(4):
+            time.sleep(0.1)  # 0.4 s of upload: the whole deadline, before the upstream is asked
+            yield b"x" * 10
+
+    _json_error(rig.call("POST", content=slow_body()), "JV_UPSTREAM_TIMEOUT", 504)
+    assert rig.requests == []
+    # the same upstream is fine when the request arrives promptly
+    assert rig.call("POST", content=b"x" * 10).status_code == 200
+
+
+@pytest.mark.req("REQ-4.3-6")
+def test_serving_requests_makes_no_database_query_after_the_config_is_loaded(
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    entry = _api("a1", "weather")
+    keys = {hash_jarvis_key(KEY): KeyEntry("k1", "p1", frozenset(), False)}
+
+    class CountingLoader:
+        async def load_all(self, now: float) -> tuple[Snapshot, frozenset[str]]:
+            calls.append("load_all")
+            snapshot = Snapshot({entry.api_id: entry}, keys, "postgres", now)
+            return snapshot, frozenset()
+
+        async def load_api(self, api_id: str) -> None:
+            calls.append("load_api")
+
+        async def load_key(self, key_id: str) -> None:
+            calls.append("load_key")
+
+        async def load_project(self, project_id: str) -> None:
+            calls.append("load_project")
+
+        async def close(self) -> None: ...
+
+    store = ConfigStore()
+    vault = CredentialVault(BOX)
+    store.add_listener(vault.refresh)
+    transport = httpx.MockTransport(lambda request: _resp(200, content=b"ok"))
+    forwarder = Forwarder(
+        SsrfPolicy(), vault, max_body_bytes=LIMIT, transport_factory=lambda: transport
+    )
+    file = SnapshotFile(tmp_path / "snapshot.json")
+    manager = ConfigManager(
+        cast(Any, CountingLoader()),
+        file,
+        CoalescingWriter(file, SystemClock()),
+        store,
+        SystemClock(),
+        resync_interval_s=3600,
+        redis_url=None,
+    )
+    with TestClient(create_app(config=manager, forwarder=forwarder)) as client:
+        assert calls == ["load_all"]  # the startup load
+        for _ in range(10):
+            response = client.get("/gw/weather/x", headers={"X-Jarvis-Key": KEY})
+            assert response.status_code == 200
+        client.get("/gw/weather/x", headers={"X-Jarvis-Key": "jv_live_bad"})
+        assert calls == ["load_all"]  # nothing was read from Postgres to serve them
