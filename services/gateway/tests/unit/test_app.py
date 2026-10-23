@@ -6,6 +6,7 @@ from jarvis_core.clock import FakeClock
 from jarvis_core.health import Dependency
 from jarvis_gateway.app import create_app, create_app_from_env, dependencies_from_env
 from jarvis_gateway.config.manager import ConfigManager, ConfigStatus
+from jarvis_gateway.config.store import ConfigStore
 
 pytestmark = pytest.mark.unit
 
@@ -50,6 +51,7 @@ INTERVAL = 10.0
 class FakeManager:
     def __init__(self, status: ConfigStatus) -> None:
         self._status = status
+        self.store = ConfigStore()
         self.events: list[str] = []
 
     def status(self) -> ConfigStatus:
