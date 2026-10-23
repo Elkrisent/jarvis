@@ -21,3 +21,13 @@ regexes = [
 paths = [
   '''services/gateway/tests/unit/test_auth_extraction\.py''',
 ]
+
+[[allowlists]]
+description = "Made-up JARVIS key used as a fixture in the forwarder unit tests (protects nothing)"
+condition = "AND"
+regexes = [
+  '''jv_live_forwarderkey1''',
+]
+paths = [
+  '''services/gateway/tests/unit/test_forwarder\.py''',
+]

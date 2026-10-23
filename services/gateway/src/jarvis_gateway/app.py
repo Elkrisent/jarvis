@@ -21,6 +21,8 @@ from jarvis_gateway.config.manager import ConfigManager, ConfigStatus
 from jarvis_gateway.config.postgres import PostgresLoader
 from jarvis_gateway.config.snapshot_file import CoalescingWriter, SnapshotFile
 from jarvis_gateway.config.store import ConfigStore
+from jarvis_gateway.credentials import CredentialVault
+from jarvis_gateway.forwarder import Forwarder
 from jarvis_gateway.routes import build_gw_router
 from jarvis_gateway.settings import load_settings
 
@@ -65,20 +67,25 @@ def create_app(
     config: ConfigManager | None = None,
     resync_interval_s: float = 60.0,
     clock: Clock | None = None,
+    forwarder: Forwarder | None = None,
 ) -> FastAPI:
     """Without ``config`` the app only reports its dependencies, exactly as in M0.3."""
     clock = SystemClock() if clock is None else clock
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-        if config is None:
-            yield
-            return
         try:
-            await config.start()
-            yield
+            if config is None:
+                yield
+                return
+            try:
+                await config.start()
+                yield
+            finally:
+                await config.stop()
         finally:
-            await config.stop()
+            if forwarder is not None:
+                await forwarder.aclose()
 
     app = FastAPI(title="jarvis-gateway", lifespan=lifespan)
 
@@ -102,7 +109,7 @@ def create_app(
         return body
 
     if config is not None:
-        app.include_router(build_gw_router(config.store))
+        app.include_router(build_gw_router(config.store, forwarder))
 
     return app
 
@@ -122,9 +129,14 @@ def create_app_from_env() -> FastAPI:
         redis_url=settings.redis_url,
         snapshot_max_age_s=settings.snapshot_max_age_s,
     )
+    vault = CredentialVault(settings.secret_box)
+    forwarder = Forwarder(settings.ssrf_policy, vault, max_body_bytes=settings.max_body_bytes)
+    store.add_listener(vault.refresh)  # secrets are opened before the forwarder can see the config
+    store.add_listener(forwarder.retain)
     return create_app(
         dependencies_from_env(),
         config=manager,
         resync_interval_s=settings.resync_interval_s,
         clock=clock,
+        forwarder=forwarder,
     )

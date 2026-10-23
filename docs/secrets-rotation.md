@@ -16,8 +16,10 @@ and how to replace the master key. Requirement: SPEC §11.2.
   record. A key ID identifies a key; it does not reveal it.
 * Plaintext secrets and keys are never written to logs, `repr`/`str` output, errors or command output.
 
-Wiring the master key into api startup is not part of M1.2 (it arrives in M1.3). Until then the
-key is used only by the rotation command and by tests.
+The api uses the master key to seal provider secrets when an API is saved. The gateway uses it to
+open them: the config it loads carries each provider secret as ciphertext (also in its local
+snapshot file), and it decrypts them into memory whenever it installs a config. Plaintext is never
+written to disk or logs.
 
 ## Generate a key
 
@@ -53,7 +55,12 @@ Store it in your secret manager. Do not paste it into tickets, chat or shell his
 4. Replace `JARVIS_MASTER_KEY` with the new value wherever it is configured, and remove
    `JARVIS_NEW_MASTER_KEY`.
 5. Restart the api and gateway. A running instance still holds the old key; anything it writes
-   after rotation is sealed under the old key ID and would then be refused as an unknown key.
+   after rotation is sealed under the old key ID and would then be refused as an unknown key. A
+   gateway that is not restarted can no longer open the re-encrypted secrets the next time it
+   reloads config (at the latest on its next resync, within 60 s by default): requests to APIs with
+   a stored credential then answer `JV_UPSTREAM_UNREACHABLE` ("the upstream credential is not
+   available") and the gateway logs one warning per API naming the API id and key id, never a
+   secret. Restarting it with the new key fixes this.
 6. Verify: the services start and can read their secrets, and `jarvis rotate-master-key` is not
    needed again. Re-running a finished rotation (old and new keys unchanged) rewrites nothing and
    exits 0 with `re-encrypted 0 secret(s) ...`.

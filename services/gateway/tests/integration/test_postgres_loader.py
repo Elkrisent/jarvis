@@ -14,8 +14,10 @@ import pytest
 from jarvis_api.db.config_source import PostgresConfigSource
 from jarvis_api.db.migrate import to_async_url
 from jarvis_api.db.repositories import KeyRepository, ProjectRepository
+from jarvis_api.db.secrets import PostgresSecretStore
 from jarvis_core.config import ApiDependency
 from jarvis_core.keys import generate_jarvis_key, hash_jarvis_key
+from jarvis_core.secretbox import AesGcmSecretBox
 from jarvis_gateway.config import postgres
 from jarvis_gateway.config.postgres import (
     ConfigLoadError,
@@ -372,7 +374,7 @@ class ReadOnlyAccess:
     own_role: bool  # False: the connecting role owns the tables, so only they were restricted
 
 
-_TABLES = "api_dependencies, api_policy_versions, jarvis_keys"
+_TABLES = "api_dependencies, api_policy_versions, jarvis_keys, secrets"
 
 
 @pytest.fixture
@@ -428,7 +430,7 @@ async def test_the_loader_works_with_access_that_can_only_select(
         ):
             with pytest.raises(asyncpg.InsufficientPrivilegeError):
                 await conn.execute(write)
-        if select_only.own_role:  # ... and nothing beyond the three tables is readable.
+        if select_only.own_role:  # ... and nothing beyond the four tables is readable.
             with pytest.raises(asyncpg.InsufficientPrivilegeError):
                 await conn.fetch("SELECT 1 FROM projects")
     finally:
@@ -510,5 +512,64 @@ async def test_libpq_style_dsn_options_shared_with_the_api_are_accepted(
     loader = PostgresLoader(f"{database_url}?{query}", connect_timeout_s=2.0)
     try:
         assert set((await loader.load_all(now=1.0))[0].apis) == {seed.weather, seed.maps, seed.news}
+    finally:
+        await loader.close()
+
+
+# --- sealed provider secrets (M1.8) ---------------------------------------------------------------
+
+
+@pytest.mark.req("REQ-4.5-7")
+async def test_an_apis_sealed_secret_is_loaded_with_it_and_follows_a_replacement(
+    engine: AsyncEngine, loader: PostgresLoader, seed: Seed
+) -> None:
+    box, store = AesGcmSecretBox(bytes(range(32))), PostgresSecretStore(engine)
+    source = PostgresConfigSource(engine)
+    first = await store.add(box, "provider-secret-1")
+    api_id, _ = await source.put_version(seed.p1, _api("billing", secret_ref=first))
+    entry = await loader.load_api(api_id)
+    assert not isinstance(entry, InvalidApi)
+    assert entry is not None
+    assert entry.sealed == await store.get(first)
+    assert box.open(entry.sealed, context=first) == "provider-secret-1"
+
+    second = await store.add(box, "provider-secret-2")
+    await source.put_version(seed.p1, _api("billing", secret_ref=second), api_id=api_id)
+    replaced = await loader.load_api(api_id)
+    assert not isinstance(replaced, InvalidApi)
+    assert replaced is not None
+    assert replaced.sealed == await store.get(second)
+    assert replaced.sealed != entry.sealed
+
+
+@pytest.mark.req("REQ-4.5-7")
+async def test_apis_without_a_stored_secret_have_no_sealed_record(
+    loader: PostgresLoader, seed: Seed
+) -> None:
+    snap, _ = await loader.load_all(now=1.0)
+    assert snap.apis[seed.maps].sealed is None  # mode none
+    assert snap.apis[seed.weather].sealed is None  # secret_ref points at no stored row
+
+
+@pytest.fixture
+async def sealed_api(engine: AsyncEngine, seed: Seed) -> str:
+    """An API with a stored secret, created before the read-only access takes writes away."""
+    secret_id = await PostgresSecretStore(engine).add(AesGcmSecretBox(bytes(range(32))), "s3cret")
+    api_id, _ = await PostgresConfigSource(engine).put_version(
+        seed.p1, _api("sealed", secret_ref=secret_id)
+    )
+    return api_id
+
+
+@pytest.mark.req("REQ-4.5-7")
+async def test_sealed_secrets_load_with_select_only_access(
+    sealed_api: str, select_only: ReadOnlyAccess
+) -> None:
+    loader = PostgresLoader(select_only.dsn, connect_timeout_s=2.0)
+    try:
+        entry = await loader.load_api(sealed_api)
+        assert not isinstance(entry, InvalidApi)
+        assert entry is not None
+        assert entry.sealed is not None
     finally:
         await loader.close()

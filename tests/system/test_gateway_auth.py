@@ -36,9 +36,9 @@ def test_missing_bad_and_revoked_keys_get_401_and_a_live_key_gets_through() -> N
         key = api.post(f"/projects/{pid}/keys", json={"name": "ci"})
         assert key.status_code == 201, key.text
 
-        # Usable once the gateway has seen it; until M1.8 an authenticated request gets 501.
+        # Usable once the gateway has seen it; the request is then forwarded (200 from the mock).
         wait_until(
-            lambda: _status(gateway, key.json()["key"]) == 501 or None,
+            lambda: _status(gateway, key.json()["key"]) == 200 or None,
             timeout_s=10,
             interval_s=0.05,
             what="gateway to accept the new key",

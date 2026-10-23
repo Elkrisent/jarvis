@@ -9,6 +9,7 @@ services:
     environment:
       JARVIS_RESYNC_INTERVAL_S: "3"
       JARVIS_SSRF_ALLOWLIST: mock-upstream  # tests save http://mock-upstream:8080
+      JARVIS_MASTER_KEY: amFydmlzLXRlc3QtbWFzdGVyLWtleS1wbGFjZWhvbGQ=  # same placeholder as the api
   api:
     ports: ["127.0.0.1:18081:8080"]
     # Throwaway placeholders for the test stack only. The master key is 32 bytes of base64 that
