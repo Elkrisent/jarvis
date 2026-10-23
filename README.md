@@ -47,6 +47,12 @@ cd deploy && docker compose up -d --build --wait
 Gateway, api and worker each serve `/healthz` (liveness) and `/readyz` (dependencies) on
 internal port 8080 and publish no host ports. For development use
 `-f docker-compose.yml -f docker-compose.dev.yml` (hot reload, ports on 127.0.0.1:8080-8082).
+The gateway loads every API policy and key hash from Postgres at startup (`DATABASE_URL`), keeps
+them current through Redis events (within 1 s) and a full resync every `JARVIS_RESYNC_INTERVAL_S`
+(default 60), and writes the last loaded config to `JARVIS_SNAPSHOT_PATH` (the `gateway-snapshot`
+volume) so it can start while Postgres is down. Its `/readyz` adds `config`
+(`source`, `apis`, `keys`, `synced_at`; counts only): `degraded` when serving the snapshot file or
+when no full sync succeeded for 3 intervals, `unavailable` (503) when no config is loaded at all.
 `make test-system`, `make test-chaos` and `make test-security` start their own stack
 (project `jarvis-test`, ports 18080-18082, mock upstream on 19000 via the `test` profile) and need Docker.
 

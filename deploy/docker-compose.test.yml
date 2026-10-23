@@ -5,6 +5,9 @@
 services:
   gateway:
     ports: ["127.0.0.1:18080:8080"]
+    # Short full-resync interval so the chaos tests see recovery within seconds.
+    environment:
+      JARVIS_RESYNC_INTERVAL_S: "3"
   api:
     ports: ["127.0.0.1:18081:8080"]
     # Throwaway placeholders for the test stack only. The master key is 32 bytes of base64 that

@@ -20,7 +20,8 @@ ARG APP_MODULE="jarvis_${SERVICE}.app:create_app_from_env"
 ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 \
     APP_MODULE="${APP_MODULE}"
 RUN groupadd --system --gid 10001 jarvis \
-    && useradd --system --uid 10001 --gid jarvis --no-create-home --shell /usr/sbin/nologin jarvis
+    && useradd --system --uid 10001 --gid jarvis --no-create-home --shell /usr/sbin/nologin jarvis \
+    && install -d -o 10001 -g 10001 -m 0700 /var/lib/jarvis/gateway
 COPY --from=builder --chown=jarvis:jarvis /app/.venv /app/.venv
 USER 10001:10001
 WORKDIR /app
