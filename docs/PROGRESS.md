@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 merged (PR #20, merge commit `b17187d`); M1.5 merged (PR #21, merge commit `d756c4c`).
+Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 merged (PR #20, merge commit `b17187d`); M1.5 merged (PR #21, merge commit `d756c4c`); M1.6 implemented on `feat/m1.6-path-templating` (PR pending).
 
 ## Current Phase
 
@@ -10,7 +10,7 @@ Phase 1: Proxy.
 
 ## Current Module
 
-None active. Next is M1.6 Path templating (not planned or started).
+None active. M1.6 Path templating is implemented and awaiting review and merge; next is M1.7 SSRF guard (not planned or started).
 
 ## Completed
 
@@ -69,14 +69,18 @@ None active. Next is M1.6 Path templating (not planned or started).
   * CI: gitleaks flagged the made-up key `jv_live_abc123` in `test_auth_extraction.py` (history scan). `.gitleaks.toml` now allows it for that file only (both allowlists moved to `[[allowlists]]`), and `security.yml` pins `GITLEAKS_VERSION: 8.30.1` because the action's default 8.24.3 ignores those AND-condition allowlists (checked locally: 8.24.3 fails, 8.26.0 and later pass).
   * CI: `ci`, `security`, `system` and `bench` (including the chained `propagation` job) all green on `main` at `d756c4c`. `propagation` is not a PR check (`bench.yml` runs on main, nightly and manual only), so the user removed it from the ruleset's required checks.
   * Docs: README, `docs/quickstart-dev.md` (gateway calls and the 1 s revoke), `docs/traceability.md`.
+* M1.6 Path templating (branch `feat/m1.6-path-templating`, PR pending; plan `docs/superpowers/plans/2026-10-23-m1-6-path-templating.md`):
+  * `jarvis_core.route_template.RouteTemplater` (one per API): explicit patterns first (a `{name}` segment matches any one segment; most literal segments wins, ties by configured order), then the `{id}` fallback for all-digit, UUID and over-24-character token segments, with a cap of 500 distinct fallback templates (constructor argument, not a config field) and an `{other}` bucket. Explicit pattern results are never capped. Paths over 2048 characters or 32 segments go to `{other}` unstored. Not wired into the gateway yet (M1.8/M1.9).
+  * Benchmark `route_template_match` (two calls: one fallback path with a UUID, one explicit match): 6.93 us/op locally, against a budget changed from null to 20 us (the M1.6 DoD) in `benchmarks/budgets.yaml`.
+  * Verified locally: `make lint typecheck` clean; `make coverage` 996 passed (core 100% line / 99.2% branch, gateway 100/100, api 100/100); `make traceability COMPLETED_PHASE=0 TRACE_MARKERS="not perf"` 1032 passed, 56/246 covered, REQ-4.14-1 to -4 linked, Checkpoint 0 rows `pass`, no `not run` rows.
 
 ## In Progress
 
-Nothing.
+M1.6 review and PR.
 
 ## Next
 
-1. Plan and build M1.6 Path templating (IMPLEMENTATION.md M1.6, SPEC section 4.14).
+1. Merge M1.6, then plan and build M1.7 SSRF guard (IMPLEMENTATION.md M1.7, SPEC section 4.13).
 2. Before the P1 checkpoint: wire `make bench-propagation` (needs `DATABASE_URL`/`REDIS_URL`) into `scripts/bench/run_checkpoint.sh`. Today the checkpoint skips it, so `config_propagation_p99` stays "not measured" in the `BENCHMARKS.md` table and the interim section there is dropped by the next `make bench-checkpoint`.
 
 ## Blockers / Questions
@@ -94,7 +98,7 @@ Nothing.
 
 ## Resume Point
 
-Read the M1.6 section of `docs/IMPLEMENTATION.md` and SPEC §4.14, then write the M1.6 plan.
+Finish the M1.6 review and PR, then read the M1.7 section of `docs/IMPLEMENTATION.md` and SPEC §4.13 and write the M1.7 plan.
 
 ## Last Updated
 

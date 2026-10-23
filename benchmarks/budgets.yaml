@@ -34,7 +34,7 @@ metrics:
   # --- Micro benchmarks (pytest-benchmark), trend only
   token_bucket_take:      {unit: us/op, direction: lower, budget: null, spec: "micro"}
   cache_key_build:        {unit: us/op, direction: lower, budget: null, spec: "micro (M3.x)"}
-  route_template_match:   {unit: us/op, direction: lower, budget: null, spec: "micro (M1.x)"}
+  route_template_match:   {unit: us/op, direction: lower, budget: 20, spec: "IMPLEMENTATION M1.6 DoD: < 20 us per request"}
   backoff_compute:        {unit: us/op, direction: lower, budget: null, spec: "micro (M2.x)"}
   redaction_apply:        {unit: us/op, direction: lower, budget: null, spec: "micro (M6.x)"}
   evidence_bundle_build:  {unit: us/op, direction: lower, budget: null, spec: "micro (M6.x)"}
