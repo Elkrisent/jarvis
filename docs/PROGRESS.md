@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`). M1.3 implemented and verified on `feat/m1.3-management-api` (including the Docker suites), awaiting the PR.
+Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`).
 
 ## Current Phase
 
@@ -10,7 +10,7 @@ Phase 1: Proxy.
 
 ## Current Module
 
-M1.3 Minimal management API: implemented on the branch, not yet reviewed or merged.
+None active. Next is M1.4 Gateway config loader (not planned or started).
 
 ## Completed
 
@@ -44,23 +44,22 @@ M1.3 Minimal management API: implemented on the branch, not yet reviewed or merg
   * Code-review fixes (all applied, each with a regression test): the CLI no longer reports every database error as a connection failure; each record is bound to its row id as associated data (a ciphertext copied to another row fails authentication; `AesGcmSecretBox.seal/open` take an optional `context`, the `SecretBox` protocol is unchanged; `PostgresSecretStore.add(box, plaintext)` / `reveal(box, id)`); key ID widened to 64 bits (`k_` + 16 hex); `to_async_url` maps `connect_timeout` and rejects other libpq-only options by name instead of failing at connect time (M1.1 code); `run_migrations` cleanup no longer masks the real error; `create_app_from_env` reports a missing `DATABASE_URL` clearly; the CI `integration` job runs the integration tests once (via `make coverage`) instead of twice plus a baseline.
   * Verified locally against Postgres 16 and Redis 7: ruff, mypy, bandit and pip-audit clean; 438 unit + integration tests pass under `make coverage` (core 100% line / 99% branch, api 100% / 100%, gates met); 468 non-perf tests pass in the traceability run; Checkpoint 0 rows still `pass`. Regression tests were checked to fail without their fix (migration cleanup).
   * `ci` and `security` checks were green on PR #16 before merge; `system` is skipped on PRs without the label (check it on `main`).
+* M1.3 Minimal management API (PR #18, merge commit `7d8acec`):
+  * `/api/v1` projects, JARVIS keys (`jv_live_` + base62 of 32 random bytes, only the SHA-256 hash stored, shown once) and API dependencies (versioned; provider secrets sealed with the master key, `has_secret` only on output); admin bearer token auth; 422 errors with field paths; `config:changed` published to Redis on API create/update; `/openapi.json` behind the token with a committed snapshot (`make openapi-snapshot`).
+  * The api refuses to start without `JARVIS_MASTER_KEY` and `JARVIS_ADMIN_TOKEN`. New pinned dependency `redis==8.0.1`. Compose, `deploy/.env.example`, test override (placeholder secrets), README, `docs/contributing.md` and `docs/quickstart-dev.md` updated.
+  * Verified locally against Postgres 16 and Redis: `make lint typecheck`, `make security-scan` clean; 641 unit + integration tests pass under `make coverage` (core 100/99, api 100/100, gates met; no `main` baseline available locally). `docs/traceability.md` regenerated (41/246 covered; REQ-10-1, -10-2, -5.2-1, -11.2-4 list tests).
+  * Verified on a Docker host (Docker 28.5, Compose 2.40): `make test-system` 10 passed (including `tests/system/test_management_api.py`), `make test-e2e` 4, `make test-chaos` 1, `make test-security` 17; `make traceability COMPLETED_PHASE=0 TRACE_MARKERS="not perf"` 672 passed, Checkpoint 0 rows `pass`, no `not run` rows. Every command in `docs/quickstart-dev.md` was run against a real dev stack and behaved as documented (the gateway container could not bind host port 8080 on this machine, so only the api was used; the quickstart needs only the api).
+  * gitleaks (run through its Docker image over `main..HEAD`) flagged the placeholder master key in `deploy/docker-compose.test.yml`; a narrow `.gitleaks.toml` allowlist (that value in that file only; a different key in the same file is still caught) clears it.
+  * `ci` and `security` were green on PR #18 (a first `integration` run failed the no-drop-vs-main coverage gate; fixed with a test, api back to 100/100). `ci`, `security`, `system` and `bench` are all green on `main` at `7d8acec`.
 
 ## In Progress
 
-M1.3 Minimal management API on `feat/m1.3-management-api` (not merged):
-
-* `/api/v1` projects, JARVIS keys (`jv_live_` + base62 of 32 random bytes, only the SHA-256 hash stored, shown once) and API dependencies (versioned; provider secrets sealed with the master key, `has_secret` only on output); admin bearer token auth; 422 errors with field paths; `config:changed` published to Redis on API create/update; `/openapi.json` behind the token with a committed snapshot (`make openapi-snapshot`).
-* The api refuses to start without `JARVIS_MASTER_KEY` and `JARVIS_ADMIN_TOKEN`. New pinned dependency `redis==8.0.1`. Compose, `deploy/.env.example`, test override (placeholder secrets), README, `docs/contributing.md` and `docs/quickstart-dev.md` updated.
-* Verified locally against Postgres 16 and Redis: `make lint typecheck`, `make security-scan` clean; 641 unit + integration tests pass under `make coverage` (core 100/99, api 100/100, gates met; no `main` baseline available locally). `docs/traceability.md` regenerated (41/246 covered; REQ-10-1, -10-2, -5.2-1, -11.2-4 list tests).
-* Verified on a Docker host (Docker 28.5, Compose 2.40): `make test-system` 10 passed (including `tests/system/test_management_api.py`), `make test-e2e` 4, `make test-chaos` 1, `make test-security` 17; `make traceability COMPLETED_PHASE=0 TRACE_MARKERS="not perf"` 672 passed, Checkpoint 0 rows `pass`, no `not run` rows. Every command in `docs/quickstart-dev.md` was run against a real dev stack and behaved as documented (the gateway container could not bind host port 8080 on this machine, so only the api was used; the quickstart needs only the api).
-* gitleaks (run through its Docker image over `main..HEAD`) flagged the placeholder master key in `deploy/docker-compose.test.yml`; a narrow `.gitleaks.toml` allowlist (that value in that file only; a different key in the same file is still caught) clears it.
-* Still not run: the GitHub `ci`, `security` and `system` workflows (they run on the PR).
+Nothing.
 
 ## Next
 
-1. Open the M1.3 PR, get `ci` and `security` green (and `system` on main after merge), then record the merge SHA here.
-2. Decide the open questions below (who publishes `config:changed` for revocations; the P5 rollback secret problem).
-3. Then M1.4 Gateway config loader.
+1. Settle who publishes `config:changed` for key revoke, key create, API delete and project delete (below); M1.4 subscribes to key revocation and its DoD needs propagation within 1 s.
+2. Plan and build M1.4 Gateway config loader.
 
 ## Blockers / Questions
 
@@ -72,7 +71,7 @@ M1.3 Minimal management API on `feat/m1.3-management-api` (not merged):
 
 ## Resume Point
 
-Open the M1.3 PR. Do not start M1.4 before the PR is merged.
+Read the M1.4 section of `docs/IMPLEMENTATION.md` and SPEC §5.2 and §8, resolve the revocation-publishing question with the user, then write the M1.4 plan.
 
 ## Last Updated
 
