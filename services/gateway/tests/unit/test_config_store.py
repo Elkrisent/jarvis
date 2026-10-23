@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Awaitable, Callable
 
 import pytest
 from jarvis_core.config import ApiDependency
@@ -47,35 +48,73 @@ def test_update_without_snapshot_raises() -> None:
         ConfigStore().update(lambda s: s)
 
 
-@pytest.mark.req("REQ-5.2-3")
-async def test_concurrent_readers_never_see_a_mixed_snapshot() -> None:
-    first, second = _versioned(1), _versioned(2)
-    store = ConfigStore()
-    store.replace(first)
+def _bump(snap: Snapshot, only: range | None = None) -> Snapshot:
+    """One with_changes that raises the version of many APIs at once."""
+    ids = [f"a{i}" for i in (only if only is not None else range(N_APIS))]
+    changes = {}
+    for api_id in ids:
+        held = snap.apis[api_id]
+        changes[api_id] = ApiEntry(
+            api_id, held.project_id, held.slug, held.version + 1, held.config
+        )
+    return snap.with_changes(apis=changes)
+
+
+class _IncrementalStore(ConfigStore):
+    """Deliberately non-atomic: publishes half-applied state, yielding in between."""
+
+    async def update_incrementally(self) -> None:
+        half = N_APIS // 2
+        self.update(lambda s: _bump(s, range(half)))
+        await asyncio.sleep(0)
+        self.update(lambda s: _bump(s, range(half, N_APIS)))
+
+
+async def _count_violations(store: ConfigStore, write_once: Callable[[], Awaitable[None]]) -> int:
     stop = asyncio.Event()
+    violations = 0
     observed: set[int] = set()
 
     async def writer() -> None:
-        flip = False
         while not stop.is_set():
-            store.replace(second if flip else first)
-            flip = not flip
+            await write_once()
             await asyncio.sleep(0)
 
     async def reader() -> None:
+        nonlocal violations
         for _ in range(60):
             snap = store.current
             assert snap is not None
-            versions = {entry.version for entry in snap.apis.values()}
-            assert len(versions) == 1, f"mixed snapshot: {versions}"
-            observed.update(versions)
-            await asyncio.sleep(0)
+            before = {e.version for e in snap.apis.values()}
+            await asyncio.sleep(0)  # hold the snapshot across a writer turn
+            after = {e.version for e in snap.apis.values()}
+            if len(before) != 1 or before != after:
+                violations += 1
+            observed.update(before)
 
     writer_task = asyncio.create_task(writer())
     await asyncio.gather(*(reader() for _ in range(20)))
     stop.set()
     await writer_task
-    assert observed == {1, 2}  # the swap really happened while readers ran
+    assert len(observed) > 1  # the store really changed while readers were running
+    return violations
+
+
+@pytest.mark.req("REQ-5.2-3")
+async def test_concurrent_readers_never_see_a_mixed_snapshot() -> None:
+    store = ConfigStore()
+    store.replace(_versioned(1))
+
+    async def write_once() -> None:
+        store.update(_bump)
+
+    assert await _count_violations(store, write_once) == 0
+
+
+async def test_reader_check_detects_a_non_atomic_store() -> None:
+    store = _IncrementalStore()
+    store.replace(_versioned(1))
+    assert await _count_violations(store, store.update_incrementally) > 0
 
 
 @pytest.mark.req("REQ-5.2-3")

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
@@ -13,6 +14,7 @@ from pydantic import ValidationError
 Source = Literal["postgres", "file"]
 FORMAT = 1
 _SOURCES = ("postgres", "file")
+_MAX_VERSION = 2**62
 _NO_APIS: Mapping[str, ApiEntry | None] = MappingProxyType({})
 _NO_KEYS: Mapping[str, KeyEntry | None] = MappingProxyType({})
 
@@ -85,7 +87,14 @@ class Snapshot:
         source: Source | None = None,
         synced_at: float | None = None,
     ) -> Snapshot:
-        """Return a new snapshot. ``None`` removes; an older API version is ignored."""
+        """Return a new snapshot. ``None`` removes; an older API version is ignored.
+
+        ``remove_project`` is applied first, before the adds in the same call, so
+        entries added in this call survive even for the removed project.
+        """
+        for api_id, entry in apis.items():
+            if entry is not None and entry.api_id != api_id:
+                raise ValueError(f"apis mapping key {api_id} does not match entry api_id")
         new_apis = dict(self.apis)
         new_keys = dict(self.keys)
         if remove_project is not None:
@@ -149,20 +158,40 @@ class Snapshot:
         synced_at = data.get("synced_at")
         if source not in _SOURCES:
             raise ValueError("invalid snapshot source")
-        if isinstance(synced_at, bool) or not isinstance(synced_at, int | float):
+        synced = _finite(synced_at)
+        if synced is None:
             raise ValueError("invalid snapshot synced_at")
         raw_apis, raw_keys = data.get("apis"), data.get("keys")
         if not isinstance(raw_apis, list) or not isinstance(raw_keys, list):
             raise ValueError("snapshot apis/keys missing or not lists")
         apis: dict[str, ApiEntry] = {}
+        slugs: set[tuple[str, str]] = set()
         for raw in raw_apis:
             entry = _parse_api(raw)
+            if entry.api_id in apis:
+                raise ValueError(f"duplicate api_id {entry.api_id}")
+            if (entry.project_id, entry.slug) in slugs:
+                raise ValueError(f"duplicate slug for project in api {entry.api_id}")
             apis[entry.api_id] = entry
+            slugs.add((entry.project_id, entry.slug))
         keys: dict[str, KeyEntry] = {}
         for raw in raw_keys:
             key_hash, key_entry = _parse_key(raw)
+            if key_hash in keys:
+                raise ValueError(f"duplicate key hash for key {key_entry.key_id}")
             keys[key_hash] = key_entry
-        return cls(apis, keys, cast(Source, source), float(synced_at))
+        return cls(apis, keys, cast(Source, source), synced)
+
+
+def _finite(value: object) -> float | None:
+    """``value`` as a finite float, or None for bools, non-numbers, NaN/inf and overflow."""
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    try:
+        number = float(value)
+    except OverflowError:
+        return None
+    return number if math.isfinite(number) else None
 
 
 def _string(raw: dict[str, Any], name: str, what: str) -> str:
@@ -180,8 +209,12 @@ def _parse_api(raw: object) -> ApiEntry:
     project_id = _string(raw, "project_id", what)
     slug = _string(raw, "slug", what)
     version = raw.get("version")
-    if isinstance(version, bool) or not isinstance(version, int):
-        raise ValueError(f"{what}: version must be an integer")
+    if (
+        isinstance(version, bool)
+        or not isinstance(version, int)
+        or not 1 <= version <= _MAX_VERSION
+    ):
+        raise ValueError(f"{what}: version must be a positive integer")
     try:
         config = ApiDependency.model_validate(raw.get("config"))
     except ValidationError:

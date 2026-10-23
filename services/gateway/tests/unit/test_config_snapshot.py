@@ -241,3 +241,58 @@ def test_entry_reprs_omit_config_and_allowed_ids() -> None:
     assert "sec_1" not in repr(api)
     assert "weather" not in repr(api)
     assert "zzz-api" not in repr(_key("k1", "p1", ("zzz-api",)))
+
+
+@pytest.mark.parametrize(
+    "value",
+    [10**400, float("nan"), float("inf"), float("-inf"), True, "1.0", None],
+    ids=["huge-int", "nan", "inf", "-inf", "bool", "string", "null"],
+)
+def test_synced_at_must_be_a_finite_number(value: object) -> None:
+    with pytest.raises(ValueError, match="synced_at"):
+        Snapshot.from_json_dict(_bad(synced_at=value))
+
+
+@pytest.mark.parametrize("value", [0, -1, True, 2**63, 1.5, "1"], ids=str)
+def test_api_version_must_be_a_sane_positive_int(value: object) -> None:
+    data = _snapshot().to_json_dict()
+    data["apis"][0]["version"] = value  # type: ignore[index]
+    with pytest.raises(ValueError, match="version"):
+        Snapshot.from_json_dict(data)
+
+
+def test_duplicate_api_id_rejected() -> None:
+    data = _snapshot().to_json_dict()
+    apis: list[dict[str, Any]] = data["apis"]  # type: ignore[assignment]
+    apis.append(dict(apis[0], slug="other"))
+    with pytest.raises(ValueError, match="duplicate api_id a1"):
+        Snapshot.from_json_dict(data)
+
+
+def test_duplicate_project_slug_rejected() -> None:
+    data = _snapshot().to_json_dict()
+    apis: list[dict[str, Any]] = data["apis"]  # type: ignore[assignment]
+    apis.append(dict(apis[0], api_id="a9"))
+    with pytest.raises(ValueError, match="duplicate slug.*a9"):
+        Snapshot.from_json_dict(data)
+
+
+def test_duplicate_key_hash_rejected() -> None:
+    data = _snapshot().to_json_dict()
+    keys: list[dict[str, Any]] = data["keys"]  # type: ignore[assignment]
+    keys.append(dict(keys[0], key_id="k9"))
+    with pytest.raises(ValueError, match="duplicate key"):
+        Snapshot.from_json_dict(data)
+
+
+def test_with_changes_rejects_mismatched_mapping_key() -> None:
+    with pytest.raises(ValueError, match="a1"):
+        _snapshot().with_changes(apis={"a1": _api("a2", "p1", "maps", 9)})
+
+
+def test_remove_project_applies_before_adds_in_the_same_call() -> None:
+    snap = _snapshot()
+    readded = _api("a1", "p1", "weather", 1)
+    snap2 = snap.with_changes(remove_project="p1", apis={"a1": readded})
+    assert snap2.api_by_id("a1") is readded  # removal first, so the stale-guard sees nothing held
+    assert snap2.api_by_id("a2") is None
