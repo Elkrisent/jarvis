@@ -15,6 +15,7 @@ from jarvis_core.health import (
     evaluate_readiness,
     tcp_reachable,
 )
+from jarvis_core.ssrf import DestinationChecker, DestinationResolver, SsrfPolicy
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from jarvis_api.db.config_source import PostgresConfigSource
@@ -105,6 +106,8 @@ def create_app_from_env() -> FastAPI:
         raise RuntimeError("DATABASE_URL is not set (see deploy/.env.example)")
     # Settings before any connection, so a missing or invalid key or token stops startup.
     settings = load_settings()
+    # An invalid JARVIS_SSRF_ALLOWLIST raises ValueError (naming the variable) before any I/O.
+    destinations = DestinationChecker(DestinationResolver(SsrfPolicy.from_env(os.environ)))
     database_url = settings.database_url
     engine = create_async_engine(to_async_url(database_url), hide_parameters=True)
     publisher = RedisConfigPublisher(settings.redis_url)
@@ -115,6 +118,7 @@ def create_app_from_env() -> FastAPI:
         secrets=PostgresSecretStore(engine),
         secret_box=settings.secret_box,
         publisher=publisher,
+        destinations=destinations,
     )
 
     async def migrate() -> None:

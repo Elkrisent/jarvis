@@ -8,11 +8,13 @@ services:
     # Short full-resync interval so the chaos tests see recovery within seconds.
     environment:
       JARVIS_RESYNC_INTERVAL_S: "3"
+      JARVIS_SSRF_ALLOWLIST: mock-upstream  # tests save http://mock-upstream:8080
   api:
     ports: ["127.0.0.1:18081:8080"]
     # Throwaway placeholders for the test stack only. The master key is 32 bytes of base64 that
     # spell "jarvis-test-master-key-placehold"; neither value protects anything.
     environment:
+      JARVIS_SSRF_ALLOWLIST: mock-upstream  # tests save http://mock-upstream:8080
       JARVIS_MASTER_KEY: amFydmlzLXRlc3QtbWFzdGVyLWtleS1wbGFjZWhvbGQ=
       JARVIS_ADMIN_TOKEN: test-admin-token-placeholder-0000000000
   worker:

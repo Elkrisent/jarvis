@@ -17,6 +17,7 @@ from jarvis_core.config import ApiDependency
 from jarvis_core.errors import AuthRequiredError
 from jarvis_core.keys import GeneratedKey
 from jarvis_core.secretbox import AesGcmSecretBox
+from jarvis_core.ssrf import DestinationChecker
 from starlette.requests import Request
 
 from jarvis_api.db.config_source import StoredApi
@@ -71,6 +72,8 @@ class Services:
     secrets: SecretsPort
     secret_box: AesGcmSecretBox
     publisher: ConfigPublisher
+    # SSRF check on an API's base_url (SPEC §4.13). None skips it; the app factory always sets it.
+    destinations: DestinationChecker | None = None
 
 
 API_PREFIX = "/api/v1"

@@ -883,6 +883,8 @@ source = { editable = "services/gateway" }
 dependencies = [
     { name = "asyncpg" },
     { name = "fastapi" },
+    { name = "httpcore" },
+    { name = "httpx" },
     { name = "jarvis-core" },
     { name = "redis" },
     { name = "uvicorn" },
@@ -893,6 +895,8 @@ dependencies = [
 requires-dist = [
     { name = "asyncpg", specifier = "==0.32.0" },
     { name = "fastapi", specifier = "==0.156.5" },
+    { name = "httpcore", specifier = "==1.0.9" },
+    { name = "httpx", specifier = "==0.28.1" },
     { name = "jarvis-core", editable = "packages/core" },
     { name = "redis", specifier = "==8.0.1" },
     { name = "uvicorn", specifier = "==0.34.2" },

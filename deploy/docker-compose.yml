@@ -9,6 +9,9 @@ x-service: &service
   security_opt: ["no-new-privileges:true"]
   environment: &service-env
     REDIS_URL: redis://redis:6379/0
+    # SSRF guard (SPEC 4.13): extra allowed upstream CIDRs/hosts, and the JARVIS container names.
+    JARVIS_SSRF_ALLOWLIST: ${JARVIS_SSRF_ALLOWLIST:-}
+    JARVIS_INTERNAL_HOSTS: ${JARVIS_INTERNAL_HOSTS:-}
     DATABASE_URL: postgresql://${POSTGRES_USER:-jarvis}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}@postgres:5432/${POSTGRES_DB:-jarvis}
 
 services:

@@ -15,7 +15,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Body, Response
 from fastapi.exceptions import RequestValidationError
 from jarvis_core.config import ApiDependency
-from jarvis_core.errors import NotImplementedYetError
+from jarvis_core.errors import DestinationBlockedError, NotImplementedYetError
+from jarvis_core.ssrf import DestinationChecker
 from pydantic import SecretStr, ValidationError
 
 from jarvis_api.db.config_source import StoredApi, diff_configs
@@ -79,6 +80,8 @@ async def _save(
 ) -> tuple[str, int]:
     try:
         api: ApiDependency = body.to_dependency(secret_ref)
+        if services.destinations is not None:
+            await _check_destination(services.destinations, api.base_url)
         saved = await services.apis.put_version(
             project_id,
             api,
@@ -92,6 +95,16 @@ async def _save(
             await services.secrets.delete(new_secret_ref)
         raise
     return saved
+
+
+async def _check_destination(destinations: DestinationChecker, base_url: str) -> None:
+    """SPEC §4.13 at save time: a blocked host is a 422 on ``base_url`` (no address echoed)."""
+    try:
+        await destinations.check_save(base_url)
+    except DestinationBlockedError as exc:
+        raise RequestValidationError(
+            [{"type": "value_error", "loc": ("body", "base_url"), "msg": exc.message}]
+        ) from None
 
 
 async def _discard_secret(services: Services, secret_id: str) -> None:
