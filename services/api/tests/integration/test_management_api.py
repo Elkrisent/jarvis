@@ -17,7 +17,11 @@ from jarvis_api.db.config_source import PostgresConfigSource
 from jarvis_api.db.migrate import to_async_url, upgrade
 from jarvis_api.db.repositories import KeyRepository, ProjectRepository
 from jarvis_api.db.secrets import PostgresSecretStore
-from jarvis_api.events import CONFIG_CHANGED_CHANNEL, RedisConfigPublisher
+from jarvis_api.events import (
+    CONFIG_CHANGED_CHANNEL,
+    CONFIG_INVALIDATED_CHANNEL,
+    RedisConfigPublisher,
+)
 from jarvis_api.http.deps import Services
 from jarvis_core.keys import hash_jarvis_key
 from jarvis_core.secretbox import AesGcmSecretBox
@@ -386,3 +390,45 @@ async def test_interleaved_patches_lose_no_update_and_leave_no_dangling_secret(
         )
     # Every live config's secret exists, and no sealed secret is left unreferenced.
     assert set(await _secret_ids(engine)) == await _current_refs(engine) - {None}
+
+
+async def _lifecycle(client: httpx.AsyncClient) -> list[tuple[str, str]]:
+    """Create a key, revoke it, delete an API, delete a project; return expected events."""
+    pid = await _project(client)
+    api = await _api(client, pid)
+    created = await client.post(f"/api/v1/projects/{pid}/keys", json={"name": "k"})
+    assert created.status_code == 201
+    key_id = created.json()["id"]
+    assert (await client.delete(f"/api/v1/keys/{key_id}")).status_code == 204
+    assert (await client.delete(f"/api/v1/apis/{api['id']}")).status_code == 204
+    assert (await client.delete(f"/api/v1/projects/{pid}")).status_code == 204
+    return [("key", key_id), ("key", key_id), ("api", api["id"]), ("project", pid)]
+
+
+@pytest.mark.req("REQ-11.1-6")
+async def test_key_api_and_project_changes_publish_invalidations(
+    client: httpx.AsyncClient,
+) -> None:
+    redis = redis_asyncio.from_url(_redis_url())
+    pubsub = redis.pubsub()
+    await pubsub.subscribe(CONFIG_INVALIDATED_CHANNEL)
+    assert (await pubsub.get_message(timeout=5)) is not None
+    try:
+        expected = await _lifecycle(client)
+        received = [await _next_event(pubsub) for _ in expected]
+    finally:
+        await pubsub.aclose()
+        await redis.aclose()
+    assert received == [{"kind": k, "id": i} for k, i in expected]
+
+
+@pytest.mark.req("REQ-11.1-6", "REQ-5.2-3")
+async def test_invalidation_operations_succeed_when_redis_is_down(
+    engine: AsyncEngine, box: AesGcmSecretBox
+) -> None:
+    client, publisher = await _client(engine, box, CLOSED_REDIS)
+    try:
+        await _lifecycle(client)
+    finally:
+        await client.aclose()
+        await publisher.aclose()

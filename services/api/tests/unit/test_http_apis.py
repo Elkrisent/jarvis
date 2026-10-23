@@ -750,3 +750,20 @@ def test_config_diff_reports_top_level_keys_without_secret_refs() -> None:
     assert "sec_" not in str(config_diff(old, _stored(credential={"mode": "none"})))
     unchanged_ref = config_diff(old, _stored(credential={"mode": "bearer", "secret_ref": "sec_9"}))
     assert unchanged_ref == {"changed": {}}
+
+
+def _invalidations(services: Services) -> list[tuple[str, str]]:
+    assert isinstance(services.publisher, RecordingPublisher)
+    return services.publisher.invalidations
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-11.1-6")
+def test_deleting_an_api_publishes_an_invalidation_only_on_success(
+    client: TestClient, services: Services
+) -> None:
+    created = _create(client, _project(client))
+    assert client.delete("/api/v1/apis/api_missing", headers=AUTH).status_code == 404
+    assert _invalidations(services) == []
+    assert client.delete(f"/api/v1/apis/{created['id']}", headers=AUTH).status_code == 204
+    assert _invalidations(services) == [("api", created["id"])]

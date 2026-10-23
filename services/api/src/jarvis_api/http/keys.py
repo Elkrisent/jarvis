@@ -31,6 +31,7 @@ async def create_key(project_id: str, body: KeyIn, services: ServicesDep) -> Key
         raise RequestValidationError(
             [{"type": "value_error", "loc": ("body", "allowed_api_ids"), "msg": _FOREIGN_APIS}]
         ) from None
+    await services.publisher.invalidated("key", record.id)
     return KeyCreated.model_validate({**KeyOut.fields_of(record), "key": generated.full})
 
 
@@ -38,4 +39,5 @@ async def create_key(project_id: str, body: KeyIn, services: ServicesDep) -> Key
 async def revoke_key(key_id: str, services: ServicesDep) -> Response:
     """Revoke a key: ``revoked_at`` is set and the row is kept. Revoking again is a no-op."""
     await services.keys.revoke(key_id)
+    await services.publisher.invalidated("key", key_id)
     return Response(status_code=204)

@@ -6,7 +6,11 @@ import json
 import os
 
 import pytest
-from jarvis_api.events import CONFIG_CHANGED_CHANNEL, RedisConfigPublisher
+from jarvis_api.events import (
+    CONFIG_CHANGED_CHANNEL,
+    CONFIG_INVALIDATED_CHANNEL,
+    RedisConfigPublisher,
+)
 from redis import asyncio as redis_asyncio
 
 pytestmark = [pytest.mark.integration, pytest.mark.req("REQ-5.2-3")]
@@ -28,6 +32,26 @@ async def test_config_changed_is_published_to_redis() -> None:
         message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=5)
         assert message is not None
         assert json.loads(message["data"]) == {"api_id": "api_1", "version": 3}
+    finally:
+        await publisher.aclose()
+        await pubsub.aclose()
+        await client.aclose()
+
+
+async def test_invalidated_is_published_to_redis() -> None:
+    url = os.environ.get("REDIS_URL")
+    if not url:
+        pytest.fail("REDIS_URL must point at a Redis server to run integration tests")
+    client = redis_asyncio.from_url(url)
+    pubsub = client.pubsub()
+    publisher = RedisConfigPublisher(url)
+    try:
+        await pubsub.subscribe(CONFIG_INVALIDATED_CHANNEL)
+        assert (await pubsub.get_message(timeout=5)) is not None
+        await publisher.invalidated("key", "key_1")
+        message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=5)
+        assert message is not None
+        assert message["data"] == b'{"kind":"key","id":"key_1"}'
     finally:
         await publisher.aclose()
         await pubsub.aclose()

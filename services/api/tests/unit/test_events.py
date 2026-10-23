@@ -78,3 +78,43 @@ async def test_timeout_and_os_errors_are_swallowed(
         await publisher.config_changed("api_1", 3)
 
     assert f"could not publish config:changed ({name})" in caplog.text
+
+
+class _RecordingRedis:
+    def __init__(self) -> None:
+        self.published: list[tuple[str, str]] = []
+
+    async def publish(self, channel: str, message: str) -> int:
+        self.published.append((channel, message))
+        return 1
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-11.1-6")
+async def test_invalidated_publishes_compact_json_on_its_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _RecordingRedis()
+    monkeypatch.setattr(events.redis_asyncio, "from_url", lambda url, **kw: client)
+
+    await RedisConfigPublisher(URL).invalidated("key", "key_1")
+
+    assert client.published == [("config:invalidated", '{"kind":"key","id":"key_1"}')]
+    assert events.CONFIG_INVALIDATED_CHANNEL == "config:invalidated"
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-11.1-6")
+async def test_invalidated_failure_is_logged_without_secrets(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(events.redis_asyncio, "from_url", lambda url, **kw: _FailingRedis())
+    publisher = RedisConfigPublisher(URL)
+
+    with caplog.at_level(logging.WARNING):
+        await publisher.invalidated("project", "prj_1")
+
+    assert "could not publish config:invalidated (ConnectionError)" in caplog.text
+    assert "pw" not in caplog.text
+    assert URL not in caplog.text
+    assert "prj_1" not in caplog.text
