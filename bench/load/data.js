@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792749036467,
+  "lastUpdate": 1792760025842,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Load (latency)": [
@@ -424,6 +424,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "mock_direct_p99",
             "value": 6.3089055100000015,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b17187db4a4bdd63ce6386f57eca3af2412bbe0d",
+          "message": "Merge pull request #20 from Elkrisent/feat/m1.4-config-loader\n\nfeat: M1.4 gateway config loader",
+          "timestamp": "2026-10-23T18:21:19+05:30",
+          "tree_id": "88508a6e66a5405216693cfedc4e2edbea5bd49c",
+          "url": "https://github.com/Elkrisent/jarvis/commit/b17187db4a4bdd63ce6386f57eca3af2412bbe0d"
+        },
+        "date": 1792760025312,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "mock_direct_p50",
+            "value": 3.3343030000000002,
+            "unit": "ms"
+          },
+          {
+            "name": "mock_direct_p95",
+            "value": 3.645590849999999,
+            "unit": "ms"
+          },
+          {
+            "name": "mock_direct_p99",
+            "value": 4.199358779999999,
             "unit": "ms"
           }
         ]
