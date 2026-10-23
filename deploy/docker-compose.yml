@@ -55,6 +55,10 @@ services:
     <<: *service
     image: jarvis-api:dev
     build: {context: .., dockerfile: deploy/docker/service.Dockerfile, args: {SERVICE: api}}
+    environment:
+      <<: *service-env
+      JARVIS_MASTER_KEY: ${JARVIS_MASTER_KEY:-}
+      JARVIS_ADMIN_TOKEN: ${JARVIS_ADMIN_TOKEN:-}
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}

@@ -8,6 +8,7 @@ dependencies = [
     "asyncpg==0.32.0",
     "fastapi==0.156.5",
     "jarvis-core",
+    "redis==8.0.1",
     "sqlalchemy[asyncio]==2.1.6",
     "uvicorn==0.34.2",
 ]

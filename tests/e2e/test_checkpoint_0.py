@@ -5,7 +5,9 @@
 3. Given a push to main, when `bench.yml` runs, then a data point appears on the gh-pages chart.
 """
 
+import base64
 import json
+import secrets
 import subprocess
 from pathlib import Path
 
@@ -21,11 +23,21 @@ pytestmark = pytest.mark.e2e
 # ------------------------------------------------------------------------ story 1
 
 
+def _new_master_key() -> str:
+    return base64.b64encode(secrets.token_bytes(32)).decode()
+
+
 def test_story_1_fresh_clone_comes_up_all_healthy(tmp_path: Path) -> None:
     clone = tmp_path / "jarvis"
     subprocess.run(["git", "clone", "-q", str(REPO), str(clone)], check=True)
     deploy = clone / "deploy"
-    (deploy / ".env").write_text((deploy / ".env.example").read_text())
+    # The api refuses to start without its two secrets, so a fresh clone must fill them in.
+    env_text = (deploy / ".env.example").read_text()
+    env_text = env_text.replace("JARVIS_MASTER_KEY=\n", f"JARVIS_MASTER_KEY={_new_master_key()}\n")
+    env_text = env_text.replace(
+        "JARVIS_ADMIN_TOKEN=\n", f"JARVIS_ADMIN_TOKEN={secrets.token_hex(32)}\n"
+    )
+    (deploy / ".env").write_text(env_text)
 
     def compose(*args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(

@@ -10,8 +10,9 @@ Phase 1 (Proxy) in progress. The repository scaffold, tooling, CI, benchmark inf
 `jarvis_core` package (config models, errors, interfaces with in-memory implementations) exist, and
 the `api` service now owns the Postgres schema: Alembic migrations run at startup under an advisory
 lock, and `PostgresConfigSource` stores API policies as immutable versions. M1.2 added the AES-256-GCM `SecretBox`,
-the Postgres secret store and the `jarvis rotate-master-key` command; the api does not use the master key at startup yet. The compose stack runs
-healthy but the gateway does not proxy anything yet. Current state: [`docs/PROGRESS.md`](docs/PROGRESS.md).
+the Postgres secret store and the `jarvis rotate-master-key` command; M1.3 added the `/api/v1` management API (projects, JARVIS keys, API dependencies; the api now
+requires `JARVIS_MASTER_KEY` and `JARVIS_ADMIN_TOKEN` at startup). The compose stack runs
+healthy but the gateway does not proxy anything yet. Start with [`docs/quickstart-dev.md`](docs/quickstart-dev.md). Current state: [`docs/PROGRESS.md`](docs/PROGRESS.md).
 
 ## Development setup
 
@@ -39,7 +40,7 @@ secret from `JARVIS_MASTER_KEY` to `JARVIS_NEW_MASTER_KEY`, atomically. See
 ### Run the stack
 
 ```bash
-cp deploy/.env.example deploy/.env      # then set POSTGRES_PASSWORD
+cp deploy/.env.example deploy/.env      # then set POSTGRES_PASSWORD, JARVIS_MASTER_KEY, JARVIS_ADMIN_TOKEN (docs/quickstart-dev.md)
 cd deploy && docker compose up -d --build --wait
 ```
 

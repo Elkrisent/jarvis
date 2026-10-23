@@ -75,6 +75,28 @@ class DestinationBlockedError(JarvisError):
     http_status = 403
 
 
+class AuthRequiredError(JarvisError):
+    """Management API: missing or wrong admin token (not a gateway JARVIS key error)."""
+
+    code = "JV_AUTH_REQUIRED"
+    http_status = 401
+
+
+class NotFoundError(JarvisError):
+    code = "JV_NOT_FOUND"
+    http_status = 404
+
+
+class ConflictError(JarvisError):
+    code = "JV_CONFLICT"
+    http_status = 409
+
+
+class NotImplementedYetError(JarvisError):
+    code = "JV_NOT_IMPLEMENTED"
+    http_status = 501
+
+
 ALL_ERRORS: tuple[type[JarvisError], ...] = (
     AuthInvalidError,
     RateLimitedError,
@@ -87,7 +109,17 @@ ALL_ERRORS: tuple[type[JarvisError], ...] = (
     DestinationBlockedError,
 )
 
-_BY_CODE: dict[str, type[JarvisError]] = {cls.code: cls for cls in ALL_ERRORS}
+# Management-API codes. Deliberately not in ALL_ERRORS, which mirrors the SPEC §4.4 list.
+MANAGEMENT_ERRORS: tuple[type[JarvisError], ...] = (
+    AuthRequiredError,
+    NotFoundError,
+    ConflictError,
+    NotImplementedYetError,
+)
+
+_BY_CODE: dict[str, type[JarvisError]] = {
+    cls.code: cls for cls in (*ALL_ERRORS, *MANAGEMENT_ERRORS)
+}
 
 
 def error_for_code(code: str) -> type[JarvisError]:

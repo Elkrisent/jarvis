@@ -1,0 +1,13 @@
+# Extends the default gitleaks rules; only the throwaway test-stack placeholder is allowed.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Throwaway placeholder secrets for the test compose stack (protect nothing)"
+condition = "AND"
+regexes = [
+  '''amFydmlzLXRlc3QtbWFzdGVyLWtleS1wbGFjZWhvbGQ=''',
+]
+paths = [
+  '''deploy/docker-compose\.test\.yml''',
+]

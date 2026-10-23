@@ -1,7 +1,7 @@
 .PHONY: help sync lint format typecheck security-scan bandit pip-audit \
 	test-unit test-integration test-system test-functional test-e2e test-chaos \
 	test-security test-web test-all bench-micro bench-load bench-soak \
-	bench-checkpoint bench-up bench-down traceability coverage
+	bench-checkpoint bench-up bench-down traceability coverage openapi-snapshot
 
 PYTEST = uv run pytest
 BENCH_DIR = build/bench
@@ -60,6 +60,9 @@ test-web:
 	@echo "placeholder: web/ arrives in M4.7"
 
 test-all: test-unit test-integration test-system test-functional test-e2e test-web
+
+openapi-snapshot:
+	uv run python scripts/openapi_snapshot.py --write
 
 bench-micro:
 	mkdir -p $(BENCH_DIR)

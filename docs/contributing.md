@@ -5,7 +5,7 @@
 - One branch per module: `feat/m<phase>.<n>-<slug>`. Docs-only updates use `docs/…`.
 - Conventional commits: `feat:`, `fix:`, `test:`, `perf:`, `docs:`, `ci:`, `refactor:`, `chore:`.
 - Open a PR from the template, wait for green CI, squash-merge. Never push to `main`.
-- Never commit secrets or `.env`. Pre-commit runs gitleaks; CI runs it again. Master key handling
+- Never commit secrets or `.env`. Pre-commit runs gitleaks; CI runs it again. `.gitleaks.toml` allowlists only the throwaway placeholder secret in `deploy/docker-compose.test.yml`. Master key handling
   and rotation: [`secrets-rotation.md`](secrets-rotation.md).
 - Never delete, skip or loosen a test to get green. `xfail`/`skip` needs a linked issue.
 
@@ -15,8 +15,9 @@ Local checks, the same targets CI calls:
 make lint typecheck       # ruff, mypy
 make coverage             # unit + integration tests + per-package gates (needs Postgres and Redis)
 make security-scan        # bandit + pip-audit
+make openapi-snapshot     # regenerate tests/contract/openapi.snapshot.json after an API change; explain it in the PR
 make test-integration     # needs Postgres and Redis (REDIS_URL, DATABASE_URL)
-make test-system test-functional test-chaos test-security   # need Docker
+make test-system test-functional test-chaos test-security   # need Docker; the test stack uses placeholder secrets from deploy/docker-compose.test.yml
 ```
 
 ## CI workflows
