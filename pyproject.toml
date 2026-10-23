@@ -61,6 +61,11 @@ files = [
 ]
 
 [[tool.mypy.overrides]]
+# asyncpg ships no type information.
+module = ["asyncpg", "asyncpg.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
 module = ["jarvis_core.*", "jarvis_core", "jarvis_gateway.*", "jarvis_gateway"]
 strict = true
 
