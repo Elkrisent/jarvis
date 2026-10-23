@@ -27,7 +27,11 @@ class SnapshotFile:
         self.path = path
 
     def write(self, snapshot: Snapshot, *, written_at: float) -> None:
-        """Blocking atomic write: temp file in the same directory, fsync, rename."""
+        """Blocking atomic write: temp file in the same directory, fsync, rename.
+
+        If the final directory fsync fails the new file is already in place (it is
+        never removed); the error propagates so the caller can log it.
+        """
         stamp = datetime.fromtimestamp(written_at, UTC).isoformat()
         payload = json.dumps({**snapshot.to_json_dict(), "written_at": stamp}).encode()
         directory = self.path.parent
@@ -53,7 +57,10 @@ class SnapshotFile:
         await asyncio.to_thread(self.write, snapshot, written_at=written_at)
 
     def read(self) -> Snapshot | None:
-        """The stored snapshot (``source="file"``), or None with a WARNING."""
+        """The stored snapshot (``source="file"``), or None with a WARNING.
+
+        Blocking file IO: async callers must run it in a thread.
+        """
         try:
             raw = self._read_bytes()
             data = json.loads(raw.decode("utf-8"))
@@ -105,7 +112,12 @@ def _safe_reason(exc: ValueError) -> str:
 
 
 class CoalescingWriter:
-    """Persists the latest submitted snapshot, at most once per second."""
+    """Persists the latest submitted snapshot, at most once per second.
+
+    ``aclose`` must be called at shutdown: it lets an in-flight write finish,
+    then writes the latest pending snapshot once. ``submit`` after close is
+    ignored. Write failures are logged, never raised.
+    """
 
     def __init__(self, file: SnapshotFile, clock: Clock) -> None:
         self._file = file
@@ -113,8 +125,8 @@ class CoalescingWriter:
         self._pending: Snapshot | None = None
         self._wake = asyncio.Event()
         self._task: asyncio.Task[None] | None = None
+        self._sleeper: asyncio.Task[None] | None = None
         self._last_write: float | None = None
-        self._writing = False
         self._closed = False
 
     def submit(self, snapshot: Snapshot) -> None:
@@ -127,34 +139,43 @@ class CoalescingWriter:
 
     async def aclose(self) -> None:
         self._closed = True
-        task = self._task
-        if task is not None:
-            if not self._writing:
-                task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await task
-            self._task = None
+        self._wake.set()
+        if self._sleeper is not None:
+            self._sleeper.cancel()  # cut a throttle wait short; never an in-flight write
+        if self._task is not None:
+            await asyncio.shield(self._task)  # caller cancellation propagates, writer survives
         await self._flush()
 
     async def _run(self) -> None:
         while True:
             await self._wake.wait()
             self._wake.clear()
+            if self._closed:
+                return
             if self._last_write is not None:
                 remaining = _MIN_WRITE_INTERVAL_S - (self._clock.monotonic() - self._last_write)
                 if remaining > 0:
-                    await self._clock.sleep(remaining)
+                    await self._throttle(remaining)
+                    if self._closed:
+                        return
             await self._flush()
+
+    async def _throttle(self, seconds: float) -> None:
+        sleeper = asyncio.get_running_loop().create_task(self._clock.sleep(seconds))
+        self._sleeper = sleeper
+        try:
+            await asyncio.wait({sleeper})  # a cancelled sleeper does not raise here
+        finally:
+            sleeper.cancel()
+            self._sleeper = None
 
     async def _flush(self) -> None:
         snapshot, self._pending = self._pending, None
         if snapshot is None:
             return
-        self._writing = True
         try:
             await self._file.write_async(snapshot, self._clock.now())
         except Exception as exc:
             log.error("failed to write snapshot file %s: %s", self._file.path, type(exc).__name__)
         finally:
-            self._writing = False
             self._last_write = self._clock.monotonic()

@@ -346,3 +346,184 @@ def test_concurrent_writers_never_expose_a_partial_file(tmp_path: Path) -> None:
         t.join()
     assert not errors
     assert _leftovers(tmp_path) == []
+
+
+class _ControlledClock:
+    """``sleep`` blocks until the test advances time past its deadline."""
+
+    def __init__(self) -> None:
+        self._now = 1_000.0
+        self._sleepers: list[tuple[float, asyncio.Future[None]]] = []
+
+    def now(self) -> float:
+        return self._now
+
+    def monotonic(self) -> float:
+        return self._now
+
+    async def sleep(self, seconds: float) -> None:
+        fut: asyncio.Future[None] = asyncio.get_running_loop().create_future()
+        self._sleepers.append((self._now + seconds, fut))
+        await fut
+
+    def advance(self, seconds: float) -> None:
+        self._now += seconds
+        for deadline, fut in list(self._sleepers):
+            if deadline <= self._now and not fut.done():
+                fut.set_result(None)
+
+
+async def _settle() -> None:
+    for _ in range(50):
+        await asyncio.sleep(0)
+
+
+@pytest.mark.req("REQ-8-9")
+async def test_throttle_holds_second_write_until_a_second_passes(tmp_path: Path) -> None:
+    clock = _ControlledClock()
+    spy = _SpyFile(tmp_path / "snap.json")
+    writer = CoalescingWriter(spy, clock)
+    writer.submit(_snap(1.0))
+    await _until(lambda: len(spy.writes) == 1)
+    writer.submit(_snap(2.0))
+    latest = _snap(3.0)
+    writer.submit(latest)
+    await _settle()
+    assert len(spy.writes) == 1
+    clock.advance(0.5)
+    await _settle()
+    assert len(spy.writes) == 1
+    clock.advance(0.5)
+    await _until(lambda: len(spy.writes) == 2)
+    assert spy.writes[1] is latest
+    await writer.aclose()
+    assert len(spy.writes) == 2
+
+
+class _SlowFile(SnapshotFile):
+    def __init__(self, path: Path) -> None:
+        super().__init__(path)
+        self.started = asyncio.Event()
+        self.release = asyncio.Event()
+        self.writes: list[Snapshot] = []
+
+    async def write_async(self, snapshot: Snapshot, written_at: float) -> None:
+        self.started.set()
+        await self.release.wait()
+        self.writes.append(snapshot)
+
+
+@pytest.mark.req("REQ-8-9")
+async def test_aclose_during_in_flight_write_completes_and_flushes_pending(
+    tmp_path: Path,
+) -> None:
+    slow = _SlowFile(tmp_path / "snap.json")
+    writer = CoalescingWriter(slow, FakeClock())
+    first, second = _snap(1.0), _snap(2.0)
+    writer.submit(first)
+    await asyncio.wait_for(slow.started.wait(), 2)
+    writer.submit(second)
+    closing = asyncio.create_task(writer.aclose())
+    await _settle()
+    assert not closing.done()  # waits for the in-flight write
+    slow.release.set()
+    await asyncio.wait_for(closing, 2)
+    assert slow.writes == [first, second]
+
+
+@pytest.mark.req("REQ-8-9")
+async def test_aclose_cuts_a_throttle_wait_short_and_flushes(tmp_path: Path) -> None:
+    clock = _ControlledClock()
+    spy = _SpyFile(tmp_path / "snap.json")
+    writer = CoalescingWriter(spy, clock)
+    writer.submit(_snap(1.0))
+    await _until(lambda: len(spy.writes) == 1)
+    pending = _snap(2.0)
+    writer.submit(pending)
+    await _settle()
+    await asyncio.wait_for(writer.aclose(), 2)
+    assert spy.writes[-1] is pending
+    assert len(spy.writes) == 2
+
+
+@pytest.mark.req("REQ-8-9")
+async def test_cancelling_the_caller_of_aclose_propagates(tmp_path: Path) -> None:
+    slow = _SlowFile(tmp_path / "snap.json")
+    writer = CoalescingWriter(slow, FakeClock())
+    writer.submit(_snap(1.0))
+    await asyncio.wait_for(slow.started.wait(), 2)
+    closing = asyncio.create_task(writer.aclose())
+    await _settle()
+    closing.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await closing
+    slow.release.set()
+    await writer.aclose()
+
+
+async def test_submit_after_close_is_dropped(tmp_path: Path) -> None:
+    spy = _SpyFile(tmp_path / "snap.json")
+    writer = CoalescingWriter(spy, FakeClock())
+    await writer.aclose()
+    writer.submit(_snap())
+    await _settle()
+    await writer.aclose()
+    assert spy.writes == []
+
+
+@pytest.mark.req("REQ-8-9")
+async def test_directory_fsync_failure_is_logged_and_keeps_new_file(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    f = SnapshotFile(tmp_path / "snap.json")
+    real_fsync = os.fsync
+    calls = 0
+
+    def flaky(fd: int) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:  # the directory fsync follows the file fsync
+            raise OSError("dir fsync")
+        real_fsync(fd)
+
+    monkeypatch.setattr(os, "fsync", flaky)
+    writer = CoalescingWriter(f, FakeClock())
+    with caplog.at_level(logging.ERROR):
+        writer.submit(_snap(4.0))
+        await writer.aclose()
+    monkeypatch.undo()
+    assert str(tmp_path / "snap.json") in caplog.text
+    got = f.read()
+    assert got is not None
+    assert got.synced_at == 4.0
+    assert _leftovers(tmp_path) == []
+
+
+@pytest.mark.req("REQ-8-9")
+def test_file_fsync_failure_removes_temp_and_keeps_old_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    f = SnapshotFile(tmp_path / "snap.json")
+    f.write(_snap(1.0), written_at=1.0)
+
+    def boom(_fd: int) -> None:
+        raise OSError("fsync failed")
+
+    monkeypatch.setattr(os, "fsync", boom)
+    with pytest.raises(OSError, match="fsync failed"):
+        f.write(_snap(2.0), written_at=2.0)
+    monkeypatch.undo()
+    got = f.read()
+    assert got is not None
+    assert got.synced_at == 1.0
+    assert _leftovers(tmp_path) == []
+
+
+@pytest.mark.req("REQ-8-9")
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="no FIFOs")
+def test_fifo_at_path_is_absent(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    path = tmp_path / "snap.json"
+    os.mkfifo(path)
+    with caplog.at_level(logging.WARNING):
+        assert SnapshotFile(path).read() is None
+    _warned(caplog, path)
