@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 merged (PR #20, merge commit `b17187d`); M1.5 implemented on `feat/m1.5-gateway-auth` (PR pending).
+Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 merged (PR #20, merge commit `b17187d`); M1.5 merged (PR #21, merge commit `d756c4c`).
 
 ## Current Phase
 
@@ -10,7 +10,7 @@ Phase 1: Proxy.
 
 ## Current Module
 
-M1.5 Gateway authentication: implemented, awaiting final review and PR. Next is M1.6 Path templating.
+None active. Next is M1.6 Path templating (not planned or started).
 
 ## Completed
 
@@ -58,7 +58,7 @@ M1.5 Gateway authentication: implemented, awaiting final review and PR. Next is 
   * Verified locally against Postgres and Redis: `make lint typecheck` clean; 233 gateway unit + integration tests pass; stack suites system, chaos, e2e and security passed earlier on this branch (gateway startup/readiness work); 913 passed (2 perf deselected) in the final `make traceability COMPLETED_PHASE=0 TRACE_MARKERS="not perf"` run (47/246 covered; REQ-13-5 and REQ-5.2-3 rows changed and regenerated); `make bench-propagation` passed 3 times.
   * CI after merge: `ci`, `security`, `system` and `bench` all green on `main` at `b17187d` (the first PR `integration` run failed the no-drop-vs-main coverage gate on gateway branch coverage; fixed with tests, now 100/100). The `bench` run executed the new chained `propagation` job on a hosted runner: `config_propagation_p99` 15.3 ms vs the 1000 ms budget. The dedicated-role least-privilege test ran in CI.
 
-* M1.5 Gateway authentication (branch `feat/m1.5-gateway-auth`, PR pending; plan `docs/superpowers/plans/2026-10-23-m1-5-gateway-authentication.md`):
+* M1.5 Gateway authentication (PR #21, merge commit `d756c4c`; plan `docs/superpowers/plans/2026-10-23-m1-5-gateway-authentication.md`):
   * `jarvis_gateway.auth`: `extract_key` (non-blank `X-Jarvis-Key` wins and is never retried from the slot; repeated header or value over 256 chars is no key; otherwise the API's `jarvis_key_slot` with a leading `Bearer` removed and a `jv_` prefix required) and `authenticate` (SHA-256 digest lookup, then revoked, project and allowed-API checks; every failure is the same `JV_AUTH_INVALID` body). `Snapshot.apis_with_slug` exposes duplicate slugs, which fail closed with a WARNING naming the project only. `Authenticated.forward_headers` drops the key and slot headers for M1.8.
   * `/gw/{api_slug}[/{path}]` (all methods) authenticates and answers 501 `JV_NOT_IMPLEMENTED` until M1.8 adds forwarding; before the first config load it answers 503 `JV_NOT_READY` (a code outside the SPEC section 4.4 list). Responses carry `X-Jarvis-Request-Id` (ULID, `jarvis_gateway.request_id`) and `X-Jarvis-Source: jarvis`.
   * Decided with the user: an empty `allowed_api_ids` means every API in the project (the API default is `[]`); a non-empty set restricts to those IDs and a deleted ID never matches.
@@ -67,15 +67,16 @@ M1.5 Gateway authentication: implemented, awaiting final review and PR. Next is 
   * Dev compose publishes the gateway on `127.0.0.1:8090` (was 8080, which WSL reserves); quickstart and README updated and the quickstart run unmodified against a dev stack with `jq` 1.7.1 installed in `~/.local/bin`.
   * User sign-off: `JV_NOT_READY` (503) and the interim 501 `JV_NOT_IMPLEMENTED` are accepted. The user will add the `propagation` job to the repo ruleset (not done by Claude).
   * CI: gitleaks flagged the made-up key `jv_live_abc123` in `test_auth_extraction.py` (history scan). `.gitleaks.toml` now allows it for that file only (both allowlists moved to `[[allowlists]]`), and `security.yml` pins `GITLEAKS_VERSION: 8.30.1` because the action's default 8.24.3 ignores those AND-condition allowlists (checked locally: 8.24.3 fails, 8.26.0 and later pass).
+  * CI: `ci`, `security`, `system` and `bench` (including the chained `propagation` job) all green on `main` at `d756c4c`. `propagation` is not a PR check (`bench.yml` runs on main, nightly and manual only), so the user removed it from the ruleset's required checks.
   * Docs: README, `docs/quickstart-dev.md` (gateway calls and the 1 s revoke), `docs/traceability.md`.
 
 ## In Progress
 
-Final whole-branch review of M1.5 and the PR.
+Nothing.
 
 ## Next
 
-1. Finish the M1.5 review, open the PR, then plan M1.6 Path templating.
+1. Plan and build M1.6 Path templating (IMPLEMENTATION.md M1.6, SPEC section 4.14).
 2. Before the P1 checkpoint: wire `make bench-propagation` (needs `DATABASE_URL`/`REDIS_URL`) into `scripts/bench/run_checkpoint.sh`. Today the checkpoint skips it, so `config_propagation_p99` stays "not measured" in the `BENCHMARKS.md` table and the interim section there is dropped by the next `make bench-checkpoint`.
 
 ## Blockers / Questions
@@ -93,7 +94,7 @@ Final whole-branch review of M1.5 and the PR.
 
 ## Resume Point
 
-Run the final review of the M1.5 branch, open the PR, then read M1.6 in `docs/IMPLEMENTATION.md` and SPEC §4.14.
+Read the M1.6 section of `docs/IMPLEMENTATION.md` and SPEC §4.14, then write the M1.6 plan.
 
 ## Last Updated
 
