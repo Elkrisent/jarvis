@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`).
+Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`). M1.3 implemented on `feat/m1.3-management-api`, awaiting final review and the PR.
 
 ## Current Phase
 
@@ -10,7 +10,7 @@ Phase 1: Proxy.
 
 ## Current Module
 
-None active. Next is M1.3 Minimal management API.
+M1.3 Minimal management API: implemented on the branch, not yet reviewed or merged.
 
 ## Completed
 
@@ -47,21 +47,27 @@ None active. Next is M1.3 Minimal management API.
 
 ## In Progress
 
-M1.3 Minimal management API: planned, no code yet. Branch `feat/m1.3-management-api` holds only the plan, `docs/superpowers/plans/2026-10-23-m1-3-management-api.md`. The user chose subagent-driven execution (`superpowers:subagent-driven-development`).
+M1.3 Minimal management API on `feat/m1.3-management-api` (not merged):
+
+* `/api/v1` projects, JARVIS keys (`jv_live_` + base62 of 32 random bytes, only the SHA-256 hash stored, shown once) and API dependencies (versioned; provider secrets sealed with the master key, `has_secret` only on output); admin bearer token auth; 422 errors with field paths; `config:changed` published to Redis on API create/update; `/openapi.json` behind the token with a committed snapshot (`make openapi-snapshot`).
+* The api refuses to start without `JARVIS_MASTER_KEY` and `JARVIS_ADMIN_TOKEN`. New pinned dependency `redis==8.0.1`. Compose, `deploy/.env.example`, test override (placeholder secrets), README, `docs/contributing.md` and `docs/quickstart-dev.md` updated.
+* Verified locally against Postgres 16 and Redis: `make lint typecheck`, `make security-scan` clean; 633 unit + integration tests pass under `make coverage` (core 100/99, api 99.7/97.7, gates met; no `main` baseline available locally). `docs/traceability.md` regenerated (41/246 covered; REQ-10-1, -10-2, -5.2-1, -11.2-4 list tests).
+* NOT verified (Docker was unavailable in this environment): `tests/system/test_management_api.py` has never been run, nor the other stack tests against the changed compose files, nor the `docs/quickstart-dev.md` commands against a real stack. The Checkpoint 0 rows in the traceability report keep their earlier `pass` and were not re-run.
 
 ## Next
 
-1. Execute the M1.3 plan task by task (Tasks 1 to 7) with subagent-driven development, on `feat/m1.3-management-api`.
-2. Open the M1.3 PR, get `ci` and `security` green (and `system` on main after merge), then record the merge SHA here in a docs PR.
+1. On a machine with Docker: `make test-system` (including the new test) and run every command in `docs/quickstart-dev.md`; fix anything that fails.
+2. Final review, open the M1.3 PR, get `ci` and `security` green (and `system` on main after merge), then record the merge SHA here.
 3. Then M1.4 Gateway config loader.
 
 ## Blockers / Questions
 
-Plan decisions the user has not explicitly confirmed (they were told about them and chose the execution method without objecting): the api refuses to start without `JARVIS_MASTER_KEY` and `JARVIS_ADMIN_TOKEN`; key = `jv_live_` + base62 of 32 random bytes; new pinned dependency `redis==8.0.1`. Confirm or adjust at the start of the next session.
+* No `config:changed` is published on API delete or key revoke. SPEC section 11 says keys are revocable within 1 s and M1.4 subscribes to key revocation: decide who publishes (the api on revoke/delete, or M1.4 polls).
+* System test and quickstart not yet run (see In Progress).
 
 ## Resume Point
 
-Read the M1.3 plan, confirm the open decisions above with the user, then start Task 1 via `superpowers:subagent-driven-development`. Nothing is implemented yet.
+Run the system test and the quickstart on a Docker host, then do the final review and open the M1.3 PR. Do not start M1.4 before the PR is merged.
 
 ## Last Updated
 

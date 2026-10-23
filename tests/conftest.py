@@ -16,6 +16,9 @@ DEPLOY = REPO / "deploy"
 PROJECT = "jarvis-test"
 PORTS = {"gateway": 18080, "api": 18081, "worker": 18082}
 MOCK_UPSTREAM_URL = "http://127.0.0.1:19000"
+API_URL = "http://127.0.0.1:18081"
+# Must match the placeholder api token in deploy/docker-compose.test.yml.
+ADMIN_TOKEN = "test-admin-token-placeholder-0000000000"
 
 
 def compose(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
