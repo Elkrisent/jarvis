@@ -51,6 +51,7 @@ class Snapshot:
     source: Source
     synced_at: float
     _by_slug: Mapping[tuple[str, str], ApiEntry] = field(init=False, repr=False, compare=False)
+    _slug_index: Mapping[str, tuple[ApiEntry, ...]] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         apis = dict(self.apis)
@@ -58,6 +59,12 @@ class Snapshot:
         object.__setattr__(self, "keys", MappingProxyType(dict(self.keys)))
         by_slug = {(a.project_id, a.slug): a for a in apis.values()}
         object.__setattr__(self, "_by_slug", MappingProxyType(by_slug))
+        grouped: dict[str, list[ApiEntry]] = {}
+        for entry in apis.values():
+            grouped.setdefault(entry.slug, []).append(entry)
+        object.__setattr__(
+            self, "_slug_index", MappingProxyType({k: tuple(v) for k, v in grouped.items()})
+        )
 
     def __repr__(self) -> str:
         return (
@@ -71,6 +78,10 @@ class Snapshot:
 
     def api(self, project_id: str, slug: str) -> ApiEntry | None:
         return self._by_slug.get((project_id, slug))
+
+    def apis_with_slug(self, slug: str) -> tuple[ApiEntry, ...]:
+        """Every API with this slug, across projects, including transient duplicates."""
+        return self._slug_index.get(slug, ())
 
     def api_by_id(self, api_id: str) -> ApiEntry | None:
         return self.apis.get(api_id)

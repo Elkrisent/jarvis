@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 implemented and verified on `feat/m1.4-config-loader` (PR not yet opened).
+Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 merged (PR #20, merge commit `b17187d`); M1.5 implemented on `feat/m1.5-gateway-auth` (PR pending).
 
 ## Current Phase
 
@@ -10,7 +10,7 @@ Phase 1: Proxy.
 
 ## Current Module
 
-M1.4 Gateway config loader: implemented on `feat/m1.4-config-loader`, awaiting final review and PR.
+M1.5 Gateway authentication: implemented, awaiting final review and PR. Next is M1.6 Path templating.
 
 ## Completed
 
@@ -51,37 +51,49 @@ M1.4 Gateway config loader: implemented on `feat/m1.4-config-loader`, awaiting f
   * Verified on a Docker host (Docker 28.5, Compose 2.40): `make test-system` 10 passed (including `tests/system/test_management_api.py`), `make test-e2e` 4, `make test-chaos` 1, `make test-security` 17; `make traceability COMPLETED_PHASE=0 TRACE_MARKERS="not perf"` 672 passed, Checkpoint 0 rows `pass`, no `not run` rows. Every command in `docs/quickstart-dev.md` was run against a real dev stack and behaved as documented (the gateway container could not bind host port 8080 on this machine, so only the api was used; the quickstart needs only the api).
   * gitleaks (run through its Docker image over `main..HEAD`) flagged the placeholder master key in `deploy/docker-compose.test.yml`; a narrow `.gitleaks.toml` allowlist (that value in that file only; a different key in the same file is still caught) clears it.
   * `ci` and `security` were green on PR #18 (a first `integration` run failed the no-drop-vs-main coverage gate; fixed with a test, api back to 100/100). `ci`, `security`, `system` and `bench` are all green on `main` at `7d8acec`.
-* M1.4 Gateway config loader (branch `feat/m1.4-config-loader`, PR not yet opened):
+* M1.4 Gateway config loader (PR #20, merge commit `b17187d`):
   * `jarvis_gateway.config`: immutable `Snapshot` with atomic swap in `ConfigStore`; `PostgresLoader` (read-only, repeatable-read, tells an invalid API row from a gone one); on-disk snapshot file (written after every load, coalesced) as the fallback when Postgres is down; `ConfigManager` subscribes to `config:changed` and the new `config:invalidated` (published by the api on key create/revoke, API delete, project delete), resyncs every 60 s and at startup, resyncs early after a failed refresh. The gateway loads config at startup and reports it (counts only) in `/readyz`; unreadable config makes `/readyz` 503 instead of crashing.
   * Revocation push (REQ-11.1-6) is now implemented through `config:invalidated`; M1.5 enforces it.
   * Benchmark: `services/gateway/tests/bench/test_config_propagation.py` (`perf`), `make bench-propagation`, and a `propagation` job in `bench.yml`. Local (not CI) run, 200 PATCHes, measured from before the request is sent: p50 10.8 ms, p99 20.8 ms vs 1000 ms budget (details in `BENCHMARKS.md`). The test is tagged REQ-13-5 and REQ-5.2-3; the system test keeps its REQ-13-5 tag as a single-sample check.
   * Verified locally against Postgres and Redis: `make lint typecheck` clean; 233 gateway unit + integration tests pass; stack suites system, chaos, e2e and security passed earlier on this branch (gateway startup/readiness work); 913 passed (2 perf deselected) in the final `make traceability COMPLETED_PHASE=0 TRACE_MARKERS="not perf"` run (47/246 covered; REQ-13-5 and REQ-5.2-3 rows changed and regenerated); `make bench-propagation` passed 3 times.
-  * NOT run: the GitHub `ci`, `security`, `system` and `bench` workflows (including the new `propagation` job, validated only as YAML); the dedicated least-privilege role path of the Postgres loader test (the fallback path ran locally; CI runs it).
+  * CI after merge: `ci`, `security`, `system` and `bench` all green on `main` at `b17187d` (the first PR `integration` run failed the no-drop-vs-main coverage gate on gateway branch coverage; fixed with tests, now 100/100). The `bench` run executed the new chained `propagation` job on a hosted runner: `config_propagation_p99` 15.3 ms vs the 1000 ms budget. The dedicated-role least-privilege test ran in CI.
 
+* M1.5 Gateway authentication (branch `feat/m1.5-gateway-auth`, PR pending; plan `docs/superpowers/plans/2026-10-23-m1-5-gateway-authentication.md`):
+  * `jarvis_gateway.auth`: `extract_key` (non-blank `X-Jarvis-Key` wins and is never retried from the slot; repeated header or value over 256 chars is no key; otherwise the API's `jarvis_key_slot` with a leading `Bearer` removed and a `jv_` prefix required) and `authenticate` (SHA-256 digest lookup, then revoked, project and allowed-API checks; every failure is the same `JV_AUTH_INVALID` body). `Snapshot.apis_with_slug` exposes duplicate slugs, which fail closed with a WARNING naming the project only. `Authenticated.forward_headers` drops the key and slot headers for M1.8.
+  * `/gw/{api_slug}[/{path}]` (all methods) authenticates and answers 501 `JV_NOT_IMPLEMENTED` until M1.8 adds forwarding; before the first config load it answers 503 `JV_NOT_READY` (a code outside the SPEC section 4.4 list). Responses carry `X-Jarvis-Request-Id` (ULID, `jarvis_gateway.request_id`) and `X-Jarvis-Source: jarvis`.
+  * Decided with the user: an empty `allowed_api_ids` means every API in the project (the API default is `[]`); a non-empty set restricts to those IDs and a deleted ID never matches.
+  * Moved to M1.8: the security test that the key is never forwarded upstream (asserted through mock upstream `/__admin/calls`) needs a forwarder; M1.5 proves it on `forward_headers()` and with a log/response secrecy test.
+  * Snapshot-file age cap (user decision after the review): `JARVIS_SNAPSHOT_MAX_AGE_S` in the gateway settings and `ConfigManager(snapshot_max_age_s=...)`; tests in `test_config_manager.py`, `test_settings.py`, `test_app.py`; documented in `deploy/.env.example` and README.
+  * Dev compose publishes the gateway on `127.0.0.1:8090` (was 8080, which WSL reserves); quickstart and README updated and the quickstart run unmodified against a dev stack with `jq` 1.7.1 installed in `~/.local/bin`.
+  * User sign-off: `JV_NOT_READY` (503) and the interim 501 `JV_NOT_IMPLEMENTED` are accepted. The user will add the `propagation` job to the repo ruleset (not done by Claude).
+  * CI: gitleaks flagged the made-up key `jv_live_abc123` in `test_auth_extraction.py` (history scan). `.gitleaks.toml` now allows it for that file only (both allowlists moved to `[[allowlists]]`), and `security.yml` pins `GITLEAKS_VERSION: 8.30.1` because the action's default 8.24.3 ignores those AND-condition allowlists (checked locally: 8.24.3 fails, 8.26.0 and later pass).
+  * Docs: README, `docs/quickstart-dev.md` (gateway calls and the 1 s revoke), `docs/traceability.md`.
 
 ## In Progress
 
-M1.4 is complete on the branch; final review is pending.
+Final whole-branch review of M1.5 and the PR.
 
 ## Next
 
-1. Get `ci` and `security` green on the M1.4 PR (final review done, fixes applied) (and `system`, `bench` on main after merge); record the merge SHA here in a docs PR.
-2. Then M1.5 Gateway authentication.
-3. Before the P1 checkpoint: wire `make bench-propagation` (needs `DATABASE_URL`/`REDIS_URL`) into `scripts/bench/run_checkpoint.sh`. Today the checkpoint skips it, so `config_propagation_p99` stays "not measured" in the `BENCHMARKS.md` table and the interim section there is dropped by the next `make bench-checkpoint`.
+1. Finish the M1.5 review, open the PR, then plan M1.6 Path templating.
+2. Before the P1 checkpoint: wire `make bench-propagation` (needs `DATABASE_URL`/`REDIS_URL`) into `scripts/bench/run_checkpoint.sh`. Today the checkpoint skips it, so `config_propagation_p99` stays "not measured" in the `BENCHMARKS.md` table and the interim section there is dropped by the next `make bench-checkpoint`.
 
 ## Blockers / Questions
 
 * OPEN, needs a user decision before P5: PATCH deletes the old secret, but older immutable versions still hold its `secret_ref`. A P5 rollback (copy an old version, SPEC section 5.2) would point at a deleted secret. M1.4 reads only the current version.
+* Redis outage vs revocation: see the known limit below; the user asked what it means (it is about Redis being unavailable at some moment, not about never starting) and has not decided yet.
 * REQ-11.1-6: the revocation push is implemented in M1.4 (`config:invalidated`); the traceability row only becomes meaningful once M1.5 enforces it on requests.
 * For M1.5:
-  * Do not trust a `(project, slug)` lookup blindly: a transient duplicate slug can exist in the snapshot until the next resync (up to 60 s if an event load fails).
+  * Known limit (M1.5 review): revocation within 1 s depends on Redis pub/sub. With Redis down (the gateway fails open, SPEC D3) a revoked key keeps working until the next resync, 60 s by default. Needs a user decision if SPEC §4.2 must hold without Redis.
+  * M1.5 dropped `hmac.compare_digest` (the matched entry stores no hash to compare; lookup is by SHA-256 digest the caller cannot steer), a deviation from the M1.5 test-list wording "comparisons are constant-time".
+  * Resolved in M1.5: a duplicate `(project, slug)` is denied (fail closed).
   * Revoked keys STAY in `Snapshot.keys` with `revoked=True`: `snapshot.key(h)` being non-None does NOT mean authenticated. Authenticate only when the entry exists and `revoked` is False; deny revoked and unknown identically (`JV_AUTH_INVALID`).
-  * Snapshot-file caveat: a gateway restarted from an old snapshot file (Postgres down) serves keys revoked while it was down until Postgres returns. The file has no age limit and events cannot be applied without Postgres. SPEC section 8 allows snapshot starts, but REQ-11.1-6 (1 s or less) does not hold in that mode; `/readyz` shows `degraded` with the file's `synced_at`. Capping the file age is an option for M1.5 or ops.
-  * A key's `allowed_api_ids` can name deleted APIs; deny on an unknown ID, never treat an empty or unknown list as unrestricted.
+  * Resolved in M1.5 (user decision): a snapshot file synced more than `JARVIS_SNAPSHOT_MAX_AGE_S` ago (default 86400 s, minimum 1) is ignored at startup; the gateway logs an ERROR, stays not ready (`/readyz` 503) and retries Postgres every 5 s. Within the cap the old caveat still applies (keys revoked while Postgres was down keep working until it returns). The 24 h default is my choice; the user may want it shorter.
+  * Resolved in M1.5: an empty `allowed_api_ids` means unrestricted (user decision); a non-empty set that names only deleted APIs denies everything.
 
 ## Resume Point
 
-Merge the M1.4 PR once its checks are green (watch the Postgres loader's dedicated-role test and the gateway volume under `read_only` in CI); M1.5 starts after the merge.
+Run the final review of the M1.5 branch, open the PR, then read M1.6 in `docs/IMPLEMENTATION.md` and SPEC §4.14.
 
 ## Last Updated
 

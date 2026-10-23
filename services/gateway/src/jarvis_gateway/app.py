@@ -21,6 +21,7 @@ from jarvis_gateway.config.manager import ConfigManager, ConfigStatus
 from jarvis_gateway.config.postgres import PostgresLoader
 from jarvis_gateway.config.snapshot_file import CoalescingWriter, SnapshotFile
 from jarvis_gateway.config.store import ConfigStore
+from jarvis_gateway.routes import build_gw_router
 from jarvis_gateway.settings import load_settings
 
 # A full sync older than this many resync intervals marks the gateway degraded.
@@ -100,6 +101,9 @@ def create_app(
         response.status_code = 503 if body["status"] == "unavailable" else 200
         return body
 
+    if config is not None:
+        app.include_router(build_gw_router(config.store))
+
     return app
 
 
@@ -116,6 +120,7 @@ def create_app_from_env() -> FastAPI:
         clock,
         resync_interval_s=settings.resync_interval_s,
         redis_url=settings.redis_url,
+        snapshot_max_age_s=settings.snapshot_max_age_s,
     )
     return create_app(
         dependencies_from_env(),

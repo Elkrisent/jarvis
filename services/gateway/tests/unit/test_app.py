@@ -6,6 +6,7 @@ from jarvis_core.clock import FakeClock
 from jarvis_core.health import Dependency
 from jarvis_gateway.app import create_app, create_app_from_env, dependencies_from_env
 from jarvis_gateway.config.manager import ConfigManager, ConfigStatus
+from jarvis_gateway.config.store import ConfigStore
 
 pytestmark = pytest.mark.unit
 
@@ -50,6 +51,7 @@ INTERVAL = 10.0
 class FakeManager:
     def __init__(self, status: ConfigStatus) -> None:
         self._status = status
+        self.store = ConfigStore()
         self.events: list[str] = []
 
     def status(self) -> ConfigStatus:
@@ -165,6 +167,22 @@ def test_create_app_from_env_wires_a_manager(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setenv("JARVIS_SNAPSHOT_PATH", "/nonexistent/snapshot.json")
     app = create_app_from_env()
     assert app.title == "jarvis-gateway"
+
+
+def test_create_app_from_env_passes_the_snapshot_age_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[float | None] = []
+    real = ConfigManager
+
+    def spy(*args: object, **kwargs: object) -> ConfigManager:
+        seen.append(cast("float | None", kwargs["snapshot_max_age_s"]))
+        return real(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr("jarvis_gateway.app.ConfigManager", spy)
+    monkeypatch.setenv("DATABASE_URL", ENV["DATABASE_URL"])
+    monkeypatch.setenv("REDIS_URL", ENV["REDIS_URL"])
+    monkeypatch.setenv("JARVIS_SNAPSHOT_MAX_AGE_S", "600")
+    create_app_from_env()
+    assert seen == [600.0]
 
 
 def test_the_lifespan_without_a_config_manager_just_serves() -> None:
