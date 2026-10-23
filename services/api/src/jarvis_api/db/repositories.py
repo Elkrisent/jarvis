@@ -15,6 +15,19 @@ from jarvis_api.db.ids import new_id
 from jarvis_api.db.models import ApiDependencyRow, ApiPolicyVersion, JarvisKey, Project, Secret
 
 
+def violated_constraint(exc: IntegrityError) -> str | None:
+    """Name of the constraint behind an ``IntegrityError`` (asyncpg exposes it), if known."""
+    orig = exc.orig
+    for candidate in (orig, getattr(orig, "__cause__", None)):
+        name = getattr(candidate, "constraint_name", None)
+        if name:
+            return str(name)
+    return None
+
+
+PROJECT_SLUG_CONSTRAINT = "projects_slug_key"
+
+
 class Conflict(Exception):
     """A unique constraint was violated (for example a duplicate slug)."""
 
@@ -55,7 +68,9 @@ class ProjectRepository:
                         .returning(*Project.__table__.c)
                     )
                 ).one()
-        except IntegrityError:
+        except IntegrityError as exc:
+            if violated_constraint(exc) != PROJECT_SLUG_CONSTRAINT:
+                raise
             raise Conflict(f"project slug already exists: {slug}") from None
         return _record(row)
 
@@ -88,7 +103,9 @@ class ProjectRepository:
                 else:
                     stmt = select(*Project.__table__.c).where(Project.id == id)
                 row = (await conn.execute(stmt)).first()
-        except IntegrityError:
+        except IntegrityError as exc:
+            if violated_constraint(exc) != PROJECT_SLUG_CONSTRAINT:
+                raise
             raise Conflict(f"project slug already exists: {slug}") from None
         if row is None:
             raise NotFound(f"project not found: {id}")
@@ -97,6 +114,8 @@ class ProjectRepository:
     async def delete(self, id: str) -> None:
         """Delete a project, its dependent rows (cascade) and its APIs' secrets."""
         async with self._engine.begin() as conn:
+            # Unlocked read: a secret_ref added by a concurrent put_version in the narrow window
+            # before the delete is not collected and is left orphaned.
             refs: Any = (
                 await conn.execute(
                     select(ApiPolicyVersion.config_json["credential"]["secret_ref"].astext)

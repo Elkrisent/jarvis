@@ -21,6 +21,7 @@ from jarvis_core.config import ApiDependency
 from jarvis_core.keys import generate_jarvis_key
 from jarvis_core.secretbox import AesGcmSecretBox
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 pytestmark = pytest.mark.integration
@@ -268,6 +269,24 @@ class TestApis:
         stored = await source.get_by_id(api_id)
         assert stored is not None
         assert stored.version == 2
+
+    async def test_unknown_author_is_not_reported_as_a_slug_conflict(
+        self, engine: AsyncEngine, project_id: str
+    ) -> None:
+        with pytest.raises(IntegrityError) as caught:
+            await PostgresConfigSource(engine).put_version(
+                project_id, _api(), author_id="usr_missing"
+            )
+        assert not isinstance(caught.value, Conflict)
+
+    async def test_real_slug_clash_is_a_conflict_on_rename(
+        self, engine: AsyncEngine, project_id: str
+    ) -> None:
+        source = PostgresConfigSource(engine)
+        await source.put_version(project_id, _api("one"))
+        other, _ = await source.put_version(project_id, _api("two"))
+        with pytest.raises(Conflict, match="slug"):
+            await source.put_version(project_id, _api("one"), api_id=other)
 
     async def test_put_version_unknown_project(self, engine: AsyncEngine) -> None:
         with pytest.raises(LookupError):

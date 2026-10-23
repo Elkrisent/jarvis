@@ -15,7 +15,9 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from jarvis_api.db.ids import new_id
 from jarvis_api.db.models import ApiDependencyRow, ApiPolicyVersion, Project
-from jarvis_api.db.repositories import Conflict, NotFound
+from jarvis_api.db.repositories import Conflict, NotFound, violated_constraint
+
+API_SLUG_CONSTRAINT = "uq_api_dependencies_project_slug"
 
 
 def api_from_config_json(config_json: dict[str, Any]) -> ApiDependency:
@@ -171,7 +173,9 @@ class PostgresConfigSource:
                     .where(ApiDependencyRow.id == api_id)
                     .values(current_version_id=version_id)
                 )
-        except IntegrityError:
+        except IntegrityError as exc:
+            if violated_constraint(exc) != API_SLUG_CONSTRAINT:
+                raise
             raise Conflict(f"api slug already exists in project: {api.slug}") from None
         return api_id, version
 
