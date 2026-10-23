@@ -36,6 +36,7 @@ real gateway `ConfigManager` in one process. 200 API PATCHes spaced 20 ms apart;
 from just before the request is sent to the moment the gateway store shows the new version, so it
 includes the HTTP request and is an upper bound on commit-to-store latency. The HTTP part runs over an
 in-process ASGI transport (no network hop), so the bound holds for the in-process path only.
+The `bench` workflow's first run on a GitHub-hosted runner (main at `b17187d`) recorded p99 15.3 ms.
 
 | Metric | Budget | p50 | p99 | Status |
 |---|---|---|---|---|

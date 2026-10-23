@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 implemented and verified on `feat/m1.4-config-loader` (PR not yet opened).
+Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 merged (PR #20, merge commit `b17187d`).
 
 ## Current Phase
 
@@ -10,7 +10,7 @@ Phase 1: Proxy.
 
 ## Current Module
 
-M1.4 Gateway config loader: implemented on `feat/m1.4-config-loader`, awaiting final review and PR.
+None active. Next is M1.5 Gateway authentication (not planned or started).
 
 ## Completed
 
@@ -51,23 +51,22 @@ M1.4 Gateway config loader: implemented on `feat/m1.4-config-loader`, awaiting f
   * Verified on a Docker host (Docker 28.5, Compose 2.40): `make test-system` 10 passed (including `tests/system/test_management_api.py`), `make test-e2e` 4, `make test-chaos` 1, `make test-security` 17; `make traceability COMPLETED_PHASE=0 TRACE_MARKERS="not perf"` 672 passed, Checkpoint 0 rows `pass`, no `not run` rows. Every command in `docs/quickstart-dev.md` was run against a real dev stack and behaved as documented (the gateway container could not bind host port 8080 on this machine, so only the api was used; the quickstart needs only the api).
   * gitleaks (run through its Docker image over `main..HEAD`) flagged the placeholder master key in `deploy/docker-compose.test.yml`; a narrow `.gitleaks.toml` allowlist (that value in that file only; a different key in the same file is still caught) clears it.
   * `ci` and `security` were green on PR #18 (a first `integration` run failed the no-drop-vs-main coverage gate; fixed with a test, api back to 100/100). `ci`, `security`, `system` and `bench` are all green on `main` at `7d8acec`.
-* M1.4 Gateway config loader (branch `feat/m1.4-config-loader`, PR not yet opened):
+* M1.4 Gateway config loader (PR #20, merge commit `b17187d`):
   * `jarvis_gateway.config`: immutable `Snapshot` with atomic swap in `ConfigStore`; `PostgresLoader` (read-only, repeatable-read, tells an invalid API row from a gone one); on-disk snapshot file (written after every load, coalesced) as the fallback when Postgres is down; `ConfigManager` subscribes to `config:changed` and the new `config:invalidated` (published by the api on key create/revoke, API delete, project delete), resyncs every 60 s and at startup, resyncs early after a failed refresh. The gateway loads config at startup and reports it (counts only) in `/readyz`; unreadable config makes `/readyz` 503 instead of crashing.
   * Revocation push (REQ-11.1-6) is now implemented through `config:invalidated`; M1.5 enforces it.
   * Benchmark: `services/gateway/tests/bench/test_config_propagation.py` (`perf`), `make bench-propagation`, and a `propagation` job in `bench.yml`. Local (not CI) run, 200 PATCHes, measured from before the request is sent: p50 10.8 ms, p99 20.8 ms vs 1000 ms budget (details in `BENCHMARKS.md`). The test is tagged REQ-13-5 and REQ-5.2-3; the system test keeps its REQ-13-5 tag as a single-sample check.
   * Verified locally against Postgres and Redis: `make lint typecheck` clean; 233 gateway unit + integration tests pass; stack suites system, chaos, e2e and security passed earlier on this branch (gateway startup/readiness work); 913 passed (2 perf deselected) in the final `make traceability COMPLETED_PHASE=0 TRACE_MARKERS="not perf"` run (47/246 covered; REQ-13-5 and REQ-5.2-3 rows changed and regenerated); `make bench-propagation` passed 3 times.
-  * NOT run: the GitHub `ci`, `security`, `system` and `bench` workflows (including the new `propagation` job, validated only as YAML); the dedicated least-privilege role path of the Postgres loader test (the fallback path ran locally; CI runs it).
+  * CI after merge: `ci`, `security`, `system` and `bench` all green on `main` at `b17187d` (the first PR `integration` run failed the no-drop-vs-main coverage gate on gateway branch coverage; fixed with tests, now 100/100). The `bench` run executed the new chained `propagation` job on a hosted runner: `config_propagation_p99` 15.3 ms vs the 1000 ms budget. The dedicated-role least-privilege test ran in CI.
 
 
 ## In Progress
 
-M1.4 is complete on the branch; final review is pending.
+Nothing.
 
 ## Next
 
-1. Get `ci` and `security` green on the M1.4 PR (final review done, fixes applied) (and `system`, `bench` on main after merge); record the merge SHA here in a docs PR.
-2. Then M1.5 Gateway authentication.
-3. Before the P1 checkpoint: wire `make bench-propagation` (needs `DATABASE_URL`/`REDIS_URL`) into `scripts/bench/run_checkpoint.sh`. Today the checkpoint skips it, so `config_propagation_p99` stays "not measured" in the `BENCHMARKS.md` table and the interim section there is dropped by the next `make bench-checkpoint`.
+1. Plan and build M1.5 Gateway authentication (read the M1.4 hand-off notes under Blockers first).
+2. Before the P1 checkpoint: wire `make bench-propagation` (needs `DATABASE_URL`/`REDIS_URL`) into `scripts/bench/run_checkpoint.sh`. Today the checkpoint skips it, so `config_propagation_p99` stays "not measured" in the `BENCHMARKS.md` table and the interim section there is dropped by the next `make bench-checkpoint`.
 
 ## Blockers / Questions
 
@@ -81,7 +80,7 @@ M1.4 is complete on the branch; final review is pending.
 
 ## Resume Point
 
-Merge the M1.4 PR once its checks are green (watch the Postgres loader's dedicated-role test and the gateway volume under `read_only` in CI); M1.5 starts after the merge.
+Read the M1.5 section of `docs/IMPLEMENTATION.md` and SPEC §4.2, then write the M1.5 plan.
 
 ## Last Updated
 
