@@ -28,6 +28,13 @@ def violated_constraint(exc: IntegrityError) -> str | None:
 PROJECT_SLUG_CONSTRAINT = "projects_slug_key"
 
 
+def _slug_conflict(exc: IntegrityError, slug: str | None) -> Conflict:
+    """The ``Conflict`` for a duplicate project slug; anything else is re-raised unchanged."""
+    if violated_constraint(exc) != PROJECT_SLUG_CONSTRAINT:
+        raise exc
+    return Conflict(f"project slug already exists: {slug}")
+
+
 class Conflict(Exception):
     """A unique constraint was violated (for example a duplicate slug)."""
 
@@ -69,9 +76,7 @@ class ProjectRepository:
                     )
                 ).one()
         except IntegrityError as exc:
-            if violated_constraint(exc) != PROJECT_SLUG_CONSTRAINT:
-                raise
-            raise Conflict(f"project slug already exists: {slug}") from None
+            raise _slug_conflict(exc, slug) from None
         return _record(row)
 
     async def list(self) -> list[ProjectRecord]:
@@ -104,9 +109,7 @@ class ProjectRepository:
                     stmt = select(*Project.__table__.c).where(Project.id == id)
                 row = (await conn.execute(stmt)).first()
         except IntegrityError as exc:
-            if violated_constraint(exc) != PROJECT_SLUG_CONSTRAINT:
-                raise
-            raise Conflict(f"project slug already exists: {slug}") from None
+            raise _slug_conflict(exc, slug) from None
         if row is None:
             raise NotFound(f"project not found: {id}")
         return _record(row)

@@ -361,6 +361,13 @@ class TestApis:
             )
         assert not isinstance(caught.value, Conflict)
 
+    async def test_other_integrity_errors_on_a_project_are_not_slug_conflicts(
+        self, engine: AsyncEngine
+    ) -> None:
+        with pytest.raises(IntegrityError) as caught:
+            await ProjectRepository(engine).create(None, "no-name")  # type: ignore[arg-type]
+        assert not isinstance(caught.value, Conflict)
+
     async def test_real_slug_clash_is_a_conflict_on_rename(
         self, engine: AsyncEngine, project_id: str
     ) -> None:
