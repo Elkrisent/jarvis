@@ -32,8 +32,8 @@ class Conflict(Exception):
     """A unique constraint was violated (for example a duplicate slug)."""
 
 
-class NotFound(Exception):
-    """The addressed row does not exist."""
+class NotFound(LookupError):
+    """The addressed row does not exist (a ``LookupError``, so older callers still match)."""
 
 
 @dataclass(frozen=True)

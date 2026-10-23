@@ -3,6 +3,7 @@
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 from jarvis_core.secretbox import AesGcmSecretBox, MasterKeyError, secret_box_from_env
 
@@ -13,6 +14,19 @@ class SettingsError(Exception):
     """Invalid or missing configuration. Messages name variables, never values."""
 
 
+def redact_url(url: str) -> str:
+    """The URL with any password replaced by ``***``; an unparseable URL is not shown at all."""
+    try:
+        parts = urlsplit(url)
+        if parts.password is None:
+            return url
+        host = parts.netloc.rpartition("@")[2]
+        user = f"{parts.username}:" if parts.username else ":"
+        return parts._replace(netloc=f"{user}***@{host}").geturl()
+    except ValueError:
+        return "<unparseable url>"
+
+
 @dataclass(frozen=True)
 class Settings:
     database_url: str
@@ -21,7 +35,10 @@ class Settings:
     secret_box: AesGcmSecretBox
 
     def __repr__(self) -> str:
-        return f"Settings(database_url={self.database_url!r}, redis_url={self.redis_url!r})"
+        return (
+            f"Settings(database_url={redact_url(self.database_url)!r}, "
+            f"redis_url={redact_url(self.redis_url)!r})"
+        )
 
     __str__ = __repr__
 

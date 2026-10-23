@@ -67,3 +67,24 @@ def test_error_for_code_round_trips() -> None:
 def test_error_for_unknown_code_raises() -> None:
     with pytest.raises(KeyError, match="JV_NOPE"):
         error_for_code("JV_NOPE")
+
+
+MANAGEMENT_CODES = {"JV_AUTH_REQUIRED", "JV_NOT_FOUND", "JV_CONFLICT", "JV_NOT_IMPLEMENTED"}
+
+
+def test_management_api_codes_are_separate_from_the_spec_codes() -> None:
+    from jarvis_core.errors import MANAGEMENT_ERRORS
+
+    assert {cls.code for cls in MANAGEMENT_ERRORS} == MANAGEMENT_CODES
+    assert not {cls.code for cls in ALL_ERRORS} & MANAGEMENT_CODES
+    assert {cls.code: cls.http_status for cls in MANAGEMENT_ERRORS} == {
+        "JV_AUTH_REQUIRED": 401,
+        "JV_NOT_FOUND": 404,
+        "JV_CONFLICT": 409,
+        "JV_NOT_IMPLEMENTED": 501,
+    }
+
+
+@pytest.mark.parametrize("code", sorted(MANAGEMENT_CODES))
+def test_management_codes_round_trip(code: str) -> None:
+    assert error_for_code(code).code == code

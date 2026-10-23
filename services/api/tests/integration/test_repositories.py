@@ -314,3 +314,9 @@ class TestSecretDelete:
         assert await store.get(secret_id) is None
         await store.delete(secret_id)
         await store.delete(new_id("sec"))
+
+
+async def test_put_version_unknown_project_is_not_found(engine: AsyncEngine) -> None:
+    # Routers rely on the port raising NotFound (not a bare LookupError) for a missing project.
+    with pytest.raises(NotFound, match="prj_missing"):
+        await PostgresConfigSource(engine).put_version("prj_missing", _api())

@@ -99,13 +99,14 @@ class PostgresConfigSource:
         """Store ``api`` as the next immutable version; return ``(api_id, version)``.
 
         Without ``api_id`` the API is upserted by slug. With it, that API's slug and name are
-        updated (``Conflict`` on a slug clash, ``NotFound`` for an unknown API).
+        updated (``Conflict`` on a slug clash, ``NotFound`` for an unknown API). An unknown project
+        also raises ``NotFound``, so routers map every missing parent to 404.
         """
         try:
             async with self._engine.begin() as conn:
                 exists = await conn.execute(select(Project.id).where(Project.id == project_id))
                 if exists.first() is None:
-                    raise LookupError(f"unknown project: {project_id}")
+                    raise NotFound(f"unknown project: {project_id}")
 
                 # The upsert/update takes a row lock held until commit, which serialises
                 # concurrent writes for the same API so each reads a distinct next version.
