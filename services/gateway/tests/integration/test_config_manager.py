@@ -377,3 +377,49 @@ def _dependency(slug: str, deadline_ms: int) -> ApiDependency:
             "deadline_ms": deadline_ms,
         }
     )
+
+
+# --- /gw authentication follows the live config (M1.5) -------------------------------------------
+
+
+async def _gw_status(client: httpx.AsyncClient, slug: str, key: str) -> int:
+    response = await client.get(f"/gw/{slug}/ping", headers={"X-Jarvis-Key": key})
+    return response.status_code
+
+
+async def _status_within(client: httpx.AsyncClient, slug: str, key: str, want: int) -> float:
+    """Seconds until the gateway answers ``want`` for this key; fails past the 1 s budget."""
+    start = time.monotonic()
+    while await _gw_status(client, slug, key) != want:
+        if time.monotonic() - start > BUDGET_S + 2.0:
+            pytest.fail(f"gateway never answered {want}")
+        await asyncio.sleep(POLL_S)
+    return time.monotonic() - start
+
+
+@pytest.mark.req("REQ-4.2-6", "REQ-11.1-6")
+async def test_gateway_accepts_a_new_key_and_rejects_a_revoked_one_within_1s(
+    api: httpx.AsyncClient, gateway: GatewayFactory
+) -> None:
+    from jarvis_gateway.app import create_app as create_gateway_app
+
+    gw: Gateway = await gateway(redis_url=_redis_url())
+    pid, _ = await _subscribed(api, gw)
+    await _create_api(api, pid, "weather")
+    gateway_app = create_gateway_app(config=gw.manager)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=gateway_app), base_url="http://gw"
+    ) as client:
+        created = await api.post(f"/api/v1/projects/{pid}/keys", json={"name": "ci"})
+        key, key_id = created.json()["key"], created.json()["id"]
+        assert await _status_within(client, "weather", key, 501) <= BUDGET_S
+
+        start = time.monotonic()
+        assert (await api.delete(f"/api/v1/keys/{key_id}")).status_code == 204
+        await _status_within(client, "weather", key, 401)
+        assert time.monotonic() - start <= BUDGET_S
+
+        foreign_pid = await _project(api, "p2")
+        foreign = await api.post(f"/api/v1/projects/{foreign_pid}/keys", json={"name": "x"})
+        await _within(lambda: len(gw.snap.keys) >= 2)
+        assert await _gw_status(client, "weather", foreign.json()["key"]) == 401
