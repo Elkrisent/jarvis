@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792686724197,
+  "lastUpdate": 1792743300155,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Load (latency)": [
@@ -309,6 +309,43 @@ window.BENCHMARK_DATA = {
           {
             "name": "mock_direct_p99",
             "value": 6.495249919999996,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent",
+            "email": "144690045+Elkrisent@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "c690343a26ea91cc88becb07f5e4d0984161b6cb",
+          "message": "Merge pull request #17 from Elkrisent/docs/progress-m1.2-complete\n\ndocs: record M1.2 complete",
+          "timestamp": "2026-10-22T16:31:05Z",
+          "url": "https://github.com/Elkrisent/jarvis/commit/c690343a26ea91cc88becb07f5e4d0984161b6cb"
+        },
+        "date": 1792743299333,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "mock_direct_p50",
+            "value": 3.445445,
+            "unit": "ms"
+          },
+          {
+            "name": "mock_direct_p95",
+            "value": 4.0959949999999985,
+            "unit": "ms"
+          },
+          {
+            "name": "mock_direct_p99",
+            "value": 4.616482960000001,
             "unit": "ms"
           }
         ]
