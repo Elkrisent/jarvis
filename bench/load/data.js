@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792767161458,
+  "lastUpdate": 1792770696936,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Load (latency)": [
@@ -580,6 +580,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "mock_direct_p99",
             "value": 5.67606975,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "a3d3942326656dcd56f1b8e9077e9f41efb85fc6",
+          "message": "Merge pull request #24 from Elkrisent/feat/m1.7-ssrf-guard\n\nfeat: SSRF guard (M1.7)",
+          "timestamp": "2026-10-23T21:18:52+05:30",
+          "tree_id": "ad0a2015d34ba82817bed3e48b455c8c924a7d65",
+          "url": "https://github.com/Elkrisent/jarvis/commit/a3d3942326656dcd56f1b8e9077e9f41efb85fc6"
+        },
+        "date": 1792770695929,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "mock_direct_p50",
+            "value": 4.328324,
+            "unit": "ms"
+          },
+          {
+            "name": "mock_direct_p95",
+            "value": 4.738442599999999,
+            "unit": "ms"
+          },
+          {
+            "name": "mock_direct_p99",
+            "value": 5.361160599999996,
             "unit": "ms"
           }
         ]
