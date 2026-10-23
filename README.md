@@ -47,11 +47,11 @@ cd deploy && docker compose up -d --build --wait
 
 Gateway, api and worker each serve `/healthz` (liveness) and `/readyz` (dependencies) on
 internal port 8080 and publish no host ports. For development use
-`-f docker-compose.yml -f docker-compose.dev.yml` (hot reload, ports on 127.0.0.1:8080-8082).
+`-f docker-compose.yml -f docker-compose.dev.yml` (hot reload, gateway on 127.0.0.1:8090, api on 8081, worker on 8082).
 The gateway loads every API policy and key hash from Postgres at startup (`DATABASE_URL`), keeps
 them current through Redis events (within 1 s) and a full resync every `JARVIS_RESYNC_INTERVAL_S`
 (default 60), and writes the last loaded config to `JARVIS_SNAPSHOT_PATH` (the `gateway-snapshot`
-volume) so it can start from that file while Postgres is down. Compose starts the gateway only after Postgres is healthy, so with Postgres down a plain `docker compose up` will not start it; snapshot starts work through the restart policy, `docker compose restart gateway` or `docker start`. A gateway started from an old file serves keys revoked while it was down until Postgres returns (revocation within 1 s does not hold in that mode; the file has no age limit yet). Its `/readyz` adds `config`
+volume) so it can start from that file while Postgres is down. Compose starts the gateway only after Postgres is healthy, so with Postgres down a plain `docker compose up` will not start it; snapshot starts work through the restart policy, `docker compose restart gateway` or `docker start`. A gateway started from the file serves keys revoked while it was down until Postgres returns (revocation within 1 s does not hold in that mode), so a file synced more than `JARVIS_SNAPSHOT_MAX_AGE_S` ago (default 24 h) is ignored and the gateway stays not ready. Its `/readyz` adds `config`
 (`source`, `apis`, `keys`, `synced_at`; counts only): `degraded` when serving the snapshot file or
 when no full sync succeeded for 3 intervals, `unavailable` (503) when no config is loaded at all.
 `make test-system`, `make test-chaos` and `make test-security` start their own stack

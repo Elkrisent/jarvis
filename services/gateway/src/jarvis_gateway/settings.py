@@ -10,6 +10,8 @@ from urllib.parse import urlsplit
 DEFAULT_SNAPSHOT_PATH = "/var/lib/jarvis/gateway/snapshot.json"
 DEFAULT_RESYNC_INTERVAL_S = 60.0
 MIN_RESYNC_INTERVAL_S = 1.0
+DEFAULT_SNAPSHOT_MAX_AGE_S = 86_400.0
+MIN_SNAPSHOT_MAX_AGE_S = 1.0
 
 
 class SettingsError(Exception):
@@ -35,12 +37,14 @@ class Settings:
     redis_url: str
     snapshot_path: Path
     resync_interval_s: float
+    snapshot_max_age_s: float = DEFAULT_SNAPSHOT_MAX_AGE_S
 
     def __repr__(self) -> str:
         return (
             f"Settings(database_url={redact_url(self.database_url)!r}, "
             f"redis_url={redact_url(self.redis_url)!r}, snapshot_path={str(self.snapshot_path)!r}, "
-            f"resync_interval_s={self.resync_interval_s!r})"
+            f"resync_interval_s={self.resync_interval_s!r}, "
+            f"snapshot_max_age_s={self.snapshot_max_age_s!r})"
         )
 
     __str__ = __repr__
@@ -69,6 +73,22 @@ def _interval(source: Mapping[str, str]) -> float:
     return value
 
 
+def _snapshot_max_age(source: Mapping[str, str]) -> float:
+    raw = source.get("JARVIS_SNAPSHOT_MAX_AGE_S")
+    if raw is None or raw == "":
+        return DEFAULT_SNAPSHOT_MAX_AGE_S
+    try:
+        value = float(raw)
+    except ValueError:
+        raise SettingsError("JARVIS_SNAPSHOT_MAX_AGE_S must be a number") from None
+    if not math.isfinite(value) or value < MIN_SNAPSHOT_MAX_AGE_S:
+        raise SettingsError(
+            f"JARVIS_SNAPSHOT_MAX_AGE_S must be a finite number of at least "
+            f"{MIN_SNAPSHOT_MAX_AGE_S:g} seconds"
+        )
+    return value
+
+
 def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     source = os.environ if env is None else env
     return Settings(
@@ -76,4 +96,5 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         redis_url=_require(source, "REDIS_URL"),
         snapshot_path=Path(source.get("JARVIS_SNAPSHOT_PATH") or DEFAULT_SNAPSHOT_PATH),
         resync_interval_s=_interval(source),
+        snapshot_max_age_s=_snapshot_max_age(source),
     )

@@ -85,6 +85,7 @@ class ConfigManager:
         resync_interval_s: float,
         redis_url: str | None,
         subscriber: Subscriber = events.subscribe,
+        snapshot_max_age_s: float | None = None,
     ) -> None:
         if not resync_interval_s > 0:
             raise ValueError("resync_interval_s must be positive")
@@ -95,6 +96,7 @@ class ConfigManager:
         self._clock = clock
         self._interval = resync_interval_s
         self._redis_url = redis_url
+        self._snapshot_max_age_s = snapshot_max_age_s
         self._subscriber_fn = subscriber
         self._lock = asyncio.Lock()
         self._stop = asyncio.Event()
@@ -135,7 +137,19 @@ class ConfigManager:
         if error is not None:
             self._full_error = error  # later failures with the same reason stay quiet
             fallback = await asyncio.to_thread(self._file.read)
-            if fallback is not None:
+            if fallback is not None and self._too_old(fallback):
+                age = self._clock.now() - fallback.synced_at
+                log.error(
+                    "the snapshot file %s is too old to serve (%.0f s, limit %.0f s): keys "
+                    "revoked since then would still work. Postgres is unavailable (%s); "
+                    "retrying every %.0f s",
+                    self._file.path,
+                    age,
+                    self._snapshot_max_age_s,
+                    error,
+                    RETRY_INTERVAL_S,
+                )
+            elif fallback is not None:
                 self._store.replace(fallback)
                 log.warning(
                     "Postgres is unavailable at startup (%s); serving %d APIs and %d keys from "
@@ -159,6 +173,10 @@ class ConfigManager:
         self._spawn(self._supervise(), "supervisor")
         if self._redis_url is not None:
             self._spawn(self._subscribe(self._redis_url), "subscriber")
+
+    def _too_old(self, snapshot: Snapshot) -> bool:
+        cap = self._snapshot_max_age_s
+        return cap is not None and self._clock.now() - snapshot.synced_at > cap
 
     async def stop(self) -> None:
         """Cancel and await the background tasks, flush the snapshot file, close the loader."""

@@ -169,6 +169,22 @@ def test_create_app_from_env_wires_a_manager(monkeypatch: pytest.MonkeyPatch) ->
     assert app.title == "jarvis-gateway"
 
 
+def test_create_app_from_env_passes_the_snapshot_age_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[float | None] = []
+    real = ConfigManager
+
+    def spy(*args: object, **kwargs: object) -> ConfigManager:
+        seen.append(cast("float | None", kwargs["snapshot_max_age_s"]))
+        return real(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr("jarvis_gateway.app.ConfigManager", spy)
+    monkeypatch.setenv("DATABASE_URL", ENV["DATABASE_URL"])
+    monkeypatch.setenv("REDIS_URL", ENV["REDIS_URL"])
+    monkeypatch.setenv("JARVIS_SNAPSHOT_MAX_AGE_S", "600")
+    create_app_from_env()
+    assert seen == [600.0]
+
+
 def test_the_lifespan_without_a_config_manager_just_serves() -> None:
     async def probe(host: str, port: int) -> bool:
         return True

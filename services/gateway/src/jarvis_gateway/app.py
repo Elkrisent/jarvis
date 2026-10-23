@@ -120,6 +120,7 @@ def create_app_from_env() -> FastAPI:
         clock,
         resync_interval_s=settings.resync_interval_s,
         redis_url=settings.redis_url,
+        snapshot_max_age_s=settings.snapshot_max_age_s,
     )
     return create_app(
         dependencies_from_env(),

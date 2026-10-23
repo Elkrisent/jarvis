@@ -16,6 +16,7 @@ def test_defaults() -> None:
     assert s.resync_interval_s == 60.0
     assert s.snapshot_path == Path("/var/lib/jarvis/gateway/snapshot.json")
     assert s.redis_url == BASE["REDIS_URL"]
+    assert s.snapshot_max_age_s == 86_400.0
 
 
 def test_overrides() -> None:
@@ -36,6 +37,17 @@ def test_missing_required_variable_is_named(name: str) -> None:
 def test_invalid_interval_is_rejected_by_name_without_the_value(bad: str) -> None:
     with pytest.raises(SettingsError, match="JARVIS_RESYNC_INTERVAL_S") as exc:
         load_settings({**BASE, "JARVIS_RESYNC_INTERVAL_S": bad})
+    assert f"'{bad}'" not in str(exc.value)
+
+
+def test_snapshot_max_age_override() -> None:
+    assert load_settings({**BASE, "JARVIS_SNAPSHOT_MAX_AGE_S": "600"}).snapshot_max_age_s == 600.0
+
+
+@pytest.mark.parametrize("bad", ["0", "0.5", "-3", "abc", "nan", "inf"])
+def test_invalid_snapshot_max_age_is_rejected_by_name_without_the_value(bad: str) -> None:
+    with pytest.raises(SettingsError, match="JARVIS_SNAPSHOT_MAX_AGE_S") as exc:
+        load_settings({**BASE, "JARVIS_SNAPSHOT_MAX_AGE_S": bad})
     assert f"'{bad}'" not in str(exc.value)
 
 

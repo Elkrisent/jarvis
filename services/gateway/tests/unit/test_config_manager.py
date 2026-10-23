@@ -151,7 +151,9 @@ class FakeWriter:
 
 
 class Harness:
-    def __init__(self, tmp_path: Path, *, real_writer: bool = False) -> None:
+    def __init__(
+        self, tmp_path: Path, *, real_writer: bool = False, snapshot_max_age_s: float | None = None
+    ) -> None:
         self.clock = SteppingClock()
         self.loader = FakeLoader()
         self.file = SnapshotFile(tmp_path / "snapshot.json")
@@ -168,6 +170,7 @@ class Harness:
             self.clock,
             resync_interval_s=INTERVAL,
             redis_url=None,
+            snapshot_max_age_s=snapshot_max_age_s,
         )
 
     @property
@@ -235,6 +238,70 @@ async def test_startup_from_the_file_does_not_rewrite_it(h: Harness) -> None:
     h.loader.fail = True
     await h.manager.start()
     assert h.fake_writer.submitted == []
+    await h.manager.stop()
+
+
+CAP = 3600.0
+
+
+def _file_aged(h: Harness, age_s: float) -> None:
+    h.file.write(
+        Snapshot({"old": _api("old", 7)}, {}, "postgres", h.clock.now() - age_s),
+        written_at=h.clock.now() - age_s,
+    )
+
+
+@pytest.mark.req("REQ-4.2-6", "REQ-8-2")
+@pytest.mark.parametrize("age_s", [CAP + 1, 10 * CAP])
+async def test_a_snapshot_file_older_than_the_cap_is_not_served(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, age_s: float
+) -> None:
+    h = Harness(tmp_path, snapshot_max_age_s=CAP)
+    _file_aged(h, age_s)
+    h.loader.fail = True
+    with caplog.at_level(logging.INFO, logger=LOGGER):
+        await h.manager.start()
+    assert h.store.current is None
+    assert h.manager.status() == ConfigStatus("none", 0, 0, None, None)
+    errors = [r.getMessage() for r in caplog.records if r.levelno == logging.ERROR]
+    assert len(errors) == 1
+    assert "too old" in errors[0]
+    assert str(h.file.path) in errors[0]
+
+    h.loader.fail = False
+    h.loader.apis = {"new": _api("new")}
+    await h.clock.step(5.0)
+    assert h.snap.source == "postgres"
+    assert set(h.snap.apis) == {"new"}
+    await h.manager.stop()
+
+
+@pytest.mark.parametrize("age_s", [0.0, CAP - 1, CAP])
+async def test_a_snapshot_file_within_the_cap_is_served(tmp_path: Path, age_s: float) -> None:
+    h = Harness(tmp_path, snapshot_max_age_s=CAP)
+    _file_aged(h, age_s)
+    h.loader.fail = True
+    await h.manager.start()
+    assert h.snap.source == "file"
+    assert set(h.snap.apis) == {"old"}
+    await h.manager.stop()
+
+
+async def test_a_snapshot_stamped_in_the_future_is_served(tmp_path: Path) -> None:
+    h = Harness(tmp_path, snapshot_max_age_s=CAP)
+    _file_aged(h, -120.0)  # clock skew between the writer and this process
+    h.loader.fail = True
+    await h.manager.start()
+    assert h.snap.source == "file"
+    await h.manager.stop()
+
+
+async def test_without_a_cap_any_age_is_served(tmp_path: Path) -> None:
+    h = Harness(tmp_path)
+    _file_aged(h, 10_000 * CAP)
+    h.loader.fail = True
+    await h.manager.start()
+    assert h.snap.source == "file"
     await h.manager.stop()
 
 

@@ -24,7 +24,7 @@ at least 32 characters). Keep the master key: without it stored credentials cann
 
 ## 2. Start the stack
 
-The dev override publishes the api on `127.0.0.1:8081` (the default stack publishes no host ports).
+The dev override publishes the gateway on `127.0.0.1:8090`, the api on `127.0.0.1:8081` and the worker on `127.0.0.1:8082` (the default stack publishes no host ports).
 
 ```bash
 cd deploy
@@ -32,7 +32,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build --w
 set -a; . ./.env; set +a      # exports JARVIS_ADMIN_TOKEN into this shell
 ```
 
-If another program already holds host port 8080 or 8082 (on Windows with WSL some ports are reserved), `up --wait` reports a bind error for the gateway or worker; the api on 8081 is still usable for everything below, or change the published ports in `deploy/docker-compose.dev.yml`.
+If another program already holds host port 8090, 8081 or 8082 (on Windows with WSL some ports are reserved), `up --wait` reports a bind error; change the published ports in `deploy/docker-compose.dev.yml`. Port 8080 is avoided on purpose: WSL often reserves it.
 
 ## 3. Use the API
 
@@ -62,11 +62,11 @@ KEY_ID=$(echo "$KEY_JSON" | jq -r .id)
 curl -sS "$API/projects/$PROJECT_ID/keys" -H "$AUTH" | jq .
 curl -sS "$API/projects/$PROJECT_ID/apis" -H "$AUTH" | jq .
 
-# Call the gateway with the key (the gateway is on 127.0.0.1:8080 in the dev stack). It now
+# Call the gateway with the key (the gateway is on 127.0.0.1:8090 in the dev stack). It now
 # authenticates the key; forwarding to the provider arrives in a later module, so a valid key
 # gets 501 JV_NOT_IMPLEMENTED and a missing, unknown or revoked key gets 401 JV_AUTH_INVALID.
 JARVIS_KEY=$(echo "$KEY_JSON" | jq -r .key)
-GW=http://127.0.0.1:8080
+GW=http://127.0.0.1:8090
 sleep 1   # the gateway learns of a new key within 1 s
 curl -sS -i "$GW/gw/weather/v1/current" -H "X-Jarvis-Key: $JARVIS_KEY" | sed -n '1p;/^{/p'
 curl -sS -i "$GW/gw/weather/v1/current" -H "Authorization: Bearer $JARVIS_KEY" | sed -n '1p'

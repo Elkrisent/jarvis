@@ -6,7 +6,7 @@ x-dev: &dev
 services:
   gateway:
     <<: *dev
-    ports: ["127.0.0.1:8080:8080"]
+    ports: ["127.0.0.1:8090:8080"]
     environment: {PYTHONPATH: /src/core:/src/gateway}
     volumes: ["../packages/core/src:/src/core:ro", "../services/gateway/src:/src/gateway:ro"]
   api:

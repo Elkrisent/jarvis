@@ -63,6 +63,9 @@ M1.5 Gateway authentication: implemented, awaiting final review and PR. Next is 
   * `/gw/{api_slug}[/{path}]` (all methods) authenticates and answers 501 `JV_NOT_IMPLEMENTED` until M1.8 adds forwarding; before the first config load it answers 503 `JV_NOT_READY` (a code outside the SPEC section 4.4 list). Responses carry `X-Jarvis-Request-Id` (ULID, `jarvis_gateway.request_id`) and `X-Jarvis-Source: jarvis`.
   * Decided with the user: an empty `allowed_api_ids` means every API in the project (the API default is `[]`); a non-empty set restricts to those IDs and a deleted ID never matches.
   * Moved to M1.8: the security test that the key is never forwarded upstream (asserted through mock upstream `/__admin/calls`) needs a forwarder; M1.5 proves it on `forward_headers()` and with a log/response secrecy test.
+  * Snapshot-file age cap (user decision after the review): `JARVIS_SNAPSHOT_MAX_AGE_S` in the gateway settings and `ConfigManager(snapshot_max_age_s=...)`; tests in `test_config_manager.py`, `test_settings.py`, `test_app.py`; documented in `deploy/.env.example` and README.
+  * Dev compose publishes the gateway on `127.0.0.1:8090` (was 8080, which WSL reserves); quickstart and README updated and the quickstart run unmodified against a dev stack with `jq` 1.7.1 installed in `~/.local/bin`.
+  * User sign-off: `JV_NOT_READY` (503) and the interim 501 `JV_NOT_IMPLEMENTED` are accepted. The user will add the `propagation` job to the repo ruleset (not done by Claude).
   * Docs: README, `docs/quickstart-dev.md` (gateway calls and the 1 s revoke), `docs/traceability.md`.
 
 ## In Progress
@@ -77,13 +80,14 @@ Final whole-branch review of M1.5 and the PR.
 ## Blockers / Questions
 
 * OPEN, needs a user decision before P5: PATCH deletes the old secret, but older immutable versions still hold its `secret_ref`. A P5 rollback (copy an old version, SPEC section 5.2) would point at a deleted secret. M1.4 reads only the current version.
+* Redis outage vs revocation: see the known limit below; the user asked what it means (it is about Redis being unavailable at some moment, not about never starting) and has not decided yet.
 * REQ-11.1-6: the revocation push is implemented in M1.4 (`config:invalidated`); the traceability row only becomes meaningful once M1.5 enforces it on requests.
 * For M1.5:
   * Known limit (M1.5 review): revocation within 1 s depends on Redis pub/sub. With Redis down (the gateway fails open, SPEC D3) a revoked key keeps working until the next resync, 60 s by default. Needs a user decision if SPEC §4.2 must hold without Redis.
   * M1.5 dropped `hmac.compare_digest` (the matched entry stores no hash to compare; lookup is by SHA-256 digest the caller cannot steer), a deviation from the M1.5 test-list wording "comparisons are constant-time".
   * Resolved in M1.5: a duplicate `(project, slug)` is denied (fail closed).
   * Revoked keys STAY in `Snapshot.keys` with `revoked=True`: `snapshot.key(h)` being non-None does NOT mean authenticated. Authenticate only when the entry exists and `revoked` is False; deny revoked and unknown identically (`JV_AUTH_INVALID`).
-  * Snapshot-file caveat: a gateway restarted from an old snapshot file (Postgres down) serves keys revoked while it was down until Postgres returns. The file has no age limit and events cannot be applied without Postgres. SPEC section 8 allows snapshot starts, but REQ-11.1-6 (1 s or less) does not hold in that mode; `/readyz` shows `degraded` with the file's `synced_at`. Capping the file age is an option for M1.5 or ops.
+  * Resolved in M1.5 (user decision): a snapshot file synced more than `JARVIS_SNAPSHOT_MAX_AGE_S` ago (default 86400 s, minimum 1) is ignored at startup; the gateway logs an ERROR, stays not ready (`/readyz` 503) and retries Postgres every 5 s. Within the cap the old caveat still applies (keys revoked while Postgres was down keep working until it returns). The 24 h default is my choice; the user may want it shorter.
   * Resolved in M1.5: an empty `allowed_api_ids` means unrestricted (user decision); a non-empty set that names only deleted APIs denies everything.
 
 ## Resume Point
