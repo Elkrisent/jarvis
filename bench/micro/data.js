@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792770565742,
+  "lastUpdate": 1792776607883,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Micro benchmarks": [
@@ -506,6 +506,44 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 2.0924661992491756e-7",
             "extra": "mean: 932.6014419715865 nsec\nrounds: 80445"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0ea3df771b18ef6b4c83706e6c8cfefd55a425db",
+          "message": "Merge pull request #25 from Elkrisent/feat/m1.8-forwarding\n\nfeat(gateway): forwarding, credential injection, header hygiene (M1.8)",
+          "timestamp": "2026-10-23T22:59:34+05:30",
+          "tree_id": "2fa91fea9fe14668391286e51f9647df1fbca2f3",
+          "url": "https://github.com/Elkrisent/jarvis/commit/0ea3df771b18ef6b4c83706e6c8cfefd55a425db"
+        },
+        "date": 1792776607291,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "packages/core/tests/bench/test_bench_route_template_match.py::test_bench_route_template_match",
+            "value": 145700.1436998766,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000014951295832626282",
+            "extra": "mean: 6.863411212962634 usec\nrounds: 18550"
+          },
+          {
+            "name": "packages/core/tests/bench/test_bench_token_bucket_take.py::test_bench_token_bucket_take",
+            "value": 651994.7323770355,
+            "unit": "iter/sec",
+            "range": "stddev: 5.691210632389073e-7",
+            "extra": "mean: 1.5337547227631896 usec\nrounds: 78291"
           }
         ]
       }
