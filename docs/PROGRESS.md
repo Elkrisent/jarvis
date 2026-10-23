@@ -65,7 +65,7 @@ M1.4 is complete on the branch; final review is pending.
 
 ## Next
 
-1. Final review of the M1.4 branch, then open the M1.4 PR and get `ci` and `security` green (and `system`, `bench` on main after merge); record the merge SHA here in a docs PR.
+1. Get `ci` and `security` green on the M1.4 PR (final review done, fixes applied) (and `system`, `bench` on main after merge); record the merge SHA here in a docs PR.
 2. Then M1.5 Gateway authentication.
 3. Before the P1 checkpoint: wire `make bench-propagation` (needs `DATABASE_URL`/`REDIS_URL`) into `scripts/bench/run_checkpoint.sh`. Today the checkpoint skips it, so `config_propagation_p99` stays "not measured" in the `BENCHMARKS.md` table and the interim section there is dropped by the next `make bench-checkpoint`.
 
@@ -81,7 +81,7 @@ M1.4 is complete on the branch; final review is pending.
 
 ## Resume Point
 
-Final review of `feat/m1.4-config-loader`, then open the PR; M1.5 starts after the merge.
+Merge the M1.4 PR once its checks are green (watch the Postgres loader's dedicated-role test and the gateway volume under `read_only` in CI); M1.5 starts after the merge.
 
 ## Last Updated
 
