@@ -16,7 +16,13 @@ from jarvis_api.db.migrate import to_async_url
 from jarvis_api.db.repositories import KeyRepository, ProjectRepository
 from jarvis_core.config import ApiDependency
 from jarvis_core.keys import generate_jarvis_key, hash_jarvis_key
-from jarvis_gateway.config.postgres import ConfigLoadError, PostgresLoader
+from jarvis_gateway.config import postgres
+from jarvis_gateway.config.postgres import (
+    ConfigLoadError,
+    InvalidApi,
+    PostgresLoader,
+    ProjectRows,
+)
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
@@ -96,7 +102,8 @@ async def loader(database_url: str) -> AsyncIterator[PostgresLoader]:
 async def test_load_all_returns_exactly_the_seeded_entries(
     loader: PostgresLoader, seed: Seed
 ) -> None:
-    snap = await loader.load_all(now=123.5)
+    snap, invalid = await loader.load_all(now=123.5)
+    assert invalid == frozenset()
 
     assert snap.source == "postgres"
     assert snap.synced_at == 123.5
@@ -155,12 +162,13 @@ async def test_load_key_of_a_revoked_key_is_flagged_not_dropped(
 async def test_load_project_returns_its_rows_and_empty_when_gone(
     loader: PostgresLoader, seed: Seed, engine: AsyncEngine
 ) -> None:
-    apis, keys = await loader.load_project(seed.p1)
+    apis, keys, invalid = await loader.load_project(seed.p1)
+    assert invalid == frozenset()
     assert {a.api_id for a in apis} == {seed.weather, seed.maps}
     assert [k[1].key_id for k in keys] == [seed.live_id]
 
     await ProjectRepository(engine).delete(seed.p1)
-    assert await loader.load_project(seed.p1) == ([], [])
+    assert await loader.load_project(seed.p1) == ProjectRows([], [], frozenset())
 
 
 async def _raw(database_url: str, sql: str, *args: object) -> None:
@@ -195,15 +203,19 @@ async def test_bad_api_rows_are_skipped_and_logged_without_their_config(
     )
 
     with caplog.at_level(logging.DEBUG, logger=LOGGER):
-        snap = await loader.load_all(now=1.0)
+        snap, invalid = await loader.load_all(now=1.0)
         single = await loader.load_api(bad_cfg)
         null_single = await loader.load_api(null_api)
-        apis, _ = await loader.load_project(seed.p2)
+        project = await loader.load_project(seed.p2)
 
     assert set(snap.apis) == {seed.weather, seed.maps, seed.news}
-    assert single is None
-    assert null_single is None
-    assert {a.api_id for a in apis} == {seed.news}
+    assert invalid == {null_api, bad_cfg}
+    assert single == InvalidApi(bad_cfg)
+    assert null_single == InvalidApi(null_api)
+    assert {a.api_id for a in project.apis} == {seed.news}
+    assert project.invalid_api_ids == {null_api, bad_cfg}
+    # Invalid is not gone: a missing row is still None, and a deleted project is empty.
+    assert await loader.load_api("api_nope") is None
     text = caplog.text
     assert bad_cfg in text
     assert null_api in text
@@ -281,7 +293,7 @@ class _Proxy:
 
 @pytest.mark.req("REQ-5.2-4")
 async def test_unreachable_postgres_raises_a_dsn_free_error_and_the_pool_recovers(
-    seed: Seed, database_url: str
+    seed: Seed, database_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     url = make_url(database_url)
     proxy = _Proxy(url.host or "127.0.0.1", url.port or 5432)
@@ -289,7 +301,18 @@ async def test_unreachable_postgres_raises_a_dsn_free_error_and_the_pool_recover
     dsn = url.set(host="127.0.0.1", port=proxy.port).render_as_string(hide_password=False)
     loader = PostgresLoader(dsn, connect_timeout_s=1.0)
     try:
-        assert (await loader.load_all(now=1.0)).apis  # healthy first
+        created = 0
+        real_create_pool = postgres.asyncpg.create_pool
+
+        def counting(*args: object, **kwargs: object) -> object:
+            nonlocal created
+            created += 1
+            return real_create_pool(*args, **kwargs)
+
+        monkeypatch.setattr(postgres.asyncpg, "create_pool", counting)
+        assert (await loader.load_all(now=1.0))[0].apis  # healthy first
+        assert created == 1
+        first_pool = loader._pool
         await proxy.stop()  # existing connections are cut and the port is closed
 
         started = time.monotonic()
@@ -302,8 +325,11 @@ async def test_unreachable_postgres_raises_a_dsn_free_error_and_the_pool_recover
         assert f"{proxy.port}" not in message
 
         await proxy.start()  # same port again: the loader must recreate its pool
-        snap = await loader.load_all(now=3.0)
+        snap, _ = await loader.load_all(now=3.0)
         assert set(snap.apis) == {seed.weather, seed.maps, seed.news}
+        assert created == 2  # the failed pool was dropped and a new one created
+        assert loader._pool is not None
+        assert loader._pool is not first_pool
     finally:
         await loader.close()
         await proxy.stop()
@@ -411,11 +437,11 @@ async def test_the_loader_works_with_access_that_can_only_select(
     # ... yet every loader entry point succeeds, so it issues nothing but SELECTs.
     loader = PostgresLoader(select_only.dsn, connect_timeout_s=2.0)
     try:
-        snap = await loader.load_all(now=1.0)
+        snap, _ = await loader.load_all(now=1.0)
         assert set(snap.apis) == {seed.weather, seed.maps, seed.news}
         assert await loader.load_api(seed.weather) is not None
         assert await loader.load_key(seed.live_id) is not None
-        apis, keys = await loader.load_project(seed.p1)
+        apis, keys, _ = await loader.load_project(seed.p1)
         assert apis
         assert keys
     finally:
@@ -423,23 +449,66 @@ async def test_the_loader_works_with_access_that_can_only_select(
 
 
 @pytest.mark.req("REQ-5.2-4")
-async def test_load_all_sees_one_consistent_snapshot(
-    loader: PostgresLoader, seed: Seed, engine: AsyncEngine
+async def test_full_and_project_loads_run_in_a_read_only_repeatable_read_transaction(
+    loader: PostgresLoader, seed: Seed, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # A project deleted between calls disappears from both its APIs and its keys together.
-    await ProjectRepository(engine).delete(seed.p2)
-    snap = await loader.load_all(now=1.0)
-    assert set(snap.apis) == {seed.weather, seed.maps}
-    assert set(snap.keys) == {hash_jarvis_key(seed.live_full)}
+    seen: list[tuple[str, str, str]] = []
+    real_run = loader._run
+
+    async def spying_run(fn):  # type: ignore[no-untyped-def]
+        async def wrapped(conn):  # type: ignore[no-untyped-def]
+            class Proxy:
+                def transaction(self, **kwargs: object) -> object:
+                    return conn.transaction(**kwargs)
+
+                async def fetch(self, query: str, *args: object) -> object:
+                    seen.append(
+                        (
+                            query.split(" FROM ")[1].split()[0],
+                            await conn.fetchval("SHOW transaction_read_only"),
+                            await conn.fetchval("SHOW transaction_isolation"),
+                        )
+                    )
+                    return await conn.fetch(query, *args)
+
+            return await fn(Proxy())
+
+        return await real_run(wrapped)
+
+    monkeypatch.setattr(loader, "_run", spying_run)
+    await loader.load_all(now=1.0)
+    await loader.load_project(seed.p1)
+
+    assert len(seen) == 4  # two queries each, all inside the transaction
+    assert {(ro, iso) for _, ro, iso in seen} == {("on", "repeatable read")}
+    assert {t for t, _, _ in seen} == {"api_dependencies", "jarvis_keys"}
 
 
 @pytest.mark.req("REQ-5.2-4")
-@pytest.mark.parametrize("query", ["connect_timeout=5", "sslmode=prefer&connect_timeout=5"])
+@pytest.mark.parametrize(
+    "option", ["options", "sslpassword", "server_settings", "statement_timeout"]
+)
+async def test_unsupported_dsn_options_are_rejected_by_name_only(option: str) -> None:
+    loader = PostgresLoader(f"postgresql://u:pw-secret@127.0.0.1:1/db?{option}=VALUE-secret")
+    try:
+        with pytest.raises(ConfigLoadError) as err:
+            await loader.load_all(now=1.0)
+    finally:
+        await loader.close()
+    assert str(err.value) == f"unsupported DSN option: {option}"
+    assert "secret" not in str(err.value)
+
+
+@pytest.mark.req("REQ-5.2-4")
+@pytest.mark.parametrize(
+    "query",
+    ["connect_timeout=5", "sslmode=prefer&connect_timeout=5", "application_name=jarvis-gw"],
+)
 async def test_libpq_style_dsn_options_shared_with_the_api_are_accepted(
     seed: Seed, database_url: str, query: str
 ) -> None:
     loader = PostgresLoader(f"{database_url}?{query}", connect_timeout_s=2.0)
     try:
-        assert set((await loader.load_all(now=1.0)).apis) == {seed.weather, seed.maps, seed.news}
+        assert set((await loader.load_all(now=1.0))[0].apis) == {seed.weather, seed.maps, seed.news}
     finally:
         await loader.close()
