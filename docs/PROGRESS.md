@@ -66,6 +66,7 @@ M1.5 Gateway authentication: implemented, awaiting final review and PR. Next is 
   * Snapshot-file age cap (user decision after the review): `JARVIS_SNAPSHOT_MAX_AGE_S` in the gateway settings and `ConfigManager(snapshot_max_age_s=...)`; tests in `test_config_manager.py`, `test_settings.py`, `test_app.py`; documented in `deploy/.env.example` and README.
   * Dev compose publishes the gateway on `127.0.0.1:8090` (was 8080, which WSL reserves); quickstart and README updated and the quickstart run unmodified against a dev stack with `jq` 1.7.1 installed in `~/.local/bin`.
   * User sign-off: `JV_NOT_READY` (503) and the interim 501 `JV_NOT_IMPLEMENTED` are accepted. The user will add the `propagation` job to the repo ruleset (not done by Claude).
+  * CI: gitleaks flagged the made-up key `jv_live_abc123` in `test_auth_extraction.py` (history scan). `.gitleaks.toml` now allows it for that file only (both allowlists moved to `[[allowlists]]`), and `security.yml` pins `GITLEAKS_VERSION: 8.30.1` because the action's default 8.24.3 ignores those AND-condition allowlists (checked locally: 8.24.3 fails, 8.26.0 and later pass).
   * Docs: README, `docs/quickstart-dev.md` (gateway calls and the 1 s revoke), `docs/traceability.md`.
 
 ## In Progress
