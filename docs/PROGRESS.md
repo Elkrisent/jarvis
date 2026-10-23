@@ -55,7 +55,7 @@ M1.4 Gateway config loader: implemented on `feat/m1.4-config-loader`, awaiting f
   * `jarvis_gateway.config`: immutable `Snapshot` with atomic swap in `ConfigStore`; `PostgresLoader` (read-only, repeatable-read, tells an invalid API row from a gone one); on-disk snapshot file (written after every load, coalesced) as the fallback when Postgres is down; `ConfigManager` subscribes to `config:changed` and the new `config:invalidated` (published by the api on key create/revoke, API delete, project delete), resyncs every 60 s and at startup, resyncs early after a failed refresh. The gateway loads config at startup and reports it (counts only) in `/readyz`; unreadable config makes `/readyz` 503 instead of crashing.
   * Revocation push (REQ-11.1-6) is now implemented through `config:invalidated`; M1.5 enforces it.
   * Benchmark: `services/gateway/tests/bench/test_config_propagation.py` (`perf`), `make bench-propagation`, and a `propagation` job in `bench.yml`. Local (not CI) run, 200 PATCHes, measured from before the request is sent: p50 10.8 ms, p99 20.8 ms vs 1000 ms budget (details in `BENCHMARKS.md`). The test is tagged REQ-13-5 and REQ-5.2-3; the system test keeps its REQ-13-5 tag as a single-sample check.
-  * Verified locally against Postgres and Redis: `make lint typecheck` clean; 233 gateway unit + integration tests pass; stack suites system, chaos, e2e and security passed in Task 6; 913 passed (2 perf deselected) in `make traceability COMPLETED_PHASE=0 TRACE_MARKERS="not perf"` in Task 8 (47/246 covered; REQ-13-5 and REQ-5.2-3 rows changed and regenerated); `make bench-propagation` passed 3 times.
+  * Verified locally against Postgres and Redis: `make lint typecheck` clean; 233 gateway unit + integration tests pass; stack suites system, chaos, e2e and security passed earlier on this branch (gateway startup/readiness work); 913 passed (2 perf deselected) in the final `make traceability COMPLETED_PHASE=0 TRACE_MARKERS="not perf"` run (47/246 covered; REQ-13-5 and REQ-5.2-3 rows changed and regenerated); `make bench-propagation` passed 3 times.
   * NOT run: the GitHub `ci`, `security`, `system` and `bench` workflows (including the new `propagation` job, validated only as YAML); the dedicated least-privilege role path of the Postgres loader test (the fallback path ran locally; CI runs it).
 
 
@@ -67,6 +67,7 @@ M1.4 is complete on the branch; final review is pending.
 
 1. Final review of the M1.4 branch, then open the M1.4 PR and get `ci` and `security` green (and `system`, `bench` on main after merge); record the merge SHA here in a docs PR.
 2. Then M1.5 Gateway authentication.
+3. Before the P1 checkpoint: wire `make bench-propagation` (needs `DATABASE_URL`/`REDIS_URL`) into `scripts/bench/run_checkpoint.sh`. Today the checkpoint skips it, so `config_propagation_p99` stays "not measured" in the `BENCHMARKS.md` table and the interim section there is dropped by the next `make bench-checkpoint`.
 
 ## Blockers / Questions
 
