@@ -35,6 +35,7 @@ jobs:
           <h1>JARVIS benchmarks</h1>
           <ul>
             <li><a href="bench/micro/">Micro benchmarks</a></li>
+            <li><a href="bench/propagation/">Config propagation</a></li>
             <li><a href="bench/load/">Load: latency</a></li>
             <li><a href="bench/load-throughput/">Load: throughput</a></li>
           </ul>
@@ -85,6 +86,75 @@ jobs:
           output-file-path: build/bench/micro.json
           gh-pages-branch: gh-pages
           benchmark-data-dir-path: bench/micro
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          comment-on-alert: true
+          alert-threshold: "120%"
+          fail-on-alert: true
+          fail-threshold: "150%"
+          summary-always: true
+
+  propagation:
+    needs: prepare-pages
+    runs-on: ubuntu-latest
+    concurrency: {group: gh-pages-push, cancel-in-progress: false}
+    services:
+      postgres:
+        image: timescale/timescaledb:2.17.2-pg16
+        env:
+          POSTGRES_USER: jarvis
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: jarvis
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U jarvis -d jarvis"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+      redis:
+        image: redis:7.4.1-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+    env:
+      REDIS_URL: redis://localhost:6379/0
+      DATABASE_URL: postgresql://jarvis:ci-only@localhost:5432/jarvis
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.11.17"
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --locked
+      - run: make bench-propagation
+      - run: uv run python scripts/bench/write_env.py --out build/bench/env.json --profile propagation
+      - name: Baseline from main
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          id=$(gh run list --workflow bench.yml --branch main --status success --limit 1 --json databaseId -q '.[0].databaseId')
+          [ -n "$id" ] && gh run download "$id" -n bench-propagation -D build/baseline
+          true
+      - name: Job summary (value, budget, change vs main)
+        run: uv run python scripts/bench/check_budgets.py build/bench/results.json --baseline build/baseline/results.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bench-propagation
+          path: |
+            build/bench/propagation.json
+            build/bench/results.json
+            build/bench/env.json
+          retention-days: 90
+      - name: Chart on gh-pages
+        uses: benchmark-action/github-action-benchmark@4322e5726e6334590d251fc4f92bec0efafc45dc # v1.22.2
+        with:
+          name: Config propagation
+          tool: customSmallerIsBetter
+          output-file-path: build/bench/propagation.json
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: bench/propagation
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
           comment-on-alert: true

@@ -1,6 +1,6 @@
 .PHONY: help sync lint format typecheck security-scan bandit pip-audit \
 	test-unit test-integration test-system test-functional test-e2e test-chaos \
-	test-security test-web test-all bench-micro bench-load bench-soak \
+	test-security test-web test-all bench-micro bench-propagation bench-load bench-soak \
 	bench-checkpoint bench-up bench-down traceability coverage openapi-snapshot
 
 PYTEST = uv run pytest
@@ -68,6 +68,11 @@ bench-micro:
 	mkdir -p $(BENCH_DIR)
 	$(PYTEST) -m perf packages/core/tests/bench --benchmark-json=$(BENCH_DIR)/micro.json -q
 	uv run python scripts/bench/micro_results.py $(BENCH_DIR)/micro.json --results $(BENCH_DIR)/results.json
+
+# Needs DATABASE_URL (a server where the role may create databases) and REDIS_URL.
+bench-propagation:
+	mkdir -p $(BENCH_DIR)
+	BENCH_DIR=$(BENCH_DIR) $(PYTEST) -m perf services/gateway/tests/bench -q -s
 
 # Needs the mock upstream running: `make bench-up`.
 bench-load:

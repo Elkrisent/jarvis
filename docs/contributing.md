@@ -71,7 +71,8 @@ Check names appear exactly as listed once each workflow has run at least once.
 
 ## Benchmarks
 
-- `make bench-micro` and `make bench-load` (after `make bench-up`) are for quick local checks.
+- `make bench-micro`, `make bench-propagation` (needs `DATABASE_URL` and `REDIS_URL`, like the
+  integration tests) and `make bench-load` (after `make bench-up`) are for quick local checks.
 - `make bench-checkpoint PHASE=<n>` produces the **numbers of record** on your machine: it runs
   everything, enforces the budgets in `benchmarks/budgets.yaml`, writes
   `benchmarks/checkpoints/P<n>.json` (results, raw data, `env.json`) and regenerates
@@ -79,5 +80,5 @@ Check names appear exactly as listed once each workflow has run at least once.
 - `bench.yml` only tracks trends on hosted runners. It comments on a commit at +20% and fails at
   +50% against the previous run, and reports (but does not enforce) the absolute budgets.
 - Charts: `https://<owner>.github.io/<repo>/bench/micro/`, `.../bench/load/`,
-  `.../bench/load-throughput/`. One-time setup: after the first `bench.yml` run on `main` has
+  `.../bench/load-throughput/`, `.../bench/propagation/`. One-time setup: after the first `bench.yml` run on `main` has
   created the `gh-pages` branch, enable Settings → Pages → Deploy from branch `gh-pages` / `/ (root)`.

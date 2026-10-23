@@ -1,4 +1,4 @@
-"""Fixtures for gateway integration tests that need a real Postgres.
+"""Fixtures for gateway tests (integration and bench) that need a real Postgres.
 
 ``DATABASE_URL`` must point at a server whose role may create databases and roles. Each test gets
 its own throwaway, fully migrated database (the schema comes from ``jarvis_api.db.migrate``, which

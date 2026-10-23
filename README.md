@@ -28,6 +28,7 @@ make coverage       # unit + integration tests + per-package coverage gates (sam
 make traceability   # requirement -> test report in docs/traceability.md
 make security-scan  # bandit + pip-audit
 make bench-micro    # pytest-benchmark micro-benchmarks
+make bench-propagation   # config propagation p99 (needs DATABASE_URL and REDIS_URL)
 make bench-up bench-load bench-down   # k6 dry run against the mock upstream (needs Docker)
 make bench-checkpoint PHASE=0         # numbers of record -> BENCHMARKS.md (local machine)
 pre-commit install  # enable git hooks
