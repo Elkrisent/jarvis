@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792767040708,
+  "lastUpdate": 1792770565742,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Micro benchmarks": [
@@ -468,6 +468,44 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 4.5400836524186176e-7",
             "extra": "mean: 1.547841900673643 usec\nrounds: 78223"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "a3d3942326656dcd56f1b8e9077e9f41efb85fc6",
+          "message": "Merge pull request #24 from Elkrisent/feat/m1.7-ssrf-guard\n\nfeat: SSRF guard (M1.7)",
+          "timestamp": "2026-10-23T21:18:52+05:30",
+          "tree_id": "ad0a2015d34ba82817bed3e48b455c8c924a7d65",
+          "url": "https://github.com/Elkrisent/jarvis/commit/a3d3942326656dcd56f1b8e9077e9f41efb85fc6"
+        },
+        "date": 1792770564697,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "packages/core/tests/bench/test_bench_route_template_match.py::test_bench_route_template_match",
+            "value": 255788.8174999992,
+            "unit": "iter/sec",
+            "range": "stddev: 4.207939046021116e-7",
+            "extra": "mean: 3.9094750496667166 usec\nrounds: 16613"
+          },
+          {
+            "name": "packages/core/tests/bench/test_bench_token_bucket_take.py::test_bench_token_bucket_take",
+            "value": 1072269.4122002728,
+            "unit": "iter/sec",
+            "range": "stddev: 2.0924661992491756e-7",
+            "extra": "mean: 932.6014419715865 nsec\nrounds: 80445"
           }
         ]
       }
