@@ -15,6 +15,7 @@ Local checks, the same targets CI calls:
 make lint typecheck       # ruff, mypy
 make coverage             # unit + integration tests + per-package gates (needs Postgres and Redis)
 make security-scan        # bandit + pip-audit
+make openapi-snapshot     # regenerate tests/contract/openapi.snapshot.json after an API change; explain it in the PR
 make test-integration     # needs Postgres and Redis (REDIS_URL, DATABASE_URL)
 make test-system test-functional test-chaos test-security   # need Docker
 ```

@@ -1,0 +1,1803 @@
+{
+  "components": {
+    "schemas": {
+      "ApiIn": {
+        "additionalProperties": false,
+        "description": "Every ``ApiDependency`` field, with ``CredentialIn`` in place of the stored credential.",
+        "properties": {
+          "attempt_timeout_ms": {
+            "default": 2000,
+            "exclusiveMinimum": 0.0,
+            "title": "Attempt Timeout Ms",
+            "type": "integer"
+          },
+          "base_url": {
+            "title": "Base Url",
+            "type": "string"
+          },
+          "body_sampling": {
+            "$ref": "#/components/schemas/BodySampling",
+            "default": {
+              "enabled": false,
+              "rate": 0.0
+            }
+          },
+          "cache": {
+            "$ref": "#/components/schemas/CachePolicy",
+            "default": {
+              "default_ttl_s": 60,
+              "enabled": false,
+              "honor_cache_control": false,
+              "max_object_bytes": 1048576,
+              "stale_ttl_s": 600,
+              "vary_headers": [
+                "accept",
+                "accept-language"
+              ]
+            }
+          },
+          "circuit": {
+            "$ref": "#/components/schemas/CircuitPolicy",
+            "default": {
+              "failure_rate_threshold": 0.5,
+              "max_open_duration_s": 300,
+              "min_calls": 20,
+              "open_duration_s": 30,
+              "window_s": 30
+            }
+          },
+          "credential": {
+            "$ref": "#/components/schemas/CredentialIn",
+            "default": {
+              "mode": "none"
+            }
+          },
+          "deadline_ms": {
+            "default": 5000,
+            "exclusiveMinimum": 0.0,
+            "title": "Deadline Ms",
+            "type": "integer"
+          },
+          "fallback": {
+            "$ref": "#/components/schemas/Fallback",
+            "default": {
+              "serve_stale": false
+            }
+          },
+          "jarvis_key_slot": {
+            "default": "x-jarvis-key",
+            "maxLength": 100,
+            "pattern": "^[A-Za-z0-9!#$%&'*+.^_`|~-]+$",
+            "title": "Jarvis Key Slot",
+            "type": "string"
+          },
+          "min_attempt_ms": {
+            "default": 300,
+            "exclusiveMinimum": 0.0,
+            "title": "Min Attempt Ms",
+            "type": "integer"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "rate_limits": {
+            "$ref": "#/components/schemas/RateLimits",
+            "default": {
+              "inbound": {
+                "capacity": 100,
+                "enabled": false,
+                "refill_per_s": 10.0
+              },
+              "upstream": {
+                "capacity": 100,
+                "enabled": false,
+                "refill_per_s": 10.0
+              }
+            }
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "retry": {
+            "$ref": "#/components/schemas/RetryPolicy",
+            "default": {
+              "base_ms": 100,
+              "budget_ratio": 0.2,
+              "cap_ms": 2000,
+              "enabled": true,
+              "max_attempts": 3
+            }
+          },
+          "routes": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Route"
+            },
+            "title": "Routes",
+            "type": "array"
+          },
+          "slug": {
+            "pattern": "^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$",
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "name",
+          "base_url"
+        ],
+        "title": "ApiIn",
+        "type": "object"
+      },
+      "ApiOut": {
+        "description": "The current version of an API, with ``credential.has_secret`` in place of the secret.",
+        "properties": {
+          "attempt_timeout_ms": {
+            "default": 2000,
+            "exclusiveMinimum": 0.0,
+            "title": "Attempt Timeout Ms",
+            "type": "integer"
+          },
+          "base_url": {
+            "title": "Base Url",
+            "type": "string"
+          },
+          "body_sampling": {
+            "$ref": "#/components/schemas/BodySampling",
+            "default": {
+              "enabled": false,
+              "rate": 0.0
+            }
+          },
+          "cache": {
+            "$ref": "#/components/schemas/CachePolicy",
+            "default": {
+              "default_ttl_s": 60,
+              "enabled": false,
+              "honor_cache_control": false,
+              "max_object_bytes": 1048576,
+              "stale_ttl_s": 600,
+              "vary_headers": [
+                "accept",
+                "accept-language"
+              ]
+            }
+          },
+          "circuit": {
+            "$ref": "#/components/schemas/CircuitPolicy",
+            "default": {
+              "failure_rate_threshold": 0.5,
+              "max_open_duration_s": 300,
+              "min_calls": 20,
+              "open_duration_s": 30,
+              "window_s": 30
+            }
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "credential": {
+            "$ref": "#/components/schemas/CredentialOut"
+          },
+          "deadline_ms": {
+            "default": 5000,
+            "exclusiveMinimum": 0.0,
+            "title": "Deadline Ms",
+            "type": "integer"
+          },
+          "fallback": {
+            "$ref": "#/components/schemas/Fallback",
+            "default": {
+              "serve_stale": false
+            }
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "jarvis_key_slot": {
+            "default": "x-jarvis-key",
+            "maxLength": 100,
+            "pattern": "^[A-Za-z0-9!#$%&'*+.^_`|~-]+$",
+            "title": "Jarvis Key Slot",
+            "type": "string"
+          },
+          "min_attempt_ms": {
+            "default": 300,
+            "exclusiveMinimum": 0.0,
+            "title": "Min Attempt Ms",
+            "type": "integer"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "rate_limits": {
+            "$ref": "#/components/schemas/RateLimits",
+            "default": {
+              "inbound": {
+                "capacity": 100,
+                "enabled": false,
+                "refill_per_s": 10.0
+              },
+              "upstream": {
+                "capacity": 100,
+                "enabled": false,
+                "refill_per_s": 10.0
+              }
+            }
+          },
+          "retry": {
+            "$ref": "#/components/schemas/RetryPolicy",
+            "default": {
+              "base_ms": 100,
+              "budget_ratio": 0.2,
+              "cap_ms": 2000,
+              "enabled": true,
+              "max_attempts": 3
+            }
+          },
+          "routes": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Route"
+            },
+            "title": "Routes",
+            "type": "array"
+          },
+          "slug": {
+            "pattern": "^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$",
+            "title": "Slug",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "slug",
+          "name",
+          "base_url",
+          "credential",
+          "id",
+          "project_id",
+          "version",
+          "created_at"
+        ],
+        "title": "ApiOut",
+        "type": "object"
+      },
+      "BodySampling": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "rate": {
+            "default": 0.0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Rate",
+            "type": "number"
+          }
+        },
+        "title": "BodySampling",
+        "type": "object"
+      },
+      "BucketPolicy": {
+        "additionalProperties": false,
+        "description": "Token bucket parameters (SPEC §4.11).",
+        "properties": {
+          "capacity": {
+            "default": 100,
+            "exclusiveMinimum": 0.0,
+            "title": "Capacity",
+            "type": "integer"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "refill_per_s": {
+            "default": 10.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Refill Per S",
+            "type": "number"
+          }
+        },
+        "title": "BucketPolicy",
+        "type": "object"
+      },
+      "CachePolicy": {
+        "additionalProperties": false,
+        "description": "SPEC §4.9.",
+        "properties": {
+          "default_ttl_s": {
+            "default": 60,
+            "minimum": 0.0,
+            "title": "Default Ttl S",
+            "type": "integer"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "honor_cache_control": {
+            "default": false,
+            "title": "Honor Cache Control",
+            "type": "boolean"
+          },
+          "max_object_bytes": {
+            "default": 1048576,
+            "exclusiveMinimum": 0.0,
+            "title": "Max Object Bytes",
+            "type": "integer"
+          },
+          "stale_ttl_s": {
+            "default": 600,
+            "minimum": 0.0,
+            "title": "Stale Ttl S",
+            "type": "integer"
+          },
+          "vary_headers": {
+            "default": [
+              "accept",
+              "accept-language"
+            ],
+            "items": {
+              "maxLength": 100,
+              "pattern": "^[A-Za-z0-9!#$%&'*+.^_`|~-]+$",
+              "type": "string"
+            },
+            "title": "Vary Headers",
+            "type": "array"
+          }
+        },
+        "title": "CachePolicy",
+        "type": "object"
+      },
+      "CircuitPolicy": {
+        "additionalProperties": false,
+        "description": "SPEC §4.8.",
+        "properties": {
+          "failure_rate_threshold": {
+            "default": 0.5,
+            "exclusiveMinimum": 0.0,
+            "maximum": 1.0,
+            "title": "Failure Rate Threshold",
+            "type": "number"
+          },
+          "max_open_duration_s": {
+            "default": 300,
+            "exclusiveMinimum": 0.0,
+            "title": "Max Open Duration S",
+            "type": "integer"
+          },
+          "min_calls": {
+            "default": 20,
+            "exclusiveMinimum": 0.0,
+            "title": "Min Calls",
+            "type": "integer"
+          },
+          "open_duration_s": {
+            "default": 30,
+            "exclusiveMinimum": 0.0,
+            "title": "Open Duration S",
+            "type": "integer"
+          },
+          "window_s": {
+            "default": 30,
+            "exclusiveMinimum": 0.0,
+            "title": "Window S",
+            "type": "integer"
+          }
+        },
+        "title": "CircuitPolicy",
+        "type": "object"
+      },
+      "CredentialIn": {
+        "additionalProperties": false,
+        "description": "A credential as sent by a client. ``secret`` is write-only plaintext; refs never come in.",
+        "properties": {
+          "header_name": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "pattern": "^[A-Za-z0-9!#$%&'*+.^_`|~-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Header Name"
+          },
+          "mode": {
+            "default": "none",
+            "enum": [
+              "bearer",
+              "header",
+              "query",
+              "none"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "param_name": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Param Name"
+          },
+          "secret": {
+            "anyOf": [
+              {
+                "format": "password",
+                "minLength": 1,
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secret"
+          }
+        },
+        "title": "CredentialIn",
+        "type": "object"
+      },
+      "CredentialOut": {
+        "description": "A credential as shown: whether a secret is stored, never the secret or its reference.",
+        "properties": {
+          "has_secret": {
+            "title": "Has Secret",
+            "type": "boolean"
+          },
+          "header_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Header Name"
+          },
+          "mode": {
+            "enum": [
+              "bearer",
+              "header",
+              "query",
+              "none"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "param_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Param Name"
+          }
+        },
+        "required": [
+          "mode",
+          "header_name",
+          "param_name",
+          "has_secret"
+        ],
+        "title": "CredentialOut",
+        "type": "object"
+      },
+      "Fallback": {
+        "additionalProperties": false,
+        "description": "SPEC §4.12. No chains: the fallback API's own fallback is never followed.",
+        "properties": {
+          "fallback_api": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fallback Api"
+          },
+          "serve_stale": {
+            "default": false,
+            "title": "Serve Stale",
+            "type": "boolean"
+          }
+        },
+        "title": "Fallback",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "KeyCreated": {
+        "description": "The creation response: the only place the full key is ever returned.",
+        "properties": {
+          "allowed_api_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed Api Ids",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "prefix": {
+            "title": "Prefix",
+            "type": "string"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "name",
+          "prefix",
+          "allowed_api_ids",
+          "revoked_at",
+          "key"
+        ],
+        "title": "KeyCreated",
+        "type": "object"
+      },
+      "KeyIn": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed_api_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed Api Ids",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "KeyIn",
+        "type": "object"
+      },
+      "KeyOut": {
+        "description": "A JARVIS key as listed: the display prefix only, never the key or its hash.",
+        "properties": {
+          "allowed_api_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed Api Ids",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "prefix": {
+            "title": "Prefix",
+            "type": "string"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "name",
+          "prefix",
+          "allowed_api_ids",
+          "revoked_at"
+        ],
+        "title": "KeyOut",
+        "type": "object"
+      },
+      "ProjectIn": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "slug": {
+            "pattern": "^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$",
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "slug"
+        ],
+        "title": "ProjectIn",
+        "type": "object"
+      },
+      "ProjectOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "created_at"
+        ],
+        "title": "ProjectOut",
+        "type": "object"
+      },
+      "ProjectPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slug"
+          }
+        },
+        "title": "ProjectPatch",
+        "type": "object"
+      },
+      "RateLimits": {
+        "additionalProperties": false,
+        "properties": {
+          "inbound": {
+            "$ref": "#/components/schemas/BucketPolicy",
+            "default": {
+              "capacity": 100,
+              "enabled": false,
+              "refill_per_s": 10.0
+            }
+          },
+          "upstream": {
+            "$ref": "#/components/schemas/BucketPolicy",
+            "default": {
+              "capacity": 100,
+              "enabled": false,
+              "refill_per_s": 10.0
+            }
+          }
+        },
+        "title": "RateLimits",
+        "type": "object"
+      },
+      "RetryPolicy": {
+        "additionalProperties": false,
+        "description": "SPEC §4.7.",
+        "properties": {
+          "base_ms": {
+            "default": 100,
+            "exclusiveMinimum": 0.0,
+            "title": "Base Ms",
+            "type": "integer"
+          },
+          "budget_ratio": {
+            "default": 0.2,
+            "exclusiveMinimum": 0.0,
+            "maximum": 1.0,
+            "title": "Budget Ratio",
+            "type": "number"
+          },
+          "cap_ms": {
+            "default": 2000,
+            "exclusiveMinimum": 0.0,
+            "title": "Cap Ms",
+            "type": "integer"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "idempotency_header": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "pattern": "^[A-Za-z0-9!#$%&'*+.^_`|~-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idempotency Header"
+          },
+          "max_attempts": {
+            "default": 3,
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Max Attempts",
+            "type": "integer"
+          }
+        },
+        "title": "RetryPolicy",
+        "type": "object"
+      },
+      "Route": {
+        "additionalProperties": false,
+        "properties": {
+          "cache_ttl_s": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cache Ttl S"
+          },
+          "pattern": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Pattern",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pattern"
+        ],
+        "title": "Route",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "jarvis-api",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/apis/{api_id}": {
+      "delete": {
+        "description": "Delete an API with its versions and its sealed secret.",
+        "operationId": "delete_api_api_v1_apis__api_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "api_id",
+            "required": true,
+            "schema": {
+              "title": "Api Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Api",
+        "tags": [
+          "apis"
+        ]
+      },
+      "get": {
+        "operationId": "get_api_api_v1_apis__api_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "api_id",
+            "required": true,
+            "schema": {
+              "title": "Api Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Api",
+        "tags": [
+          "apis"
+        ]
+      },
+      "patch": {
+        "operationId": "update_api_api_v1_apis__api_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "api_id",
+            "required": true,
+            "schema": {
+              "title": "Api Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiIn",
+                "additionalProperties": true,
+                "title": "Patch",
+                "type": "object"
+              }
+            }
+          },
+          "description": "A JSON merge patch (RFC 7386) over the current config, validated as a whole. Omit credential.secret to keep the stored secret; send one to replace it.",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Api",
+        "tags": [
+          "apis"
+        ]
+      }
+    },
+    "/api/v1/apis/{api_id}/test": {
+      "post": {
+        "description": "Placeholder: sending a test request through the gateway pipeline arrives in M4.10.",
+        "operationId": "test_api_api_v1_apis__api_id__test_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "api_id",
+            "required": true,
+            "schema": {
+              "title": "Api Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Test Api",
+        "tags": [
+          "apis"
+        ]
+      }
+    },
+    "/api/v1/keys/{key_id}": {
+      "delete": {
+        "description": "Revoke a key: ``revoked_at`` is set and the row is kept. Revoking again is a no-op.",
+        "operationId": "revoke_key_api_v1_keys__key_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key_id",
+            "required": true,
+            "schema": {
+              "title": "Key Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Key",
+        "tags": [
+          "keys"
+        ]
+      }
+    },
+    "/api/v1/projects": {
+      "get": {
+        "operationId": "list_projects_api_v1_projects_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectOut"
+                  },
+                  "title": "Response List Projects Api V1 Projects Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Projects",
+        "tags": [
+          "projects"
+        ]
+      },
+      "post": {
+        "operationId": "create_project_api_v1_projects_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Project",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}": {
+      "delete": {
+        "description": "Delete a project with its keys, APIs, versions and the APIs' sealed secrets.",
+        "operationId": "delete_project_api_v1_projects__project_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Project",
+        "tags": [
+          "projects"
+        ]
+      },
+      "get": {
+        "operationId": "get_project_api_v1_projects__project_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Project",
+        "tags": [
+          "projects"
+        ]
+      },
+      "patch": {
+        "operationId": "update_project_api_v1_projects__project_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Project",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/apis": {
+      "get": {
+        "operationId": "list_apis_api_v1_projects__project_id__apis_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ApiOut"
+                  },
+                  "title": "Response List Apis Api V1 Projects  Project Id  Apis Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Apis",
+        "tags": [
+          "apis"
+        ]
+      },
+      "post": {
+        "operationId": "create_api_api_v1_projects__project_id__apis_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Api",
+        "tags": [
+          "apis"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/keys": {
+      "get": {
+        "operationId": "list_keys_api_v1_projects__project_id__keys_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/KeyOut"
+                  },
+                  "title": "Response List Keys Api V1 Projects  Project Id  Keys Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Keys",
+        "tags": [
+          "keys"
+        ]
+      },
+      "post": {
+        "operationId": "create_key_api_v1_projects__project_id__keys_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeyIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Key",
+        "tags": [
+          "keys"
+        ]
+      }
+    },
+    "/healthz": {
+      "get": {
+        "operationId": "healthz_healthz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Healthz Healthz Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Healthz"
+      }
+    },
+    "/readyz": {
+      "get": {
+        "operationId": "readyz_readyz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Readyz Readyz Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Readyz"
+      }
+    }
+  }
+}
