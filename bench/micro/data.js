@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792759911997,
+  "lastUpdate": 1792765246173,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Micro benchmarks": [
@@ -368,6 +368,37 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 4.296830161750209e-7",
             "extra": "mean: 1.5195395238779121 usec\nrounds: 36927"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d756c4cb414180f241224f9d37c123d046194d06",
+          "message": "Merge pull request #21 from Elkrisent/feat/m1.5-gateway-auth\n\nfeat(gateway): JARVIS key authentication on /gw (M1.5)",
+          "timestamp": "2026-10-23T19:50:14+05:30",
+          "tree_id": "0ca48ec9d5d523f07fb4d007358967b615e2c1b3",
+          "url": "https://github.com/Elkrisent/jarvis/commit/d756c4cb414180f241224f9d37c123d046194d06"
+        },
+        "date": 1792765245544,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "packages/core/tests/bench/test_bench_token_bucket_take.py::test_bench_token_bucket_take",
+            "value": 1163903.8483948922,
+            "unit": "iter/sec",
+            "range": "stddev: 2.555559623730869e-7",
+            "extra": "mean: 859.1775011132341 nsec\nrounds: 30766"
           }
         ]
       }
