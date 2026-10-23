@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792766607793,
+  "lastUpdate": 1792767040708,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Micro benchmarks": [
@@ -430,6 +430,44 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 2.547014672046291e-7",
             "extra": "mean: 1.2223268364476827 usec\nrounds: 35299"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "937a9367a0d7d32efb7e997806bdd0970cd4abd0",
+          "message": "Merge pull request #23 from Elkrisent/feat/m1.6-path-templating\n\nfeat(core): route path templating (M1.6)",
+          "timestamp": "2026-10-23T20:20:08+05:30",
+          "tree_id": "0763c0a3b1d59ce349395a0a450951370497f24f",
+          "url": "https://github.com/Elkrisent/jarvis/commit/937a9367a0d7d32efb7e997806bdd0970cd4abd0"
+        },
+        "date": 1792767040392,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "packages/core/tests/bench/test_bench_route_template_match.py::test_bench_route_template_match",
+            "value": 145974.10234724218,
+            "unit": "iter/sec",
+            "range": "stddev: 9.9552141788958e-7",
+            "extra": "mean: 6.850530223650268 usec\nrounds: 18115"
+          },
+          {
+            "name": "packages/core/tests/bench/test_bench_token_bucket_take.py::test_bench_token_bucket_take",
+            "value": 646060.8151031353,
+            "unit": "iter/sec",
+            "range": "stddev: 4.5400836524186176e-7",
+            "extra": "mean: 1.547841900673643 usec\nrounds: 78223"
           }
         ]
       }
