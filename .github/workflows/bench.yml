@@ -45,6 +45,11 @@ jobs:
           git commit -m "chore: create gh-pages for benchmark charts"
           git push origin gh-pages
 
+  # The three benchmark jobs push to gh-pages, so they must not overlap. A concurrency group allows
+  # one running plus ONE pending job, so with three siblings a queued third cancels the pending
+  # one and the run never ends `success` (which also breaks the baseline lookup). They are chained
+  # with `needs` instead; `!cancelled()` lets a later job still run after an earlier one failed.
+  # The group stays at job level to serialise pushes across separate runs.
   micro:
     needs: prepare-pages
     runs-on: ubuntu-latest
@@ -95,7 +100,8 @@ jobs:
           summary-always: true
 
   propagation:
-    needs: prepare-pages
+    needs: [prepare-pages, micro]
+    if: ${{ !cancelled() && needs.prepare-pages.result == 'success' }}
     runs-on: ubuntu-latest
     concurrency: {group: gh-pages-push, cancel-in-progress: false}
     services:
@@ -159,12 +165,13 @@ jobs:
           auto-push: true
           comment-on-alert: true
           alert-threshold: "120%"
-          fail-on-alert: true
+          fail-on-alert: false # a ~20 ms p99 swings >50% on shared runners; the 1000 ms budget is enforced by the test
           fail-threshold: "150%"
           summary-always: true
 
   load:
-    needs: prepare-pages
+    needs: [prepare-pages, propagation]
+    if: ${{ !cancelled() && needs.prepare-pages.result == 'success' }}
     runs-on: ubuntu-latest
     concurrency: {group: gh-pages-push, cancel-in-progress: false}
     steps:

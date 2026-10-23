@@ -75,6 +75,8 @@ M1.4 is complete on the branch; final review is pending.
 * REQ-11.1-6: the revocation push is implemented in M1.4 (`config:invalidated`); the traceability row only becomes meaningful once M1.5 enforces it on requests.
 * For M1.5:
   * Do not trust a `(project, slug)` lookup blindly: a transient duplicate slug can exist in the snapshot until the next resync (up to 60 s if an event load fails).
+  * Revoked keys STAY in `Snapshot.keys` with `revoked=True`: `snapshot.key(h)` being non-None does NOT mean authenticated. Authenticate only when the entry exists and `revoked` is False; deny revoked and unknown identically (`JV_AUTH_INVALID`).
+  * Snapshot-file caveat: a gateway restarted from an old snapshot file (Postgres down) serves keys revoked while it was down until Postgres returns. The file has no age limit and events cannot be applied without Postgres. SPEC section 8 allows snapshot starts, but REQ-11.1-6 (1 s or less) does not hold in that mode; `/readyz` shows `degraded` with the file's `synced_at`. Capping the file age is an option for M1.5 or ops.
   * A key's `allowed_api_ids` can name deleted APIs; deny on an unknown ID, never treat an empty or unknown list as unrestricted.
 
 ## Resume Point

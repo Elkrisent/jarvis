@@ -802,6 +802,31 @@ async def test_a_failed_targeted_refresh_triggers_an_early_resync(
     await h.manager.stop()
 
 
+@pytest.mark.req("REQ-4.2-6", "REQ-11.1-6")
+async def test_an_unexpected_error_in_a_targeted_refresh_requests_an_early_resync(
+    h: Harness, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Not only ConfigLoadError: any failure leaves nothing escaping and asks for a resync."""
+    await _started(h)
+    await h.clock.step(10.0)
+
+    async def broken_key(key_id: str) -> tuple[str, KeyEntry] | None:
+        raise RuntimeError("SECRET-MARKER")
+
+    monkeypatch.setattr(h.loader, "load_key", broken_key)
+    h.loader.keys["h1"] = _key("k1", revoked=True)
+    with caplog.at_level(logging.ERROR, logger=LOGGER):
+        await h.manager.handle_event(Invalidated("key", "k1"))  # must not raise
+    assert "RuntimeError" in caplog.text
+    assert "SECRET-MARKER" not in caplog.text
+    monkeypatch.undo()
+    await settle()  # the early resync (not the 60 s one) brings the revoke in
+    revoked = h.snap.key("h1")
+    assert revoked is not None
+    assert revoked.revoked is True
+    await h.manager.stop()
+
+
 async def test_early_resyncs_are_rate_limited_and_retried_until_one_succeeds(
     h: Harness, monkeypatch: pytest.MonkeyPatch
 ) -> None:

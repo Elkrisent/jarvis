@@ -43,13 +43,23 @@ def _gateway_running() -> bool:
     out = compose("ps", "-q", "gateway").stdout.strip()
     if not out:
         return False
-    state = subprocess.run(
+    result = subprocess.run(
         ["docker", "inspect", "-f", "{{.State.Running}}", out],
-        check=True,
+        check=False,  # called from a finally block: never mask the original failure
         capture_output=True,
         text=True,
-    ).stdout.strip()
-    return state == "true"
+    )
+    return result.returncode == 0 and result.stdout.strip() == "true"
+
+
+def _snapshot_file_exists() -> bool:
+    out = compose("ps", "-q", "gateway").stdout.strip()
+    result = subprocess.run(
+        ["docker", "exec", out, "test", "-s", "/var/lib/jarvis/gateway/snapshot.json"],
+        check=False,
+        capture_output=True,
+    )
+    return result.returncode == 0
 
 
 def _clear_snapshot_volume() -> None:
@@ -83,11 +93,14 @@ def test_postgres_outage_snapshot_start_and_recovery(
             wait_until(
                 lambda: _state()[2]["apis"] or None, timeout_s=10, what="API visible in config"
             )
-            # Let the snapshot writer's one-per-second throttle flush the latest config.
             before = _state()[2]
             apis, keys = before["apis"], before["keys"]
 
             # 1. Postgres goes away: the running gateway keeps serving the same config.
+            # The snapshot file is written after each load; wait until it exists.
+            wait_until(
+                lambda: _snapshot_file_exists() or None, timeout_s=15, what="snapshot file written"
+            )
             kill("postgres")
             _wait_config(
                 "stale-but-serving",

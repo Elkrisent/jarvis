@@ -185,9 +185,11 @@ class ConfigManager:
                 return  # nothing loaded yet: the pending full load covers this change
             try:
                 await self._refresh(event)
-            except ConfigLoadError as exc:
+            except Exception as exc:  # any refresh failure is healed by a full resync
                 if not self._refresh_failing:
-                    log.error("config event refresh failed: %s; a full resync will follow", exc)
+                    # Only the type name unless it is a ConfigLoadError, whose text is safe.
+                    reason = str(exc) if isinstance(exc, ConfigLoadError) else type(exc).__name__
+                    log.error("config event refresh failed: %s; a full resync will follow", reason)
                 self._refresh_failing = True
                 self._resync_pending = True
                 self._wake.set()
