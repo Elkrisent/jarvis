@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792858252450,
+  "lastUpdate": 1792860500561,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Micro benchmarks": [
@@ -808,6 +808,44 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 3.092677187470383e-7",
             "extra": "mean: 1.2126070069752781 usec\nrounds: 79378"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "ae6cf9de7717d68d0a673dfbd4d37848cbc1c687",
+          "message": "Merge pull request #32 from Elkrisent/feat/checkpoint-1-finish\n\nCheckpoint 1: Proxy",
+          "timestamp": "2026-10-24T22:17:49+05:30",
+          "tree_id": "4aec3602530c8adc2379c1096651d5a1689a4eef",
+          "url": "https://github.com/Elkrisent/jarvis/commit/ae6cf9de7717d68d0a673dfbd4d37848cbc1c687"
+        },
+        "date": 1792860499228,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "packages/core/tests/bench/test_bench_route_template_match.py::test_bench_route_template_match",
+            "value": 262461.8717124204,
+            "unit": "iter/sec",
+            "range": "stddev: 4.2315496030285877e-7",
+            "extra": "mean: 3.8100772256006024 usec\nrounds: 17546"
+          },
+          {
+            "name": "packages/core/tests/bench/test_bench_token_bucket_take.py::test_bench_token_bucket_take",
+            "value": 1097284.6263888474,
+            "unit": "iter/sec",
+            "range": "stddev: 1.863630308701131e-7",
+            "extra": "mean: 911.3405728566432 nsec\nrounds: 76110"
           }
         ]
       }
