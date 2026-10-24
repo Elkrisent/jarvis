@@ -8,6 +8,7 @@ import check_budgets
 import checkpoint
 import docker_stats
 import k6_to_gab
+import median_runs
 import micro_results
 import overhead
 import pytest
@@ -474,3 +475,27 @@ def test_benchmarks_md_lists_budgeted_metrics_even_when_not_measured(tmp_path: P
         if line.startswith("| gw_throughput_hit_rps")
     )
     assert row.split("|")[-2].strip() == "not measured"
+
+
+def test_median_runs_merges_the_per_metric_median_and_keeps_the_raw_values(tmp_path: Path) -> None:
+    runs = [
+        {"gw_overhead_miss_p50": 2.0, "gw_overhead_miss_p99": 30.0},
+        {"gw_overhead_miss_p50": 3.0, "gw_overhead_miss_p99": 10.0},
+        {"gw_overhead_miss_p50": 2.5, "gw_overhead_miss_p99": 14.0},
+    ]
+    paths = []
+    for index, run in enumerate(runs):
+        path = tmp_path / f"run{index}.json"
+        benchlib.write_json(path, run)
+        paths.append(str(path))
+    out, raw = tmp_path / "results.json", tmp_path / "runs.json"
+    benchlib.write_json(out, {"stack_idle_rss_total_mb": 266})
+
+    assert median_runs.main([*paths, "--out", str(out), "--runs-out", str(raw)]) == 0
+
+    assert benchlib.read_json(out) == {
+        "stack_idle_rss_total_mb": 266,
+        "gw_overhead_miss_p50": 2.5,
+        "gw_overhead_miss_p99": 14.0,
+    }
+    assert benchlib.read_json(raw)["gw_overhead_miss_p99"] == [30.0, 10.0, 14.0]

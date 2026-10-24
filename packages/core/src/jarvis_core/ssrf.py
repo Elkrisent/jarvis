@@ -29,6 +29,9 @@ Resolver = Callable[[str, int], Awaitable[Sequence[str]]]
 MESSAGE = "destination is not allowed"
 DEFAULT_INTERNAL_HOSTS = frozenset({"gateway", "api", "worker", "postgres", "redis"})
 INTERNAL_TTL_S = 30.0
+# When a container name did not resolve, look again after this short pause, not on every connection.
+INTERNAL_RETRY_S = 5.0
+INTERNAL_WARN_EVERY_S = 30.0
 INTERNAL_LOOKUP_TIMEOUT_S = 2.0
 MAX_HOST_CHARS = 253
 
@@ -244,7 +247,11 @@ class DestinationResolver:
         self._resolver = resolver
         self._clock = SystemClock() if clock is None else clock
         self._internal: frozenset[IPAddress] = frozenset()
+        self._internal_names: dict[str, frozenset[IPAddress]] = {}
+        self._internal_complete = True
         self._internal_until = float("-inf")
+        self._internal_refresh: asyncio.Task[tuple[frozenset[IPAddress], bool]] | None = None
+        self._internal_warned: float | None = None
         self._loopback_allowed = tuple(
             net
             for net in policy.allow_networks
@@ -279,27 +286,55 @@ class DestinationResolver:
         return [str(ip) for ip in addresses]
 
     async def _internal_addresses(self) -> tuple[frozenset[IPAddress], bool]:
-        """The JARVIS containers' addresses, and whether every lookup worked. A lookup that failed
-        or timed out keeps the last known addresses, and nothing is cached until all succeed."""
-        now = self._clock.monotonic()
-        if now < self._internal_until:
-            return self._internal, True
+        """The JARVIS containers' addresses, and whether they can be trusted as complete.
+
+        One lookup runs at a time and every waiting connection shares its answer. A name that has
+        never resolved (the container is not running) has no address to protect. A name that
+        resolved before and now fails keeps its last known addresses and makes the answer
+        incomplete, so an address allowed only by the allowlist is refused. Either way the answer
+        is reused for a short while instead of looking up again for every connection.
+        """
+        if self._clock.monotonic() < self._internal_until:
+            return self._internal, self._internal_complete
+        if self._internal_refresh is None or self._internal_refresh.done():
+            self._internal_refresh = asyncio.ensure_future(self._lookup_internal())
+        return await asyncio.shield(self._internal_refresh)
+
+    async def _lookup_internal(self) -> tuple[frozenset[IPAddress], bool]:
+        started = self._clock.monotonic()
+        names = sorted(self.policy.internal_hosts)
 
         async def lookup(name: str) -> Sequence[str]:
             return await asyncio.wait_for(self._resolver(name, 0), INTERNAL_LOOKUP_TIMEOUT_S)
 
-        results = await asyncio.gather(
-            *(lookup(n) for n in sorted(self.policy.internal_hosts)), return_exceptions=True
-        )
-        complete = not any(isinstance(r, BaseException) for r in results)
-        found: set[IPAddress] = set() if complete else set(self._internal)
-        for result in results:
-            if not isinstance(result, BaseException):
-                found.update(_canonical(ip) for ip in _parse_addresses(result))
-        self._internal = frozenset(found)
-        if complete:
-            self._internal_until = now + INTERNAL_TTL_S
+        results = await asyncio.gather(*(lookup(n) for n in names), return_exceptions=True)
+        complete = True
+        unknown: list[str] = []
+        for name, result in zip(names, results, strict=True):
+            if isinstance(result, BaseException):
+                if name in self._internal_names:
+                    complete = False  # it was there once and may have moved: fail closed
+                else:
+                    unknown.append(name)  # never seen: not running, nothing to protect
+            else:
+                self._internal_names[name] = frozenset(
+                    _canonical(ip) for ip in _parse_addresses(result)
+                )
+        self._internal = frozenset().union(*self._internal_names.values())
+        self._internal_complete = complete
+        failed = not complete or bool(unknown)
+        self._internal_until = started + (INTERNAL_RETRY_S if failed else INTERNAL_TTL_S)
+        if unknown:
+            self._warn_unknown(unknown, started)
         return self._internal, complete
+
+    def _warn_unknown(self, names: list[str], now: float) -> None:
+        if self._internal_warned is None or now - self._internal_warned >= INTERNAL_WARN_EVERY_S:
+            self._internal_warned = now
+            log.warning(
+                "JARVIS container names did not resolve and are treated as not running: %s",
+                ", ".join(names),
+            )
 
 
 def _parse_addresses(raw: Sequence[str]) -> list[IPAddress]:
