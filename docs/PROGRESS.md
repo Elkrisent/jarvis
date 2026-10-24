@@ -94,12 +94,20 @@ None active. Next is M1.9 Telemetry emitter (not planned or started), the last m
 
 ## In Progress
 
-M1.9 Telemetry emitter: plan written (`docs/superpowers/plans/2026-10-24-m1-9-telemetry-emitter.md`) on branch `feat/m1.9-telemetry`, awaiting user review of the four open points at its end. No code yet.
+M1.9 Telemetry emitter, branch `feat/m1.9-telemetry` (plan `docs/superpowers/plans/2026-10-24-m1-9-telemetry-emitter.md`; the four open points were accepted as written). Code, tests and benchmark are written and committed; not yet pushed, no PR, CI not run. Not complete until the items under Next pass.
+
+* `jarvis_core.telemetry`: `RequestEvent` (SPEC 6.1 fields in order, plus `kind: "request"`), `event_from_outcome` (validates), `encode`, `format_ts`; schema snapshot `tests/contract/telemetry.snapshot.json` (`make telemetry-snapshot`, `scripts/telemetry_snapshot.py`) with a test that fails when fields change without bumping `v`. `TelemetrySink.emit` and the in-memory sink now also accept a `RequestEvent`.
+* `jarvis_gateway.telemetry`: `RedisTelemetrySink` (bounded deque, drop-newest when full, one flusher task, pipelined `XADD ... MAXLEN ~`, 1 s command timeout, failed batch dropped and counted, capped backoff, 2 s flush on shutdown, rate-limited WARNING with counts only), `RedisStreamWriter` (own Redis client, separate from the config pub/sub), `NoopTelemetrySink`.
+* `jarvis_gateway.record.RequestRecord` + `routing.TemplateRegistry` (M1.6 templater now wired, one per api id and version): one event per request, finished when the response ends (after the last body chunk, on client disconnect, on a cut upstream body) or at once for rejections (401, 400, 413, 503) and 500/499. Health endpoints emit nothing.
+* Settings `JARVIS_TELEMETRY_ENABLED|QUEUE_SIZE|BATCH_SIZE|STREAM_MAXLEN`; sink starts and closes with the app lifespan (closed last); `/readyz` adds `telemetry: {queue, dropped_total}` and the status is unchanged by drops. Compose, `.env.example`, README, quickstart updated.
+* Verified locally (Redis 7 on this machine, no Postgres, no Docker): `ruff`, `mypy` clean, `bandit` clean; 1375 unit + functional tests pass, plus 17 Redis integration tests (sink and transport). Mutation checks each make a named test fail: `MAXLEN` removed, queue-full drop not counted, command timeout removed, finish hook removed, response bytes not counted, raw path or query used as the route, finish emitting twice. `scripts/traceability.py --completed-phase 0` (static) exits 0, 85/246 covered.
+* Benchmark `make bench-telemetry` (new `telemetry` job in `bench.yml`, budget 0.5 ms for both `telemetry_overhead_p99` and `telemetry_overhead_p99_redis_down`): six local runs, telemetry-on overhead 0.08 to 0.38 ms, Redis-down -0.09 to 0.16 ms; `emit()` p99 about 0.5 us (limit 20 us). Per-round noise is about ±1 ms, so a noisy runner can get close to the budget (details in `BENCHMARKS.md`). `make bench-propagation` now runs only the propagation file.
 
 ## Next
 
-1. Build M1.9 Telemetry emitter from its plan (IMPLEMENTATION.md M1.9, SPEC 6.1/6.3), then run Checkpoint 1.
-2. Before the P1 checkpoint: wire `make bench-propagation` (needs `DATABASE_URL`/`REDIS_URL`) into `scripts/bench/run_checkpoint.sh`. Today the checkpoint skips it, so `config_propagation_p99` stays "not measured" in the `BENCHMARKS.md` table and the interim section there is dropped by the next `make bench-checkpoint`.
+1. Finish M1.9 on a machine with Docker and Postgres: `make test-system test-chaos test-e2e test-security` (new: `tests/system/test_telemetry_stream.py`, `tests/chaos/test_redis_down_telemetry.py`; they were written but never run, and use `docker compose exec redis redis-cli` through `tests.conftest.telemetry_events`); `make coverage` (needs `DATABASE_URL`/`REDIS_URL`; the Postgres-backed gateway integration tests were not run here); `make traceability COMPLETED_PHASE=0 TRACE_MARKERS="not perf"` to regenerate `docs/traceability.md` with real results (not regenerated: only a static run was possible). Then push, open the PR, wait for CI (the `telemetry` bench job runs only on `main`), merge, check `main` CI, and record M1.9 under Completed.
+2. Then run Checkpoint 1 only after the user says so.
+3. Before the P1 checkpoint: wire `make bench-propagation` (needs `DATABASE_URL`/`REDIS_URL`) into `scripts/bench/run_checkpoint.sh`. Today the checkpoint skips it, so `config_propagation_p99` stays "not measured" in the `BENCHMARKS.md` table and the interim section there is dropped by the next `make bench-checkpoint`.
 
 ## Blockers / Questions
 
@@ -116,7 +124,7 @@ M1.9 Telemetry emitter: plan written (`docs/superpowers/plans/2026-10-24-m1-9-te
 
 ## Resume Point
 
-Get the user's answers on the four open points at the end of the M1.9 plan, then execute it task by task (Task 1: event schema in `jarvis_core.telemetry`). Open decisions still waiting for the user: Redis-outage revocation window (Blockers), the P5 secret-rollback question.
+Branch `feat/m1.9-telemetry` (last commit `bench: telemetry on/off A/B (M1.9)`). Everything in the M1.9 plan is written except the Task 7 steps that need Docker or Postgres (see Next, item 1). Do those, fix whatever the stack tests show, then push and open the PR. Open decisions still waiting for the user: Redis-outage revocation window (Blockers), the P5 secret-rollback question.
 
 ## Last Updated
 
