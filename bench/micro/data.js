@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792860500561,
+  "lastUpdate": 1792861961621,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Micro benchmarks": [
@@ -846,6 +846,44 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 1.863630308701131e-7",
             "extra": "mean: 911.3405728566432 nsec\nrounds: 76110"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "4fccfcfa5507b27ba072982664feb7fe19c76eae",
+          "message": "Merge pull request #33 from Elkrisent/docs/progress-checkpoint-1-tagged\n\ndocs: record Checkpoint 1 merged and v0.1.0 tagged",
+          "timestamp": "2026-10-24T22:42:13+05:30",
+          "tree_id": "e661e14cdeb1ec4762e6b20cade71e007293741f",
+          "url": "https://github.com/Elkrisent/jarvis/commit/4fccfcfa5507b27ba072982664feb7fe19c76eae"
+        },
+        "date": 1792861960921,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "packages/core/tests/bench/test_bench_route_template_match.py::test_bench_route_template_match",
+            "value": 262962.91873811814,
+            "unit": "iter/sec",
+            "range": "stddev: 4.3014392447983866e-7",
+            "extra": "mean: 3.8028175409624536 usec\nrounds: 14754"
+          },
+          {
+            "name": "packages/core/tests/bench/test_bench_token_bucket_take.py::test_bench_token_bucket_take",
+            "value": 1091817.0097581565,
+            "unit": "iter/sec",
+            "range": "stddev: 4.736838380312141e-7",
+            "extra": "mean: 915.9043970394871 nsec\nrounds: 80782"
           }
         ]
       }
