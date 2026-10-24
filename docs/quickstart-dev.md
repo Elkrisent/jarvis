@@ -149,6 +149,11 @@ sleep 1
 curl -sS -i "$GW/gw/demo/" -H "Authorization: Bearer $JARVIS_KEY" | sed -n '1p;/^[Xx]-[Jj]arvis/p'
 docker logs demo-upstream 2>&1 | tail -2     # shows the request; the JARVIS key never arrives
 
+# The call also left one telemetry event on the Redis Stream (ids, route, status, timings, bytes;
+# never the key, the credential or the query string):
+(cd deploy && docker compose exec redis redis-cli XREVRANGE telemetry + - COUNT 1)
+curl -sS http://127.0.0.1:8090/readyz | jq .telemetry     # {"queue": 0, "dropped_total": 0}
+
 docker rm -f demo-upstream
 curl -sS -X DELETE "$API/projects/$PROJECT_ID" -H "$AUTH" -w '%{http_code}\n'
 ```

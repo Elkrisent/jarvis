@@ -50,6 +50,10 @@ services:
       # Provider secrets are opened in memory with the master key (SPEC 4.5, 11.2).
       JARVIS_MASTER_KEY: ${JARVIS_MASTER_KEY:-}
       JARVIS_MAX_BODY_BYTES: ${JARVIS_MAX_BODY_BYTES:-}
+      JARVIS_TELEMETRY_ENABLED: ${JARVIS_TELEMETRY_ENABLED:-}
+      JARVIS_TELEMETRY_QUEUE_SIZE: ${JARVIS_TELEMETRY_QUEUE_SIZE:-}
+      JARVIS_TELEMETRY_BATCH_SIZE: ${JARVIS_TELEMETRY_BATCH_SIZE:-}
+      JARVIS_TELEMETRY_STREAM_MAXLEN: ${JARVIS_TELEMETRY_STREAM_MAXLEN:-}
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}

@@ -195,3 +195,110 @@ def test_the_lifespan_without_a_config_manager_just_serves() -> None:
 
     with TestClient(create_app(dependencies_from_env(ENV), probe)) as client:
         assert client.get("/healthz").json() == {"status": "ok"}
+
+
+# --- telemetry lifecycle and readiness (M1.9) ----------------------------------------------------
+
+
+class ManagedSink:
+    def __init__(self) -> None:
+        self.events: list[str] = []
+        self.dropped_total = 7
+        self.queue_depth = 3
+
+    async def start(self) -> None:
+        self.events.append("start")
+
+    async def aclose(self) -> None:
+        self.events.append("close")
+
+    def emit(self, event: object) -> bool:
+        return True
+
+
+def _with_sink(sink: ManagedSink, config: bool = True, down: set[str] | None = None) -> TestClient:
+    async def probe(host: str, port: int) -> bool:
+        return host not in (down or set())
+
+    manager = FakeManager(_status("postgres", 995.0, 995.0)) if config else None
+    return TestClient(
+        create_app(
+            dependencies_from_env(ENV),
+            probe,
+            config=cast("ConfigManager | None", manager),
+            resync_interval_s=INTERVAL,
+            clock=FakeClock(1000.0),
+            sink=sink,  # type: ignore[arg-type]
+        )
+    )
+
+
+@pytest.mark.req("REQ-6.3-1")
+@pytest.mark.parametrize("config", [True, False])
+def test_the_sink_starts_with_the_app_and_is_flushed_on_shutdown(config: bool) -> None:
+    sink = ManagedSink()
+    with _with_sink(sink, config=config) as client:
+        assert sink.events == ["start"]
+        assert client.get("/healthz").status_code == 200
+    assert sink.events == ["start", "close"]
+
+
+def test_the_sink_is_closed_even_when_the_config_manager_fails_to_start() -> None:
+    sink = ManagedSink()
+
+    async def probe(host: str, port: int) -> bool:
+        return True
+
+    failing = FakeManager(_status("postgres", 995.0, 995.0))
+
+    async def boom() -> None:
+        raise RuntimeError("start failed")
+
+    failing.start = boom  # type: ignore[method-assign]
+    app = create_app(
+        dependencies_from_env(ENV),
+        probe,
+        config=cast(ConfigManager, failing),
+        sink=sink,  # type: ignore[arg-type]
+    )
+    with pytest.raises(RuntimeError, match="start failed"), TestClient(app):
+        pass
+    assert sink.events == ["start", "close"]
+
+
+@pytest.mark.req("REQ-6.3-2")
+def test_readyz_reports_telemetry_counts_and_does_not_change_the_status() -> None:
+    client = _with_sink(ManagedSink(), down={"redis"})
+    body = client.get("/readyz").json()
+    assert body["telemetry"] == {"queue": 3, "dropped_total": 7}
+    assert body["status"] == "degraded"  # from Redis being down, not from telemetry
+    healthy = _with_sink(ManagedSink()).get("/readyz").json()
+    assert healthy["status"] == "ok"
+    assert healthy["telemetry"] == {"queue": 3, "dropped_total": 7}
+
+
+def test_readyz_has_no_telemetry_key_without_a_sink() -> None:
+    assert "telemetry" not in _client(set()).get("/readyz").json()
+
+
+def test_create_app_from_env_builds_a_redis_sink_unless_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DATABASE_URL", ENV["DATABASE_URL"])
+    monkeypatch.setenv("JARVIS_MASTER_KEY", MASTER_KEY)
+    monkeypatch.setenv("REDIS_URL", ENV["REDIS_URL"])
+    monkeypatch.setenv("JARVIS_SNAPSHOT_PATH", "/nonexistent/snapshot.json")
+    seen: list[object] = []
+    real = create_app
+
+    def spy(*args: object, **kwargs: object) -> object:
+        seen.append(kwargs["sink"])
+        return real(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr("jarvis_gateway.app.create_app", spy)
+    create_app_from_env()
+    monkeypatch.setenv("JARVIS_TELEMETRY_ENABLED", "false")
+    monkeypatch.setenv("JARVIS_TELEMETRY_QUEUE_SIZE", "5")
+    create_app_from_env()
+    assert type(seen[0]).__name__ == "RedisTelemetrySink"
+    assert type(seen[1]).__name__ == "NoopTelemetrySink"

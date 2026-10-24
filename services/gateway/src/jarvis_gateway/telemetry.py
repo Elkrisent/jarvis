@@ -13,7 +13,7 @@ import json
 import logging
 from collections import deque
 from collections.abc import Awaitable, Callable, Mapping
-from typing import Any, Final, Protocol
+from typing import Any, Final, Protocol, runtime_checkable
 
 from jarvis_core.clock import Clock, SystemClock
 from jarvis_core.telemetry import STREAM, RequestEvent, encode
@@ -31,6 +31,21 @@ _BACKOFF_START_S: Final = 0.1
 _BACKOFF_MAX_S: Final = 5.0
 _WARN_EVERY_S: Final = 30.0
 _FIELD: Final = "event"
+
+
+@runtime_checkable
+class ManagedSink(Protocol):
+    """A sink the app starts and stops with its lifespan and reports in ``/readyz``."""
+
+    @property
+    def dropped_total(self) -> int: ...
+
+    @property
+    def queue_depth(self) -> int: ...
+
+    async def start(self) -> None: ...
+
+    async def aclose(self) -> None: ...
 
 
 class StreamWriter(Protocol):

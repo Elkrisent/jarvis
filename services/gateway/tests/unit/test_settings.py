@@ -96,3 +96,58 @@ def test_the_ssrf_policy_comes_from_the_environment_and_errors_name_the_variable
     with pytest.raises(SettingsError, match="JARVIS_SSRF_ALLOWLIST"):
         load_settings({**BASE, "JARVIS_SSRF_ALLOWLIST": "10.0.0.0/99"})
     assert "10.0.0.0/8" not in repr(load_settings({**BASE, "JARVIS_SSRF_ALLOWLIST": "10.0.0.0/8"}))
+
+
+def test_telemetry_defaults() -> None:
+    settings = load_settings(BASE)
+    assert settings.telemetry_enabled is True
+    assert settings.telemetry_queue_size == 10_000
+    assert settings.telemetry_batch_size == 500
+    assert settings.telemetry_maxlen == 1_000_000
+
+
+@pytest.mark.req("REQ-6.3-1")
+def test_telemetry_overrides() -> None:
+    settings = load_settings(
+        {
+            **BASE,
+            "JARVIS_TELEMETRY_QUEUE_SIZE": "50",
+            "JARVIS_TELEMETRY_BATCH_SIZE": "5",
+            "JARVIS_TELEMETRY_STREAM_MAXLEN": "1000",
+            "JARVIS_TELEMETRY_ENABLED": "false",
+        }
+    )
+    assert (settings.telemetry_queue_size, settings.telemetry_batch_size) == (50, 5)
+    assert settings.telemetry_maxlen == 1000
+    assert settings.telemetry_enabled is False
+
+
+@pytest.mark.parametrize("raw", ["true", "TRUE", "1", "yes", "on", ""])
+def test_telemetry_enabled_truthy_spellings(raw: str) -> None:
+    assert load_settings({**BASE, "JARVIS_TELEMETRY_ENABLED": raw}).telemetry_enabled is True
+
+
+@pytest.mark.parametrize("raw", ["false", "FALSE", "0", "no", "off"])
+def test_telemetry_enabled_falsy_spellings(raw: str) -> None:
+    assert load_settings({**BASE, "JARVIS_TELEMETRY_ENABLED": raw}).telemetry_enabled is False
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "JARVIS_TELEMETRY_QUEUE_SIZE",
+        "JARVIS_TELEMETRY_BATCH_SIZE",
+        "JARVIS_TELEMETRY_STREAM_MAXLEN",
+    ],
+)
+def test_telemetry_sizes_below_one_or_malformed_name_the_variable(name: str) -> None:
+    for bad in ("0", "-5", "1.5", "abc", "nan"):
+        with pytest.raises(SettingsError, match=name) as exc:
+            load_settings({**BASE, name: bad})
+        assert f"'{bad}'" not in str(exc.value)
+
+
+def test_telemetry_enabled_rejects_unknown_words() -> None:
+    with pytest.raises(SettingsError, match="JARVIS_TELEMETRY_ENABLED") as exc:
+        load_settings({**BASE, "JARVIS_TELEMETRY_ENABLED": "maybe"})
+    assert "maybe" not in str(exc.value)

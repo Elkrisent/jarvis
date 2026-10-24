@@ -16,6 +16,11 @@ MIN_RESYNC_INTERVAL_S = 1.0
 DEFAULT_MAX_BODY_BYTES = 10 * 1024 * 1024
 DEFAULT_SNAPSHOT_MAX_AGE_S = 86_400.0
 MIN_SNAPSHOT_MAX_AGE_S = 1.0
+DEFAULT_TELEMETRY_QUEUE_SIZE = 10_000
+DEFAULT_TELEMETRY_BATCH_SIZE = 500
+DEFAULT_TELEMETRY_MAXLEN = 1_000_000
+_TRUE = frozenset({"true", "1", "yes", "on"})
+_FALSE = frozenset({"false", "0", "no", "off"})
 
 
 class SettingsError(Exception):
@@ -45,6 +50,10 @@ class Settings:
     snapshot_max_age_s: float = DEFAULT_SNAPSHOT_MAX_AGE_S
     max_body_bytes: int = DEFAULT_MAX_BODY_BYTES
     ssrf_policy: SsrfPolicy = field(default_factory=SsrfPolicy, repr=False)
+    telemetry_enabled: bool = True
+    telemetry_queue_size: int = DEFAULT_TELEMETRY_QUEUE_SIZE
+    telemetry_batch_size: int = DEFAULT_TELEMETRY_BATCH_SIZE
+    telemetry_maxlen: int = DEFAULT_TELEMETRY_MAXLEN
 
     def __repr__(self) -> str:
         return (
@@ -52,7 +61,8 @@ class Settings:
             f"redis_url={redact_url(self.redis_url)!r}, snapshot_path={str(self.snapshot_path)!r}, "
             f"resync_interval_s={self.resync_interval_s!r}, "
             f"snapshot_max_age_s={self.snapshot_max_age_s!r}, "
-            f"max_body_bytes={self.max_body_bytes!r})"
+            f"max_body_bytes={self.max_body_bytes!r}, "
+            f"telemetry_enabled={self.telemetry_enabled!r})"
         )
 
     __str__ = __repr__
@@ -110,6 +120,28 @@ def _max_body_bytes(source: Mapping[str, str]) -> int:
     return value
 
 
+def _positive_int(source: Mapping[str, str], name: str, default: int) -> int:
+    raw = source.get(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        raise SettingsError(f"{name} must be a whole number") from None
+    if value < 1:
+        raise SettingsError(f"{name} must be at least 1")
+    return value
+
+
+def _telemetry_enabled(source: Mapping[str, str]) -> bool:
+    raw = (source.get("JARVIS_TELEMETRY_ENABLED") or "true").strip().lower()
+    if raw in _TRUE:
+        return True
+    if raw in _FALSE:
+        return False
+    raise SettingsError("JARVIS_TELEMETRY_ENABLED must be true or false")
+
+
 def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     source = os.environ if env is None else env
     try:
@@ -129,4 +161,14 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         secret_box=secret_box,
         max_body_bytes=_max_body_bytes(source),
         ssrf_policy=ssrf_policy,
+        telemetry_enabled=_telemetry_enabled(source),
+        telemetry_queue_size=_positive_int(
+            source, "JARVIS_TELEMETRY_QUEUE_SIZE", DEFAULT_TELEMETRY_QUEUE_SIZE
+        ),
+        telemetry_batch_size=_positive_int(
+            source, "JARVIS_TELEMETRY_BATCH_SIZE", DEFAULT_TELEMETRY_BATCH_SIZE
+        ),
+        telemetry_maxlen=_positive_int(
+            source, "JARVIS_TELEMETRY_STREAM_MAXLEN", DEFAULT_TELEMETRY_MAXLEN
+        ),
     )
