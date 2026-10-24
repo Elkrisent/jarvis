@@ -90,15 +90,15 @@ None active. Next is M1.9 Telemetry emitter (not planned or started), the last m
   * Known minors (reviewer, not fixed): the deadline bounds time-to-headers only, so a trickling body holds a slot (M2.1 owns total-time accounting); an upstream that sends both Content-Length and Transfer-Encoding gives the caller a truncated response; base-path confinement relies on standard URL parsing (`..;`, `%2F..%2F` are not special-cased); query credential stripping splits on `&` only and header mode strips the exact name only; the httpx logger pin is import-time (a later logging config naming httpx at INFO would log URLs, so a redacting filter would be sturdier); changing an API's `base_url` cuts its in-flight responses; client `X-Forwarded-*` and `Via` pass through.
   * Moved from M1.5: the JARVIS key is never forwarded (header, slot, repeated, query), asserted against the real mock upstream's call log and in raw wire tests.
   * Verified locally: `make lint typecheck` clean; `make coverage` 1300+ passed (core 100/99.5, gateway 100/100, api 100/100); `make test-functional` 99 passed; `make traceability COMPLETED_PHASE=0 TRACE_MARKERS="not perf"` 1561 passed, 79/246 covered (system, e2e incl. Checkpoint 0 story 1, chaos, security); REQ-3-4, REQ-4.1-1/-2, REQ-4.3-1/-2/-6, REQ-4.4-1/-5/-7 and REQ-4.5-1 to -7 linked; mutation checks (no dot-segment resolution, client credential kept in headers or query, hop-by-hop kept, httpx default headers or cookie jar kept, logger pin removed, JARVIS key forwarded) each make the suites fail. Quickstart sections 3 and 4 run against a real dev stack (502 for the fake upstream, 200 round trip with a throwaway upstream container).
-  * CI on `main` at `0ea3df7`: `ci`, `security` (gitleaks needed one more narrow allowlist entry for the made-up fixture key in `test_forwarder.py`) and `system` green. `bench` FAILED in its `micro` job: the regression alert fired for `route_template_match` (1.76x slower than the previous run) and `token_bucket_take` (1.64x), whose code has not changed since Phase 0, so this looks like hosted-runner noise rather than a regression, but it is not confirmed. `propagation` and `load` jobs passed. Re-run the bench workflow (or wait for the nightly) and check both numbers recover; if `token_bucket_take` stays slow, investigate before Checkpoint 1.
+  * CI on `main` at `0ea3df7` (bench micro alert later cleared: `bench` passed on `main` after PR #26, so it was runner noise): `ci`, `security` (gitleaks needed one more narrow allowlist entry for the made-up fixture key in `test_forwarder.py`) and `system` green. `bench` FAILED in its `micro` job: the regression alert fired for `route_template_match` (1.76x slower than the previous run) and `token_bucket_take` (1.64x), whose code has not changed since Phase 0, so this looks like hosted-runner noise rather than a regression, but it is not confirmed. `propagation` and `load` jobs passed. Re-run the bench workflow (or wait for the nightly) and check both numbers recover; if `token_bucket_take` stays slow, investigate before Checkpoint 1.
 
 ## In Progress
 
-Nothing.
+M1.9 Telemetry emitter: plan written (`docs/superpowers/plans/2026-10-24-m1-9-telemetry-emitter.md`) on branch `feat/m1.9-telemetry`, awaiting user review of the four open points at its end. No code yet.
 
 ## Next
 
-1. Check the `bench` re-run (see the M1.8 entry), then plan and build M1.9 Telemetry emitter (IMPLEMENTATION.md M1.9, SPEC 6.1/6.3), then run Checkpoint 1.
+1. Build M1.9 Telemetry emitter from its plan (IMPLEMENTATION.md M1.9, SPEC 6.1/6.3), then run Checkpoint 1.
 2. Before the P1 checkpoint: wire `make bench-propagation` (needs `DATABASE_URL`/`REDIS_URL`) into `scripts/bench/run_checkpoint.sh`. Today the checkpoint skips it, so `config_propagation_p99` stays "not measured" in the `BENCHMARKS.md` table and the interim section there is dropped by the next `make bench-checkpoint`.
 
 ## Blockers / Questions
@@ -116,7 +116,7 @@ Nothing.
 
 ## Resume Point
 
-Confirm the `bench` micro regression alert was runner noise, then read the M1.9 section of `docs/IMPLEMENTATION.md` and SPEC §6.1, §6.3 and write the M1.9 plan. Open decisions still waiting for the user: Redis-outage revocation window (Blockers), the P5 secret-rollback question.
+Get the user's answers on the four open points at the end of the M1.9 plan, then execute it task by task (Task 1: event schema in `jarvis_core.telemetry`). Open decisions still waiting for the user: Redis-outage revocation window (Blockers), the P5 secret-rollback question.
 
 ## Last Updated
 
