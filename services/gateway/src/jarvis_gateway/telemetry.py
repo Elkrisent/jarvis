@@ -198,7 +198,7 @@ class RedisTelemetrySink:
                     lines.append(encode(item))
                 else:
                     lines.append(_encode_mapping(item))
-            except (TypeError, ValueError):
+            except Exception:  # whatever an odd event raises, it is dropped, never the flusher
                 self._drop(1)
         return lines
 

@@ -148,11 +148,10 @@ class Forwarder:
         request: Request,
         authenticated: Authenticated,
         request_id: str,
-        started: float | None = None,
-        record: RequestRecord | None = None,
+        started: float,
+        record: RequestRecord,
     ) -> Response:
         """``started`` is the ``time.monotonic()`` of ingress: the deadline runs from there."""
-        started = time.monotonic() if started is None else started
         api = authenticated.api
         config = api.config
         # No await between the caller's snapshot read and this lookup: the secret is the one that
@@ -169,8 +168,7 @@ class Forwarder:
             secret,
         )
         body = await self._read_body(request)
-        if record is not None:
-            record.add_request_bytes(len(body))
+        record.add_request_bytes(len(body))
         remaining = config.deadline_ms / 1000 - (time.monotonic() - started)
         if remaining <= 0:
             raise UpstreamTimeoutError("the upstream did not answer in time")
@@ -183,12 +181,10 @@ class Forwarder:
                 content=body or None,
                 timeout=httpx.Timeout(config.attempt_timeout_ms / 1000),
             )
-            if record is not None:
-                record.mark_attempt()
+            record.mark_attempt()
             async with asyncio.timeout(remaining):
                 upstream = await client.send(upstream_request, stream=True)
-            if record is not None:
-                record.mark_headers_received()
+            record.mark_headers_received()
         except (TimeoutError, httpx.TimeoutException):
             raise UpstreamTimeoutError("the upstream did not answer in time") from None
         except (httpx.TransportError, httpx.InvalidURL):
@@ -204,7 +200,7 @@ def _origin(url: httpx.URL) -> Origin:
 class _RecordedStream(StreamingResponse):
     """Finishes the request's telemetry record however the response ends (done, cut, cancelled)."""
 
-    def __init__(self, *args: Any, record: RequestRecord | None, **kwargs: Any) -> None:
+    def __init__(self, *args: Any, record: RequestRecord, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._record = record
 
@@ -212,18 +208,14 @@ class _RecordedStream(StreamingResponse):
         try:
             await super().__call__(scope, receive, send)
         finally:
-            if self._record is not None:
-                self._record.finish(status=self.status_code, source="upstream", error_code=None)
+            self._record.finish(status=self.status_code, source="upstream", error_code=None)
 
 
-def _stream_back(
-    upstream: httpx.Response, request_id: str, record: RequestRecord | None = None
-) -> Response:
+def _stream_back(upstream: httpx.Response, request_id: str, record: RequestRecord) -> Response:
     async def body() -> AsyncIterator[bytes]:
         try:
             async for chunk in upstream.aiter_raw():
-                if record is not None:
-                    record.add_response_bytes(len(chunk))
+                record.add_response_bytes(len(chunk))
                 yield chunk
         except httpx.HTTPError as exc:
             log.warning("the upstream response was interrupted (%s)", type(exc).__name__)

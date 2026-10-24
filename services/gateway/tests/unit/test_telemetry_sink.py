@@ -290,3 +290,41 @@ async def test_a_writer_that_fails_to_close_does_not_break_shutdown() -> None:
     sink = make_sink(BadClose())
     await sink.start()
     await sink.aclose()
+
+
+async def test_a_batch_of_only_unencodable_events_sends_nothing_and_keeps_going() -> None:
+    class Odd:
+        def __iter__(self) -> None:
+            raise RuntimeError("odd event")
+
+    writer = FakeWriter()
+    sink = make_sink(writer)
+    sink.emit({"bad": object()})
+    sink.emit(Odd())  # type: ignore[arg-type]
+    await sink.start()
+    for _ in range(20):
+        await asyncio.sleep(0)
+    assert writer.calls == []
+    assert sink.dropped_total == 2
+    sink.emit(make_event(1))
+    await settle(sink, writer, 1)
+    await sink.aclose()
+
+
+async def test_a_crashed_flusher_is_logged_at_close_and_emit_still_never_raises(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    async def broken_sleep(_seconds: float) -> None:
+        raise RuntimeError("flusher bug")
+
+    writer = FakeWriter()
+    sink = make_sink(writer, sleep=broken_sleep, queue_size=3, batch_size=5)
+    await sink.start()
+    sink.emit(make_event(1))
+    for _ in range(20):
+        await asyncio.sleep(0)  # the flusher dies on its first batch-fill pause
+    assert [sink.emit(make_event(n)) for n in range(2, 6)] == [True, True, False, False]
+    with caplog.at_level(logging.ERROR, logger=LOGGER):
+        await sink.aclose()
+    assert "flusher stopped" in caplog.text
+    assert sink.dropped_total >= 2

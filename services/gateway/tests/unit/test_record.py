@@ -146,3 +146,10 @@ def test_invalid_values_are_logged_not_raised(caplog: pytest.LogCaptureFixture) 
     record.finish(status=999, source="upstream", error_code=None)
     assert sink.events == []
     assert "r1" in caplog.text
+
+
+def test_headers_without_an_attempt_leave_the_upstream_latency_unset() -> None:
+    record, sink, _ = make()
+    record.mark_headers_received()
+    record.finish(status=401, source="jarvis", error_code="JV_AUTH_INVALID")
+    assert sink.events[0]["upstream_latency_ms"] is None

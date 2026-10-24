@@ -31,3 +31,13 @@ regexes = [
 paths = [
   '''services/gateway/tests/unit/test_forwarder\.py''',
 ]
+
+[[allowlists]]
+description = "Made-up JARVIS key used as a fixture in the telemetry overhead benchmark (protects nothing)"
+condition = "AND"
+regexes = [
+  '''jv_live_benchtelemetry01''',
+]
+paths = [
+  '''services/gateway/tests/bench/test_telemetry_overhead\.py''',
+]
