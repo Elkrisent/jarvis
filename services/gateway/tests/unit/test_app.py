@@ -302,3 +302,44 @@ def test_create_app_from_env_builds_a_redis_sink_unless_disabled(
     create_app_from_env()
     assert type(seen[0]).__name__ == "RedisTelemetrySink"
     assert type(seen[1]).__name__ == "NoopTelemetrySink"
+
+
+# --- GC freeze (M1 checkpoint: p99 tail) ----------------------------------------------------------
+
+
+def test_the_gateway_process_freezes_startup_objects_out_of_the_collector(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: list[object] = []
+    real = create_app
+
+    def spy(*args: object, **kwargs: object) -> object:
+        seen.append(kwargs.get("freeze_gc"))
+        return real(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr("jarvis_gateway.app.create_app", spy)
+    monkeypatch.setenv("DATABASE_URL", ENV["DATABASE_URL"])
+    monkeypatch.setenv("JARVIS_MASTER_KEY", MASTER_KEY)
+    monkeypatch.setenv("REDIS_URL", ENV["REDIS_URL"])
+    monkeypatch.setenv("JARVIS_SNAPSHOT_PATH", "/nonexistent/snapshot.json")
+    create_app_from_env()
+    assert seen == [True]
+
+
+@pytest.mark.parametrize("freeze", [True, False])
+def test_startup_freezes_the_gc_only_when_asked(freeze: bool) -> None:
+    import gc
+
+    client, _ = _managed(ConfigStatus("none", 0, 0, None, None))
+    app = create_app(
+        dependencies_from_env(ENV),
+        config=cast(ConfigManager, FakeManager(ConfigStatus("none", 0, 0, None, None))),
+        freeze_gc=freeze,
+    )
+    del client
+    gc.unfreeze()
+    try:
+        with TestClient(app):
+            assert (gc.get_freeze_count() > 0) is freeze
+    finally:
+        gc.unfreeze()
