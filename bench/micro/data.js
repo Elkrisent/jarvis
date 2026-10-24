@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792855199278,
+  "lastUpdate": 1792858252450,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Micro benchmarks": [
@@ -770,6 +770,44 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 2.6217588919569426e-7",
             "extra": "mean: 1.3594325818726014 usec\nrounds: 80646"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "ab4e3a80820fb25691dd49f1929299926cb5e134",
+          "message": "Merge pull request #31 from Elkrisent/perf/gc-freeze\n\nperf(gateway): freeze startup objects out of the GC; S2 stall investigation notes",
+          "timestamp": "2026-10-24T21:40:25+05:30",
+          "tree_id": "0676b8b84c2d1203cb851aec37f81eecba215621",
+          "url": "https://github.com/Elkrisent/jarvis/commit/ab4e3a80820fb25691dd49f1929299926cb5e134"
+        },
+        "date": 1792858251873,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "packages/core/tests/bench/test_bench_route_template_match.py::test_bench_route_template_match",
+            "value": 201145.08535237386,
+            "unit": "iter/sec",
+            "range": "stddev: 5.912588050109767e-7",
+            "extra": "mean: 4.971535835678813 usec\nrounds: 19715"
+          },
+          {
+            "name": "packages/core/tests/bench/test_bench_token_bucket_take.py::test_bench_token_bucket_take",
+            "value": 824669.4883401638,
+            "unit": "iter/sec",
+            "range": "stddev: 3.092677187470383e-7",
+            "extra": "mean: 1.2126070069752781 usec\nrounds: 79378"
           }
         ]
       }
