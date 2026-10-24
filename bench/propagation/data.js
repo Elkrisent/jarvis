@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792846589016,
+  "lastUpdate": 1792855272782,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Config propagation": [
@@ -316,6 +316,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "config_propagation_p99",
             "value": 61.473,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "1c0941a46439629e288675ffcad93ae1a1d8ca01",
+          "message": "Merge pull request #30 from Elkrisent/feat/checkpoint-1\n\nfix+perf: Checkpoint 1 groundwork (SSRF resolver, sniffio/httptools, S2 benchmark, acceptance stories)",
+          "timestamp": "2026-10-24T20:49:22+05:30",
+          "tree_id": "25e51ac8550360d55b468f3818422e33366746fd",
+          "url": "https://github.com/Elkrisent/jarvis/commit/1c0941a46439629e288675ffcad93ae1a1d8ca01"
+        },
+        "date": 1792855272133,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "config_propagation_p99",
+            "value": 20.071,
             "unit": "ms"
           }
         ]
