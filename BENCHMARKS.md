@@ -46,3 +46,27 @@ Three local runs gave p50 10.5 to 10.8 ms and p99 17.7 to 20.8 ms. The table abo
 metric only once the checkpoint script runs the propagation benchmark. It does not yet:
 `scripts/bench/run_checkpoint.sh` skips `make bench-propagation` (which needs `DATABASE_URL` and
 `REDIS_URL`), and the next `make bench-checkpoint` regenerates this file and drops this section.
+
+## Interim measurements: telemetry overhead (M1.9, not a checkpoint)
+
+Taken with `make bench-telemetry`, locally (not CI): same WSL2 machine as above, Redis on the same
+machine. The real gateway app runs in process over ASGI against a stub upstream that answers after
+1 ms. Three arms take turns in blocks of 100 requests: telemetry off (no-op sink), on
+(`RedisTelemetrySink` writing to Redis) and Redis unreachable. Each round is 800 requests per arm;
+the reported overhead is the median over the rounds of `p99(arm) - p99(off)`. The budget is the
+M1.9 Definition of Done: under 0.5 ms.
+
+| Run | Rounds | p99 off | Overhead, telemetry on | Overhead, Redis down |
+|---|---|---|---|---|
+| 1 | 5 | 3.03 ms | 0.26 ms | -0.09 ms |
+| 2 | 5 | 3.22 ms | 0.08 ms | 0.09 ms |
+| 3 | 5 | 2.96 ms | 0.31 ms | 0.13 ms |
+| 4 | 9 | 3.12 ms | 0.11 ms | 0.16 ms |
+| 5 | 9 | 2.90 ms | 0.12 ms | 0.05 ms |
+| 6 | 9 | 3.07 ms | 0.38 ms | 0.03 ms |
+
+All six runs passed. The per-round differences swing by about ±1 ms on this machine (a single
+round can read negative), so one run's median can land anywhere between roughly 0.1 and 0.4 ms;
+treat the budget margin as thin on a noisy runner. The test uses 9 rounds for that reason. A
+separate check measures `emit()` alone: p50 0.1 us, p99 about 0.5 us over 50,000 calls (limit 20 us).
+Hosted-runner numbers come from the `telemetry` job in `bench.yml` once it has run on `main`.

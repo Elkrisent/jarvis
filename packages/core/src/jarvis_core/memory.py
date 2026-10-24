@@ -27,6 +27,7 @@ from jarvis_core.interfaces import (
     SealedSecret,
     ToolSchema,
 )
+from jarvis_core.telemetry import RequestEvent
 
 
 class InMemoryCacheStore:
@@ -166,11 +167,11 @@ class InMemoryTelemetrySink:
     def dropped_total(self) -> int:
         return self._dropped
 
-    def emit(self, event: Mapping[str, Any]) -> bool:
+    def emit(self, event: Mapping[str, Any] | RequestEvent) -> bool:
         if len(self.events) >= self._capacity:
             self._dropped += 1
             return False
-        self.events.append(dict(event))
+        self.events.append(event.to_dict() if isinstance(event, RequestEvent) else dict(event))
         return True
 
 

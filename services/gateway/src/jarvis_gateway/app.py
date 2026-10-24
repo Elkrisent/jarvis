@@ -16,6 +16,7 @@ from jarvis_core.health import (
     evaluate_readiness,
     tcp_reachable,
 )
+from jarvis_core.interfaces import TelemetrySink
 
 from jarvis_gateway.config.manager import ConfigManager, ConfigStatus
 from jarvis_gateway.config.postgres import PostgresLoader
@@ -24,7 +25,14 @@ from jarvis_gateway.config.store import ConfigStore
 from jarvis_gateway.credentials import CredentialVault
 from jarvis_gateway.forwarder import Forwarder
 from jarvis_gateway.routes import build_gw_router
+from jarvis_gateway.routing import TemplateRegistry
 from jarvis_gateway.settings import load_settings
+from jarvis_gateway.telemetry import (
+    ManagedSink,
+    NoopTelemetrySink,
+    RedisStreamWriter,
+    RedisTelemetrySink,
+)
 
 # A full sync older than this many resync intervals marks the gateway degraded.
 STALE_AFTER_INTERVALS = 3
@@ -68,24 +76,33 @@ def create_app(
     resync_interval_s: float = 60.0,
     clock: Clock | None = None,
     forwarder: Forwarder | None = None,
+    sink: TelemetrySink | None = None,
 ) -> FastAPI:
     """Without ``config`` the app only reports its dependencies, exactly as in M0.3."""
     clock = SystemClock() if clock is None else clock
 
+    managed_sink = sink if isinstance(sink, ManagedSink) else None
+
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        if managed_sink is not None:
+            await managed_sink.start()
         try:
-            if config is None:
-                yield
-                return
             try:
-                await config.start()
-                yield
+                if config is None:
+                    yield
+                    return
+                try:
+                    await config.start()
+                    yield
+                finally:
+                    await config.stop()
             finally:
-                await config.stop()
+                if forwarder is not None:
+                    await forwarder.aclose()
         finally:
-            if forwarder is not None:
-                await forwarder.aclose()
+            if managed_sink is not None:  # last: requests that were still finishing are flushed
+                await managed_sink.aclose()
 
     app = FastAPI(title="jarvis-gateway", lifespan=lifespan)
 
@@ -105,11 +122,18 @@ def create_app(
                 body["status"] = "unavailable"
             elif state == "degraded" or readiness.status == "degraded":
                 body["status"] = "degraded"
+        if managed_sink is not None:  # numbers only; telemetry loss never changes the status
+            body["telemetry"] = {
+                "queue": managed_sink.queue_depth,
+                "dropped_total": managed_sink.dropped_total,
+            }
         response.status_code = 503 if body["status"] == "unavailable" else 200
         return body
 
     if config is not None:
-        app.include_router(build_gw_router(config.store, forwarder))
+        templates = TemplateRegistry()
+        config.store.add_listener(templates.retain)
+        app.include_router(build_gw_router(config.store, forwarder, sink, templates, clock))
 
     return app
 
@@ -133,10 +157,22 @@ def create_app_from_env() -> FastAPI:
     forwarder = Forwarder(settings.ssrf_policy, vault, max_body_bytes=settings.max_body_bytes)
     store.add_listener(vault.refresh)  # secrets are opened before the forwarder can see the config
     store.add_listener(forwarder.retain)
+    sink: TelemetrySink = (
+        RedisTelemetrySink(
+            RedisStreamWriter(settings.redis_url),
+            queue_size=settings.telemetry_queue_size,
+            batch_size=settings.telemetry_batch_size,
+            maxlen=settings.telemetry_maxlen,
+            clock=clock,
+        )
+        if settings.telemetry_enabled
+        else NoopTelemetrySink()
+    )
     return create_app(
         dependencies_from_env(),
         config=manager,
         resync_interval_s=settings.resync_interval_s,
         clock=clock,
         forwarder=forwarder,
+        sink=sink,
     )
