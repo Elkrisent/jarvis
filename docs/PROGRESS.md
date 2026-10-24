@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 merged (PR #20, merge commit `b17187d`); M1.5 merged (PR #21, merge commit `d756c4c`); M1.6 merged (PR #23, merge commit `937a936`); M1.7 merged (PR #24, merge commit `a3d3942`); M1.8 merged (PR #25, merge commit `0ea3df7`); M1.9 merged (PR #27, merge commit `c5307e8`). Checkpoint 1 done in the checkpoint PR (report `docs/checkpoints/P1-proxy.md`; tag `v0.1.0` after it merges); waiting for user approval before Phase 2.
+Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 merged (PR #20, merge commit `b17187d`); M1.5 merged (PR #21, merge commit `d756c4c`); M1.6 merged (PR #23, merge commit `937a936`); M1.7 merged (PR #24, merge commit `a3d3942`); M1.8 merged (PR #25, merge commit `0ea3df7`); M1.9 merged (PR #27, merge commit `c5307e8`). Checkpoint 1 done (PR #32, merge commit `ae6cf9d`; report `docs/checkpoints/P1-proxy.md`; pre-release `v0.1.0` tagged on `ae6cf9d`); waiting for user approval before Phase 2.
 
 ## Current Phase
 
@@ -102,13 +102,13 @@ None active. Checkpoint 1 is done; do not start M2.1 until the user approves.
   * Review of CI on the PR (both fixed in the PR): gitleaks flagged the made-up bench key (one more narrow `.gitleaks.toml` entry); gateway branch coverage fell 1.7 points vs `main`, so `Forwarder.forward` now requires `started` and `record` (no dead `None` paths), the flusher drops any event that fails to encode (not only `TypeError`/`ValueError`), and tests cover an all-unencodable batch, a crashed flusher and headers without an attempt. Gateway is back at 100% line / 100% branch.
   * CI on `main` at `c5307e8`: `ci`, `security`, `system` and `bench` (including the new `telemetry` job) all green. Hosted-runner telemetry overhead: p99 off 1.82 ms, on 2.03 ms, overhead 0.16 ms (budget 0.5 ms), Redis down -0.04 ms; `emit()` p99 0.34 us. Per-round overhead swung from -0.32 to +0.69 ms on that run, so the median passes but a single round can exceed the budget; watch the trend chart (`bench/telemetry` on gh-pages).
 
-* Checkpoint 1 (checkpoint PR; groundwork in PR #29, #30, #31; report `docs/checkpoints/P1-proxy.md`):
+* Checkpoint 1 (PR #32, merge commit `ae6cf9d`; groundwork in PR #29, #30, #31; report `docs/checkpoints/P1-proxy.md`):
   * Protocol step 1, module DoDs verified: M1.1 reversible migrations plus the concurrency test of the advisory lock; M1.2 rotation documented (`docs/secrets-rotation.md`) and security tests pass; M1.3 quickstart run against a real stack; M1.4 propagation 24.9 ms p99 in the checkpoint run (integration test and CI benchmark); M1.5 REQ-4.2-1 to -6 all covered; M1.6 6.95 us per call (< 20 us); M1.7 SSRF suite green, each blocked attempt `JV_DESTINATION_BLOCKED` (403) or a 422 on save; M1.8 the "change one base URL" story passes (system and e2e); M1.9 telemetry overhead not measurable (-0.5 / -0.6 ms against 0.5 ms), `emit()` about 0.5 us.
   * Step 2: unit 1282, integration 145, system 16, functional 121, e2e 8, chaos 3, security 133 all pass (1,708 run plus 5 perf benchmarks); coverage core 100/99.5, gateway 100/100, api 100/100, worker 95.7/100; CI on `main` green at `ab4e3a8`.
   * Step 3: the four acceptance stories pass (`tests/e2e/test_checkpoint_1.py`).
   * Step 4: `make bench-checkpoint PHASE=1` run locally (commit `4d110eb`), numbers in `benchmarks/checkpoints/P1.json` and `BENCHMARKS.md`. All budgets in scope met except the S2 p99 (29.3 ms against 15 ms), deferred to Checkpoint 3 by user decision (`enforce_from_phase` in `benchmarks/budgets.yaml`, `docs/IMPLEMENTATION.md` updated).
   * Step 5: `make traceability COMPLETED_PHASE=1 TRACE_MARKERS="not perf"`: 1708 passed, 93/246 covered, all 76 Phase 0 and 1 rows `pass`. The first run failed on eight Phase 1 requirements (seven untagged existing tests, one with no test: REQ-11.3-3 upstream TLS verification, now tested).
-  * Steps 6 to 8: report written; pre-release `v0.1.0` to be tagged with `gh release create --prerelease` (report as notes, `P1.json` attached) after the checkpoint PR merges; then STOP.
+  * Steps 6 to 8: report written; pre-release `v0.1.0` created on `ae6cf9d` (`gh release create --prerelease`, report as notes, `P1.json` attached); CI on `main` at `ae6cf9d`: `ci`, `security`, `system`, `bench` green. Stopped for approval.
   * Found and fixed on the way: story 4 exposed the SSRF resolver repeating failed container lookups per connection (user chose the narrow relaxation, see the Checkpoint 1 notes below); profiling found `sniffio` missing (about 0.9 ms CPU per request) and gen-2 GC pauses (fixed with `gc.freeze()`).
 
 ## In Progress
@@ -124,8 +124,8 @@ Nothing. Checkpoint 1 notes kept for reference (what was found while running it)
 
 ## Next
 
-1. Merge the checkpoint PR, then tag the pre-release: `gh release create v0.1.0 --prerelease --title "Checkpoint 1: Proxy" --notes-file docs/checkpoints/P1-proxy.md benchmarks/checkpoints/P1.json`.
-2. Wait for the user's approval of Checkpoint 1. Apply any feedback first as a follow-up PR and note it in the report. Do not start Phase 2 (M2.1 Deadlines and attempt timeouts) before that.
+1. Wait for the user's approval of Checkpoint 1. Apply any feedback first as a follow-up PR and note it in the report. Do not start Phase 2 (M2.1 Deadlines and attempt timeouts) before that.
+2. Before Checkpoint 3: profile the request path with py-spy (S2 p99 budget is enforced from there). The user declined a hosted-runner workflow for S2; an optional check on a different machine (plain Linux, 2 vCPU) would show how much of the p99 is this laptop.
 
 ## Blockers / Questions
 
@@ -143,7 +143,7 @@ Nothing. Checkpoint 1 notes kept for reference (what was found while running it)
 
 ## Resume Point
 
-Checkpoint 1 is complete and waiting for the user: merge the checkpoint PR, tag `v0.1.0` (Next, item 1), post the summary and STOP. Phase 2 starts at M2.1 only after the user approves. Open decisions for the user: Redis-outage revocation window (Blockers), the P5 secret-rollback question.
+Checkpoint 1 is complete and tagged (`v0.1.0`); waiting for the user's approval. Phase 2 starts at M2.1 only after that. Open decisions for the user: Redis-outage revocation window (Blockers), the P5 secret-rollback question.
 
 ## Last Updated
 
