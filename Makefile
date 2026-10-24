@@ -1,7 +1,7 @@
 .PHONY: help sync lint format typecheck security-scan bandit pip-audit \
 	test-unit test-integration test-system test-functional test-e2e test-chaos \
 	test-security test-web test-all bench-micro bench-propagation bench-load bench-soak \
-	bench-checkpoint bench-up bench-down traceability coverage openapi-snapshot
+	bench-checkpoint bench-up bench-down traceability coverage openapi-snapshot telemetry-snapshot
 
 PYTEST = uv run pytest
 BENCH_DIR = build/bench
@@ -63,6 +63,9 @@ test-all: test-unit test-integration test-system test-functional test-e2e test-w
 
 openapi-snapshot:
 	uv run python scripts/openapi_snapshot.py --write
+
+telemetry-snapshot:
+	uv run python scripts/telemetry_snapshot.py --write
 
 bench-micro:
 	mkdir -p $(BENCH_DIR)
