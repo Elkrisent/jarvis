@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792846505471,
+  "lastUpdate": 1792855199278,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Micro benchmarks": [
@@ -732,6 +732,44 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 4.426642299888328e-7",
             "extra": "mean: 1.5439897660526896 usec\nrounds: 72015"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "1c0941a46439629e288675ffcad93ae1a1d8ca01",
+          "message": "Merge pull request #30 from Elkrisent/feat/checkpoint-1\n\nfix+perf: Checkpoint 1 groundwork (SSRF resolver, sniffio/httptools, S2 benchmark, acceptance stories)",
+          "timestamp": "2026-10-24T20:49:22+05:30",
+          "tree_id": "25e51ac8550360d55b468f3818422e33366746fd",
+          "url": "https://github.com/Elkrisent/jarvis/commit/1c0941a46439629e288675ffcad93ae1a1d8ca01"
+        },
+        "date": 1792855198386,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "packages/core/tests/bench/test_bench_route_template_match.py::test_bench_route_template_match",
+            "value": 154198.32305900907,
+            "unit": "iter/sec",
+            "range": "stddev: 5.428636563955596e-7",
+            "extra": "mean: 6.485154832827313 usec\nrounds: 20661"
+          },
+          {
+            "name": "packages/core/tests/bench/test_bench_token_bucket_take.py::test_bench_token_bucket_take",
+            "value": 735601.0245263597,
+            "unit": "iter/sec",
+            "range": "stddev: 2.6217588919569426e-7",
+            "extra": "mean: 1.3594325818726014 usec\nrounds: 80646"
           }
         ]
       }
