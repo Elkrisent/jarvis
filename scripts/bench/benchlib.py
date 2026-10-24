@@ -10,7 +10,7 @@ from typing import Any, Literal
 import yaml
 
 Direction = Literal["lower", "higher"]
-Status = Literal["ok", "over budget", "no budget", "unknown metric"]
+Status = Literal["ok", "over budget", "deferred", "no budget", "unknown metric"]
 
 
 @dataclass(frozen=True)
@@ -20,6 +20,8 @@ class Budget:
     direction: Direction
     budget: float | None
     spec: str
+    # The phase from which a miss fails the checkpoint; earlier phases report it as "deferred".
+    enforce_from_phase: int = 0
 
 
 def load_budgets(path: Path) -> dict[str, Budget]:
@@ -35,17 +37,23 @@ def load_budgets(path: Path) -> dict[str, Budget]:
             item["direction"],
             None if budget is None else float(budget),
             item.get("spec", ""),
+            int(item.get("enforce_from_phase", 0)),
         )
     return out
 
 
-def judge(value: float, budget: Budget | None) -> Status:
+def judge(value: float, budget: Budget | None, phase: int | None = None) -> Status:
+    """``phase`` is the checkpoint being judged; without it every budget is enforced."""
     if budget is None:
         return "unknown metric"
     if budget.budget is None:
         return "no budget"
     ok = value <= budget.budget if budget.direction == "lower" else value >= budget.budget
-    return "ok" if ok else "over budget"
+    if ok:
+        return "ok"
+    if phase is not None and phase < budget.enforce_from_phase:
+        return "deferred"
+    return "over budget"
 
 
 def micro_results(pytest_benchmark_json: dict[str, Any]) -> dict[str, float]:

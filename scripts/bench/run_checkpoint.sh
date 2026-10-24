@@ -48,4 +48,4 @@ uv run python scripts/bench/write_env.py --out "$dir/env.json" --profile default
   --param k6_duration=10s --param k6_vus=10
 uv run python scripts/bench/checkpoint.py --phase "$phase" --results "$dir/results.json" --env "$dir/env.json" \
   --raw "micro=$dir/micro.json" --raw "k6_dry_run=$dir/k6/dry_run.json" ${raw[@]+"${raw[@]}"}
-uv run python scripts/bench/check_budgets.py "$dir/results.json" --enforce
+uv run python scripts/bench/check_budgets.py "$dir/results.json" --enforce --phase "$phase"

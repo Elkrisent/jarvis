@@ -78,7 +78,16 @@ def _serving(client: ProviderClient, path: str = "/v1/ping") -> requests.Respons
     return response if response.status_code == 200 else None
 
 
-@pytest.mark.req("REQ-3-4", "REQ-4.1-1", "REQ-4.5-2", "REQ-4.5-6", "REQ-4.5-7")
+@pytest.mark.req(
+    "REQ-3-4",
+    "REQ-4.1-1",
+    "REQ-4.5-2",
+    "REQ-4.5-6",
+    "REQ-4.5-7",
+    "REQ-1.1-2",
+    "REQ-3-1",
+    "REQ-2-12",
+)
 def test_story_1_change_the_base_url_and_key_and_the_upstream_sees_the_real_credential(
     mock_upstream: MockUpstream,
 ) -> None:

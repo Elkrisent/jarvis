@@ -499,3 +499,65 @@ def test_median_runs_merges_the_per_metric_median_and_keeps_the_raw_values(tmp_p
         "gw_overhead_miss_p99": 14.0,
     }
     assert benchlib.read_json(raw)["gw_overhead_miss_p99"] == [30.0, 10.0, 14.0]
+
+
+# ------------------------------------------------------- budgets enforced from a later phase
+
+DEFERRED_YAML = """\
+metrics:
+  gw_overhead_miss_p50: {unit: ms, direction: lower, budget: 3, spec: x}
+  gw_overhead_miss_p99: {unit: ms, direction: lower, budget: 15, enforce_from_phase: 3, spec: x}
+"""
+
+
+@pytest.fixture
+def deferred_file(tmp_path: Path) -> Path:
+    path = tmp_path / "deferred.yaml"
+    path.write_text(DEFERRED_YAML)
+    return path
+
+
+def test_enforce_from_phase_is_loaded_and_defaults_to_always(deferred_file: Path) -> None:
+    budgets = benchlib.load_budgets(deferred_file)
+    assert budgets["gw_overhead_miss_p99"].enforce_from_phase == 3
+    assert budgets["gw_overhead_miss_p50"].enforce_from_phase == 0
+
+
+@pytest.mark.parametrize(
+    ("value", "phase", "status"),
+    [
+        (48.0, None, "over budget"),  # no phase given: everything is enforced
+        (48.0, 1, "deferred"),
+        (48.0, 2, "deferred"),
+        (48.0, 3, "over budget"),
+        (48.0, 4, "over budget"),
+        (12.0, 1, "ok"),  # a met budget is simply ok, deferred or not
+    ],
+)
+def test_judge_defers_a_budget_before_its_phase(
+    deferred_file: Path, value: float, phase: int | None, status: str
+) -> None:
+    budget = benchlib.load_budgets(deferred_file)["gw_overhead_miss_p99"]
+    assert benchlib.judge(value, budget, phase=phase) == status
+
+
+def test_a_deferred_budget_does_not_fail_the_phase_but_the_others_still_do(
+    tmp_path: Path, deferred_file: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    args = ["--budgets", str(deferred_file), "--enforce", "--phase", "1"]
+    only_p99 = _write(tmp_path / "a.json", {"gw_overhead_miss_p99": 48.0})
+    assert check_budgets.main([str(only_p99), *args]) == 0
+    assert "deferred" in capsys.readouterr().out
+    p50_too = _write(
+        tmp_path / "b.json", {"gw_overhead_miss_p50": 4.0, "gw_overhead_miss_p99": 48.0}
+    )
+    assert check_budgets.main([str(p50_too), *args]) == 1
+    assert check_budgets.main([str(only_p99), "--budgets", str(deferred_file), "--enforce"]) == 1
+
+
+def test_checkpoint_table_marks_the_deferred_budget(deferred_file: Path) -> None:
+    budgets = benchlib.load_budgets(deferred_file)
+    checkpoints = {1: {"results": {"gw_overhead_miss_p50": 2.6, "gw_overhead_miss_p99": 48.0}}}
+    table = checkpoint.render(budgets, checkpoints)
+    row = next(line for line in table.splitlines() if line.startswith("| gw_overhead_miss_p99"))
+    assert row.endswith("| deferred |")

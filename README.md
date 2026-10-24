@@ -6,7 +6,7 @@ must do and [`docs/IMPLEMENTATION.md`](docs/IMPLEMENTATION.md) for the build ord
 
 ## Status
 
-Phase 1 (Proxy) in progress. The repository scaffold, tooling, CI, benchmark infrastructure and the
+Phase 1 (Proxy) is complete (Checkpoint 1: [`docs/checkpoints/P1-proxy.md`](docs/checkpoints/P1-proxy.md); `v0.1.0` pre-release) and awaiting approval before Phase 2. JARVIS forwards calls end to end with key checks, credential injection, SSRF protection, hot config reload and telemetry; it does not retry, cache or rate-limit yet. The repository scaffold, tooling, CI, benchmark infrastructure and the
 `jarvis_core` package (config models, errors, interfaces with in-memory implementations) exist, and
 the `api` service now owns the Postgres schema: Alembic migrations run at startup under an advisory
 lock, and `PostgresConfigSource` stores API policies as immutable versions. M1.2 added the AES-256-GCM `SecretBox`,

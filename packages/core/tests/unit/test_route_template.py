@@ -25,6 +25,7 @@ UUID = "550e8400-e29b-41d4-a716-446655440000"
         ),
     ],
 )
+@pytest.mark.req("REQ-2-11")
 def test_fallback_rules(path: str, expected: str) -> None:
     assert RouteTemplater().template(path) == expected
 
@@ -53,7 +54,7 @@ def test_explicit_pattern_groups_different_raw_paths() -> None:
     assert templater.template("/v1/users/abc/orders/") == "/v1/users/{id}/orders"
 
 
-@pytest.mark.req("REQ-4.14-2")
+@pytest.mark.req("REQ-4.14-2", "REQ-2-11")
 def test_explicit_pattern_wins_over_the_fallback() -> None:
     assert RouteTemplater(["/v1/users/{name}"]).template("/v1/users/42") == "/v1/users/{name}"
 

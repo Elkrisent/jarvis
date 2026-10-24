@@ -2,15 +2,15 @@
 
 ## Status
 
-Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 merged (PR #20, merge commit `b17187d`); M1.5 merged (PR #21, merge commit `d756c4c`); M1.6 merged (PR #23, merge commit `937a936`); M1.7 merged (PR #24, merge commit `a3d3942`); M1.8 merged (PR #25, merge commit `0ea3df7`); M1.9 merged (PR #27, merge commit `c5307e8`).
+Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 merged (PR #20, merge commit `b17187d`); M1.5 merged (PR #21, merge commit `d756c4c`); M1.6 merged (PR #23, merge commit `937a936`); M1.7 merged (PR #24, merge commit `a3d3942`); M1.8 merged (PR #25, merge commit `0ea3df7`); M1.9 merged (PR #27, merge commit `c5307e8`). Checkpoint 1 done in the checkpoint PR (report `docs/checkpoints/P1-proxy.md`; tag `v0.1.0` after it merges); waiting for user approval before Phase 2.
 
 ## Current Phase
 
-Phase 1: Proxy.
+Phase 1: Proxy, complete (Checkpoint 1 done, awaiting user approval). Next phase: Phase 2: Reliability (not started).
 
 ## Current Module
 
-Checkpoint 1, blocked at step 4 (see In Progress and Blockers).
+None active. Checkpoint 1 is done; do not start M2.1 until the user approves.
 
 ## Completed
 
@@ -102,9 +102,18 @@ Checkpoint 1, blocked at step 4 (see In Progress and Blockers).
   * Review of CI on the PR (both fixed in the PR): gitleaks flagged the made-up bench key (one more narrow `.gitleaks.toml` entry); gateway branch coverage fell 1.7 points vs `main`, so `Forwarder.forward` now requires `started` and `record` (no dead `None` paths), the flusher drops any event that fails to encode (not only `TypeError`/`ValueError`), and tests cover an all-unencodable batch, a crashed flusher and headers without an attempt. Gateway is back at 100% line / 100% branch.
   * CI on `main` at `c5307e8`: `ci`, `security`, `system` and `bench` (including the new `telemetry` job) all green. Hosted-runner telemetry overhead: p99 off 1.82 ms, on 2.03 ms, overhead 0.16 ms (budget 0.5 ms), Redis down -0.04 ms; `emit()` p99 0.34 us. Per-round overhead swung from -0.32 to +0.69 ms on that run, so the median passes but a single round can exceed the budget; watch the trend chart (`bench/telemetry` on gh-pages).
 
+* Checkpoint 1 (checkpoint PR; groundwork in PR #29, #30, #31; report `docs/checkpoints/P1-proxy.md`):
+  * Protocol step 1, module DoDs verified: M1.1 reversible migrations plus the concurrency test of the advisory lock; M1.2 rotation documented (`docs/secrets-rotation.md`) and security tests pass; M1.3 quickstart run against a real stack; M1.4 propagation 24.9 ms p99 in the checkpoint run (integration test and CI benchmark); M1.5 REQ-4.2-1 to -6 all covered; M1.6 6.95 us per call (< 20 us); M1.7 SSRF suite green, each blocked attempt `JV_DESTINATION_BLOCKED` (403) or a 422 on save; M1.8 the "change one base URL" story passes (system and e2e); M1.9 telemetry overhead not measurable (-0.5 / -0.6 ms against 0.5 ms), `emit()` about 0.5 us.
+  * Step 2: unit 1282, integration 145, system 16, functional 121, e2e 8, chaos 3, security 133 all pass (1,708 run plus 5 perf benchmarks); coverage core 100/99.5, gateway 100/100, api 100/100, worker 95.7/100; CI on `main` green at `ab4e3a8`.
+  * Step 3: the four acceptance stories pass (`tests/e2e/test_checkpoint_1.py`).
+  * Step 4: `make bench-checkpoint PHASE=1` run locally (commit `4d110eb`), numbers in `benchmarks/checkpoints/P1.json` and `BENCHMARKS.md`. All budgets in scope met except the S2 p99 (29.3 ms against 15 ms), deferred to Checkpoint 3 by user decision (`enforce_from_phase` in `benchmarks/budgets.yaml`, `docs/IMPLEMENTATION.md` updated).
+  * Step 5: `make traceability COMPLETED_PHASE=1 TRACE_MARKERS="not perf"`: 1708 passed, 93/246 covered, all 76 Phase 0 and 1 rows `pass`. The first run failed on eight Phase 1 requirements (seven untagged existing tests, one with no test: REQ-11.3-3 upstream TLS verification, now tested).
+  * Steps 6 to 8: report written; pre-release `v0.1.0` to be tagged with `gh release create --prerelease` (report as notes, `P1.json` attached) after the checkpoint PR merges; then STOP.
+  * Found and fixed on the way: story 4 exposed the SSRF resolver repeating failed container lookups per connection (user chose the narrow relaxation, see the Checkpoint 1 notes below); profiling found `sniffio` missing (about 0.9 ms CPU per request) and gen-2 GC pauses (fixed with `gc.freeze()`).
+
 ## In Progress
 
-Checkpoint 1 (Phase 1: Proxy), branch `feat/checkpoint-1`. BLOCKED at protocol step 4: the S2 pass-through overhead misses its p99 budget (details under Blockers). Steps 5 to 8 (traceability, report, tag) are not done and `benchmarks/checkpoints/P1.json` / `BENCHMARKS.md` were deliberately not committed (that run failed its budget).
+Nothing. Checkpoint 1 notes kept for reference (what was found while running it):
 
 * Step 3, acceptance stories: all four automated in `tests/e2e/test_checkpoint_1.py` and passing on the Docker stack (change base URL and key; metadata base URL rejected on save; revoked key rejected 1 s later; restart with Postgres down serves from the snapshot). Story 4 failed at first and exposed a real bug (next bullet); after the fix it passed in 10 of 11 stack runs, the one failure (first full-suite run) was not reproduced and not explained, so watch it.
 * Bug found by story 4 and fixed (user chose the narrow option): with a JARVIS container stopped (Postgres), `DestinationResolver` looked up every container name again for every new upstream connection (about 2 s timeout each, 8 s inside the resolver thread) and refused allowlisted private upstreams, so such traffic got 504s. Now lookups are single-flight and reused for 5 s when incomplete; a container name that has never resolved is treated as not running (WARNING logged with the name), a name that resolved before and now fails still fails closed. Regression tests in `test_ssrf.py` and the security suite (the old test that pinned the first-lookup fail-closed rule was rewritten for the new rule, not loosened: the previously-resolved case is still tested). Known residual: if Postgres dies while the gateway is running, its name had resolved, so allowlisted private upstreams are refused from the next lookup (at most 30 s later) until it returns.
@@ -115,12 +124,12 @@ Checkpoint 1 (Phase 1: Proxy), branch `feat/checkpoint-1`. BLOCKED at protocol s
 
 ## Next
 
-1. Get the user's decision on the S2 p99 budget (Blockers, first item), then finish Checkpoint 1: `make bench-checkpoint PHASE=1` (needs `DATABASE_URL`, `REDIS_URL`, Docker), `make traceability COMPLETED_PHASE=1 TRACE_MARKERS="not perf"`, tick every M1.x DoD, write `docs/checkpoints/P1-proxy.md` (Appendix 2), tag `v0.1.0` pre-release with `P1.json` attached, post the summary and STOP for approval. Never start Phase 2 on your own.
-2. Merge the `feat/checkpoint-1` PR (SSRF resolver fix, `sniffio`/`httptools`, S2 tooling, story tests) after CI is green.
+1. Merge the checkpoint PR, then tag the pre-release: `gh release create v0.1.0 --prerelease --title "Checkpoint 1: Proxy" --notes-file docs/checkpoints/P1-proxy.md benchmarks/checkpoints/P1.json`.
+2. Wait for the user's approval of Checkpoint 1. Apply any feedback first as a follow-up PR and note it in the report. Do not start Phase 2 (M2.1 Deadlines and attempt timeouts) before that.
 
 ## Blockers / Questions
 
-* BLOCKS CHECKPOINT 1, needs a user decision: gateway pass-through overhead (S2, `gw_overhead_miss_*`, budget p50 <= 3 ms and p99 <= 15 ms, SPEC 13) at 100 req/s against a 50 ms mock upstream. p50 passes (median of 5 pairs 2.62 ms; 2.2 to 2.7 ms in every set). p99 does not reliably: sets of three pairs gave medians of 16.1, 11.8 and 33.7 ms, and the checkpoint run's five pairs gave 48.7, 41.7, 15.1, 2649 and 783 ms (median 48.7); the gateway holds steady memory (52.7 MiB over six 30 s runs), the p99 is about 20 ms above direct in quiet runs with occasional stalls of 100 ms to seconds whose source I did not find (telemetry is not it: same range with it off). Before the fixes: p50 3.1 ms and p99 76 ms at 100 req/s, and the gateway saturated near 140 to 190 req/s. Per-request cost is about 4 to 5 ms of CPU in the container (about 2 ms on the host), mostly httpcore/h11 and uvicorn work, so one core is the limit; SPEC 13 throughput (2,000 req/s, cache hits) is a Phase 3 problem. The stall investigation (In Progress) found no bug and eliminated host noise, single-core queueing, telemetry and connection churn as causes; a quieter machine would not help. Remaining options: (b) move the overhead budget to Checkpoint 3 (profiling with py-spy is planned there) and record these numbers as informational (edits IMPLEMENTATION.md; recommended), or (a) keep digging with a real profiler before Checkpoint 1.
+* RESOLVED at Checkpoint 1 (user decision): the S2 overhead p99 budget (<= 15 ms) is enforced from Checkpoint 3; p50 (<= 3 ms) stays enforced. Today: p50 2.72 ms, p99 29.3 ms (five pairs 13.9 to 1,302 ms). Phase 3 must profile the request path with py-spy first; the stall investigation found no leak, no big stalls beyond GC (fixed), and ruled out host jitter, single-core queueing, telemetry and connection churn.
 * OPEN, needs a user decision before P5: PATCH deletes the old secret, but older immutable versions still hold its `secret_ref`. A P5 rollback (copy an old version, SPEC section 5.2) would point at a deleted secret. M1.4 reads only the current version.
 * Redis outage vs revocation: see the known limit below; the user asked what it means (it is about Redis being unavailable at some moment, not about never starting) and has not decided yet.
 * REQ-11.1-6: the revocation push is implemented in M1.4 (`config:invalidated`); the traceability row only becomes meaningful once M1.5 enforces it on requests.
@@ -134,7 +143,7 @@ Checkpoint 1 (Phase 1: Proxy), branch `feat/checkpoint-1`. BLOCKED at protocol s
 
 ## Resume Point
 
-Branch `feat/checkpoint-1`. Commit/push the pending work, open the PR, and ask the user how to treat the S2 p99 budget (Blockers). Everything else for Checkpoint 1 is done except steps 4 to 8 of the protocol.
+Checkpoint 1 is complete and waiting for the user: merge the checkpoint PR, tag `v0.1.0` (Next, item 1), post the summary and STOP. Phase 2 starts at M2.1 only after the user approves. Open decisions for the user: Redis-outage revocation window (Blockers), the P5 secret-rollback question.
 
 ## Last Updated
 
