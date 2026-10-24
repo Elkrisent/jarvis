@@ -12,6 +12,7 @@ The project id is kept in build/bench/s2_project.txt between the two calls.
 from __future__ import annotations
 
 import os
+import secrets
 import sys
 import time
 from pathlib import Path
@@ -42,7 +43,7 @@ def setup() -> str:
                 "name": "S2",
                 "base_url": "http://mock-upstream:8080",
                 "jarvis_key_slot": "authorization",
-                "credential": {"mode": "bearer", "secret": "sk-s2-bench-placeholder"},
+                "credential": {"mode": "bearer", "secret": secrets.token_urlsafe(24)},  # throwaway
                 "deadline_ms": 10000,
                 "attempt_timeout_ms": 5000,
             },
