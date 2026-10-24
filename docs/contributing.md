@@ -72,10 +72,11 @@ Check names appear exactly as listed once each workflow has run at least once.
 
 ## Benchmarks
 
-- `make bench-micro`, `make bench-propagation` and `make bench-load` are for quick local checks.
-  `bench-propagation` needs `DATABASE_URL` and `REDIS_URL` (as the integration tests do);
+- `make bench-micro`, `make bench-propagation`, `make bench-telemetry` and `make bench-load` are for
+  quick local checks. `bench-propagation` needs `DATABASE_URL` and `REDIS_URL` (as the integration
+  tests do), `bench-telemetry` needs `REDIS_URL`;
   `bench-load` needs `make bench-up` first.
-- `make bench-checkpoint PHASE=<n>` produces the **numbers of record** on your machine: it runs
+- `make bench-checkpoint PHASE=<n>` (for n >= 1 it also needs `DATABASE_URL` and `REDIS_URL` and stops at once without them) produces the **numbers of record** on your machine: it runs
   everything, enforces the budgets in `benchmarks/budgets.yaml`, writes
   `benchmarks/checkpoints/P<n>.json` (results, raw data, `env.json`) and regenerates
   `BENCHMARKS.md`. Commit both.
