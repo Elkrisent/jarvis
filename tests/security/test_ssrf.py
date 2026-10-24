@@ -239,12 +239,44 @@ async def test_a_catch_all_allowlist_still_blocks_the_gateways_own_loopback(host
 
 @pytest.mark.req("REQ-17-2", "REQ-4.13-3")
 async def test_a_failing_internal_lookup_cannot_be_used_to_reach_a_container() -> None:
+    """A container that resolved before and whose lookup now fails may have moved: fail closed."""
+    clock = FakeClock()
+    state = {"down": False}
+
     async def flaky(host: str, port: int) -> Sequence[str]:
         if port == 0:
-            raise OSError("dns hiccup")
-        return {"sneaky.example": ["172.18.0.3"]}.get(host, [])
+            if state["down"]:
+                raise OSError("dns hiccup")
+            return ["172.18.0.3"] if host == "api" else []
+        return {"sneaky.example": ["172.18.0.9"]}.get(host, [])
 
     policy = SsrfPolicy.from_env({"JARVIS_SSRF_ALLOWLIST": "172.16.0.0/12"})
-    checker = DestinationChecker(DestinationResolver(policy, flaky, FakeClock()))
+    resolver = DestinationResolver(policy, flaky, clock)
+    checker = DestinationChecker(resolver)
+    await checker.check_save("https://sneaky.example/")  # the containers resolved, it is not one
+    state["down"] = True
+    clock.advance(60)  # the cache expired; the refresh now fails
     with pytest.raises(DestinationBlockedError):
         await checker.check_save("https://sneaky.example/")
+
+
+@pytest.mark.req("REQ-17-2", "REQ-4.13-3")
+async def test_a_container_that_never_resolved_is_not_running_and_the_known_ones_stay_blocked() -> (
+    None
+):
+    """Documented relaxation: a name that has never resolved is a container that is not running
+    (a stopped Postgres), so it has no address to protect. Containers that did resolve stay blocked
+    whatever the allowlist says."""
+
+    async def only_api_runs(host: str, port: int) -> Sequence[str]:
+        if port == 0:
+            if host == "api":
+                return ["172.18.0.3"]
+            raise OSError("no such container")
+        return {"to-api.example": ["172.18.0.3"], "other.example": ["172.18.0.9"]}.get(host, [])
+
+    policy = SsrfPolicy.from_env({"JARVIS_SSRF_ALLOWLIST": "172.16.0.0/12"})
+    resolver = DestinationResolver(policy, only_api_runs, FakeClock())
+    assert await resolver.resolve("other.example", 443, on_allowlist=False) == ["172.18.0.9"]
+    with pytest.raises(DestinationBlockedError):
+        await resolver.resolve("to-api.example", 443, on_allowlist=False)

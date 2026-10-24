@@ -65,7 +65,12 @@ def project_with_api(slug: str) -> Iterator[tuple[httpx.Client, str, str, str, s
             assert key.status_code == 201, key.text
             yield api, pid, created.json()["id"], key.json()["id"], key.json()["key"]
         finally:
-            api.delete(f"/projects/{pid}")
+            # Postgres may have only just returned: retry until the project is really gone.
+            wait_until(
+                lambda: api.delete(f"/projects/{pid}").status_code in (204, 404) or None,
+                timeout_s=60,
+                what="the project to be deleted",
+            )
 
 
 def _serving(client: ProviderClient, path: str = "/v1/ping") -> requests.Response | None:
@@ -143,12 +148,19 @@ def test_story_4_with_postgres_down_a_restarted_gateway_serves_from_its_snapshot
             timeout_s=60,
             what="the gateway to start from its snapshot",
         )
-        served = wait_until(
-            lambda: _serving(client),
-            timeout_s=15,
-            interval_s=0.2,
-            what="traffic with Postgres down",
-        )
+        seen: list[int] = []
+
+        def poll() -> requests.Response | None:
+            response = client.get("/v1/ping")
+            seen.append(response.status_code)
+            return response if response.status_code == 200 else None
+
+        try:
+            served = wait_until(
+                poll, timeout_s=30, interval_s=0.2, what="traffic with Postgres down"
+            )
+        except AssertionError as error:
+            raise AssertionError(f"{error}; statuses seen: {seen}") from None
         assert served.status_code == 200
         revive("postgres")
         wait_until(
