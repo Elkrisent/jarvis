@@ -12,6 +12,7 @@ import http.cookiejar
 import logging
 import time
 from collections.abc import AsyncIterator, Callable
+from typing import Any
 from urllib.parse import unquote
 
 import httpx
@@ -25,6 +26,7 @@ from jarvis_core.errors import (
 )
 from jarvis_core.ssrf import SsrfPolicy
 from starlette.background import BackgroundTask
+from starlette.types import Receive, Scope, Send
 
 from jarvis_gateway.auth import Authenticated
 from jarvis_gateway.config.snapshot import Snapshot
@@ -35,6 +37,7 @@ from jarvis_gateway.forward import (
     filter_response_headers,
     inject_credential_header,
 )
+from jarvis_gateway.record import RequestRecord
 from jarvis_gateway.upstream import PinnedTransport
 
 log = logging.getLogger(__name__)
@@ -146,6 +149,7 @@ class Forwarder:
         authenticated: Authenticated,
         request_id: str,
         started: float | None = None,
+        record: RequestRecord | None = None,
     ) -> Response:
         """``started`` is the ``time.monotonic()`` of ingress: the deadline runs from there."""
         started = time.monotonic() if started is None else started
@@ -165,6 +169,8 @@ class Forwarder:
             secret,
         )
         body = await self._read_body(request)
+        if record is not None:
+            record.add_request_bytes(len(body))
         remaining = config.deadline_ms / 1000 - (time.monotonic() - started)
         if remaining <= 0:
             raise UpstreamTimeoutError("the upstream did not answer in time")
@@ -177,13 +183,17 @@ class Forwarder:
                 content=body or None,
                 timeout=httpx.Timeout(config.attempt_timeout_ms / 1000),
             )
+            if record is not None:
+                record.mark_attempt()
             async with asyncio.timeout(remaining):
                 upstream = await client.send(upstream_request, stream=True)
+            if record is not None:
+                record.mark_headers_received()
         except (TimeoutError, httpx.TimeoutException):
             raise UpstreamTimeoutError("the upstream did not answer in time") from None
         except (httpx.TransportError, httpx.InvalidURL):
             raise UpstreamUnreachableError("could not reach the upstream") from None
-        return _stream_back(upstream, request_id)
+        return _stream_back(upstream, request_id, record)
 
 
 def _origin(url: httpx.URL) -> Origin:
@@ -191,10 +201,29 @@ def _origin(url: httpx.URL) -> Origin:
     return url.scheme, url.host, port
 
 
-def _stream_back(upstream: httpx.Response, request_id: str) -> Response:
+class _RecordedStream(StreamingResponse):
+    """Finishes the request's telemetry record however the response ends (done, cut, cancelled)."""
+
+    def __init__(self, *args: Any, record: RequestRecord | None, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._record = record
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            if self._record is not None:
+                self._record.finish(status=self.status_code, source="upstream", error_code=None)
+
+
+def _stream_back(
+    upstream: httpx.Response, request_id: str, record: RequestRecord | None = None
+) -> Response:
     async def body() -> AsyncIterator[bytes]:
         try:
             async for chunk in upstream.aiter_raw():
+                if record is not None:
+                    record.add_response_bytes(len(chunk))
                 yield chunk
         except httpx.HTTPError as exc:
             log.warning("the upstream response was interrupted (%s)", type(exc).__name__)
@@ -211,8 +240,11 @@ def _stream_back(upstream: httpx.Response, request_id: str) -> Response:
         ("X-Jarvis-Source", "upstream"),
         ("X-Jarvis-Attempts", "1"),
     ]
-    response = StreamingResponse(
-        body(), status_code=upstream.status_code, background=BackgroundTask(upstream.aclose)
+    response = _RecordedStream(
+        body(),
+        status_code=upstream.status_code,
+        background=BackgroundTask(upstream.aclose),
+        record=record,
     )
     response.raw_headers = [(n.lower().encode("latin-1"), v.encode("latin-1")) for n, v in kept]
     return response

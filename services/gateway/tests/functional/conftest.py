@@ -15,6 +15,7 @@ from typing import Any, cast
 import httpx
 import pytest
 import uvicorn
+from jarvis_core.interfaces import TelemetrySink
 from jarvis_core.keys import hash_jarvis_key
 from jarvis_core.secretbox import AesGcmSecretBox
 from jarvis_core.ssrf import SsrfPolicy
@@ -81,6 +82,7 @@ async def make_gateway(upstream: Upstream) -> AsyncIterator[GatewayFactory]:
         vault_box: AesGcmSecretBox = BOX,
         max_body_bytes: int = MAX_BODY,
         apis: Sequence[ApiEntry] | None = None,
+        sink: TelemetrySink | None = None,
         **cfg: Any,
     ) -> Gateway:
         target = port or upstream.port
@@ -113,7 +115,9 @@ async def make_gateway(upstream: Upstream) -> AsyncIterator[GatewayFactory]:
             transport_factory=lambda: PinnedTransport(policy, resolver=resolve),
         )
         store.add_listener(forwarder.retain)
-        app = create_app(config=cast(ConfigManager, StoreOnly(store)), forwarder=forwarder)
+        app = create_app(
+            config=cast(ConfigManager, StoreOnly(store)), forwarder=forwarder, sink=sink
+        )
         client = httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app), base_url="http://gateway", timeout=10
         )

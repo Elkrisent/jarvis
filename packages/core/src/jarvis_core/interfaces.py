@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
 from jarvis_core.config import ApiDependency
+from jarvis_core.telemetry import RequestEvent
 
 # ---------------------------------------------------------------- CacheStore
 
@@ -132,7 +133,7 @@ class TelemetrySink(Protocol):
     @property
     def dropped_total(self) -> int: ...
 
-    def emit(self, event: Mapping[str, Any]) -> bool:
+    def emit(self, event: Mapping[str, Any] | RequestEvent) -> bool:
         """Never blocks. False (and counted) if the event was dropped (SPEC §6.3)."""
         ...
 

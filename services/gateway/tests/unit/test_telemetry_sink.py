@@ -253,3 +253,40 @@ def test_emit_signature_accepts_mappings() -> None:
     sink = NoopTelemetrySink()
     mapping: Mapping[str, object] = {"a": 1}
     assert sink.emit(mapping) is True
+
+
+async def test_noop_sink_lifecycle_is_harmless() -> None:
+    sink = NoopTelemetrySink()
+    await sink.start()
+    await sink.aclose()
+
+
+@pytest.mark.parametrize(("queue", "batch", "maxlen"), [(0, 1, 1), (1, 0, 1), (1, 1, 0)])
+def test_sizes_below_one_are_rejected(queue: int, batch: int, maxlen: int) -> None:
+    with pytest.raises(ValueError, match="at least 1"):
+        RedisTelemetrySink(FakeWriter(), queue_size=queue, batch_size=batch, maxlen=maxlen)
+
+
+async def test_start_twice_runs_one_flusher_and_close_without_start_is_clean() -> None:
+    writer = FakeWriter()
+    sink = make_sink(writer)
+    await sink.start()
+    await sink.start()
+    sink.emit(make_event(1))
+    await settle(sink, writer, 1)
+    await sink.aclose()
+    assert len(writer.batches) == 1
+    never_started = make_sink(FakeWriter())
+    never_started.emit(make_event(1))
+    await never_started.aclose()
+    assert never_started.dropped_total == 1
+
+
+async def test_a_writer_that_fails_to_close_does_not_break_shutdown() -> None:
+    class BadClose(FakeWriter):
+        async def aclose(self) -> None:
+            raise OSError("boom")
+
+    sink = make_sink(BadClose())
+    await sink.start()
+    await sink.aclose()

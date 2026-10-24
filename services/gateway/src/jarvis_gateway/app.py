@@ -16,6 +16,7 @@ from jarvis_core.health import (
     evaluate_readiness,
     tcp_reachable,
 )
+from jarvis_core.interfaces import TelemetrySink
 
 from jarvis_gateway.config.manager import ConfigManager, ConfigStatus
 from jarvis_gateway.config.postgres import PostgresLoader
@@ -24,6 +25,7 @@ from jarvis_gateway.config.store import ConfigStore
 from jarvis_gateway.credentials import CredentialVault
 from jarvis_gateway.forwarder import Forwarder
 from jarvis_gateway.routes import build_gw_router
+from jarvis_gateway.routing import TemplateRegistry
 from jarvis_gateway.settings import load_settings
 
 # A full sync older than this many resync intervals marks the gateway degraded.
@@ -68,6 +70,7 @@ def create_app(
     resync_interval_s: float = 60.0,
     clock: Clock | None = None,
     forwarder: Forwarder | None = None,
+    sink: TelemetrySink | None = None,
 ) -> FastAPI:
     """Without ``config`` the app only reports its dependencies, exactly as in M0.3."""
     clock = SystemClock() if clock is None else clock
@@ -109,7 +112,9 @@ def create_app(
         return body
 
     if config is not None:
-        app.include_router(build_gw_router(config.store, forwarder))
+        templates = TemplateRegistry()
+        config.store.add_listener(templates.retain)
+        app.include_router(build_gw_router(config.store, forwarder, sink, templates, clock))
 
     return app
 

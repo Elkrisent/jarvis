@@ -202,3 +202,13 @@ def test_any_valid_input_round_trips(
     decoded = json.loads(encode(event))
     assert decoded == event.to_dict()
     assert decoded["status"] == status
+
+
+def test_in_memory_sink_stores_request_events_as_dicts() -> None:
+    from jarvis_core.memory import InMemoryTelemetrySink
+
+    sink = InMemoryTelemetrySink()
+    event = _event()
+    assert sink.emit(event)
+    assert sink.emit({"kind": "event"})
+    assert sink.events == [event.to_dict(), {"kind": "event"}]
