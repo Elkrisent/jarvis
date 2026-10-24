@@ -38,6 +38,12 @@ uv run python scripts/bench/docker_stats.py summarize "$dir/stats.jsonl" --match
 
 make bench-load
 
+if [ "$phase" -ge 1 ]; then
+  # S2 pass-through overhead through the gateway (gw_overhead_miss_p50/p99), median of 5 pairs.
+  REPEATS=${REPEATS:-5} scripts/bench/run_s2.sh "$dir"
+  raw+=(--raw "s2_runs=$dir/s2_runs.json")
+fi
+
 uv run python scripts/bench/write_env.py --out "$dir/env.json" --profile default \
   --param k6_duration=10s --param k6_vus=10
 uv run python scripts/bench/checkpoint.py --phase "$phase" --results "$dir/results.json" --env "$dir/env.json" \

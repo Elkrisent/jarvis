@@ -10,7 +10,7 @@ Phase 1: Proxy.
 
 ## Current Module
 
-None active. M1.9 was the last module of Phase 1; Checkpoint 1 is next but is not started (wait for the user).
+Checkpoint 1, blocked at step 4 (see In Progress and Blockers).
 
 ## Completed
 
@@ -104,15 +104,22 @@ None active. M1.9 was the last module of Phase 1; Checkpoint 1 is next but is no
 
 ## In Progress
 
-Nothing.
+Checkpoint 1 (Phase 1: Proxy), branch `feat/checkpoint-1`. BLOCKED at protocol step 4: the S2 pass-through overhead misses its p99 budget (details under Blockers). Steps 5 to 8 (traceability, report, tag) are not done and `benchmarks/checkpoints/P1.json` / `BENCHMARKS.md` were deliberately not committed (that run failed its budget).
+
+* Step 3, acceptance stories: all four automated in `tests/e2e/test_checkpoint_1.py` and passing on the Docker stack (change base URL and key; metadata base URL rejected on save; revoked key rejected 1 s later; restart with Postgres down serves from the snapshot). Story 4 failed at first and exposed a real bug (next bullet); after the fix it passed in 10 of 11 stack runs, the one failure (first full-suite run) was not reproduced and not explained, so watch it.
+* Bug found by story 4 and fixed (user chose the narrow option): with a JARVIS container stopped (Postgres), `DestinationResolver` looked up every container name again for every new upstream connection (about 2 s timeout each, 8 s inside the resolver thread) and refused allowlisted private upstreams, so such traffic got 504s. Now lookups are single-flight and reused for 5 s when incomplete; a container name that has never resolved is treated as not running (WARNING logged with the name), a name that resolved before and now fails still fails closed. Regression tests in `test_ssrf.py` and the security suite (the old test that pinned the first-lookup fail-closed rule was rewritten for the new rule, not loosened: the previously-resolved case is still tested). Known residual: if Postgres dies while the gateway is running, its name had resolved, so allowlisted private upstreams are refused from the next lookup (at most 30 s later) until it returns.
+* Performance fixes from profiling the request path (user chose "profile and fix now"): `sniffio==1.3.1` added to the gateway (httpcore imports it on every pool operation; without it every call paid a failed module search, about 0.9 ms of CPU per proxied request, regression test `test_runtime_deps.py`) and `httptools==0.9.0` (uvicorn uses it automatically, about 0.15 ms). Not done: disabling the uvicorn access log (about 0.25 ms per request, changes operations) and anything deeper in httpcore's pool.
+* S2 (pass-through overhead) did not exist: added `tests/load/scenarios/s2_passthrough.js` (open model, unique paths, 50 ms mock latency), `scripts/bench/s2_setup.py`, `run_s2.sh` (median of N direct/proxied pairs via `median_runs.py`), wired into `run_checkpoint.sh` for phase >= 1 (5 pairs, 100 req/s fixed in advance).
+* Other checkpoint steps done: step 2 on this branch before the benchmark work: unit 1261, integration 145, system 16, functional 121, e2e 7 (8 with story 4 fixed), chaos 3, security 131 + the rewritten one; `make coverage` and full lint/mypy/bandit/unit+integration+functional (1530) pass after the changes. CI on `main` was green at `5990438`.
 
 ## Next
 
-1. Run Checkpoint 1 (IMPLEMENTATION.md "Checkpoint 1" and Part D protocol) only when the user says so. Acceptance stories: change one base URL and key (real credential reaches the upstream, never the JARVIS key); a base URL of `http://169.254.169.254` is rejected on save; a key revoked via the API is rejected 1 s later; with Postgres down and a snapshot present the gateway restarts and serves. Benchmarks in scope: overhead (S2 only), `config_propagation_p99`, micro-benchmarks, plus the telemetry overhead metrics.
-2. (Done on `chore/checkpoint-bench-wiring`, pending merge.) `scripts/bench/run_checkpoint.sh` runs `make bench-propagation bench-telemetry` for phase >= 1 and stops at once if `DATABASE_URL` or `REDIS_URL` is unset. Checkpoint 1 therefore needs a Postgres role that may create databases and a Redis server reachable from the machine, as well as Docker.
+1. Get the user's decision on the S2 p99 budget (Blockers, first item), then finish Checkpoint 1: `make bench-checkpoint PHASE=1` (needs `DATABASE_URL`, `REDIS_URL`, Docker), `make traceability COMPLETED_PHASE=1 TRACE_MARKERS="not perf"`, tick every M1.x DoD, write `docs/checkpoints/P1-proxy.md` (Appendix 2), tag `v0.1.0` pre-release with `P1.json` attached, post the summary and STOP for approval. Never start Phase 2 on your own.
+2. Merge the `feat/checkpoint-1` PR (SSRF resolver fix, `sniffio`/`httptools`, S2 tooling, story tests) after CI is green.
 
 ## Blockers / Questions
 
+* BLOCKS CHECKPOINT 1, needs a user decision: gateway pass-through overhead (S2, `gw_overhead_miss_*`, budget p50 <= 3 ms and p99 <= 15 ms, SPEC 13) at 100 req/s against a 50 ms mock upstream. p50 passes (median of 5 pairs 2.62 ms; 2.2 to 2.7 ms in every set). p99 does not reliably: sets of three pairs gave medians of 16.1, 11.8 and 33.7 ms, and the checkpoint run's five pairs gave 48.7, 41.7, 15.1, 2649 and 783 ms (median 48.7); the gateway holds steady memory (52.7 MiB over six 30 s runs), the p99 is about 20 ms above direct in quiet runs with occasional stalls of 100 ms to seconds whose source I did not find (telemetry is not it: same range with it off). Before the fixes: p50 3.1 ms and p99 76 ms at 100 req/s, and the gateway saturated near 140 to 190 req/s. Per-request cost is about 4 to 5 ms of CPU in the container (about 2 ms on the host), mostly httpcore/h11 and uvicorn work, so one core is the limit; SPEC 13 throughput (2,000 req/s, cache hits) is a Phase 3 problem. Options: (a) keep digging for the stalls (loop-lag monitor, access log off, GC) before Checkpoint 1; (b) move the overhead budget to Checkpoint 3 and record these numbers as informational (edits IMPLEMENTATION.md); (c) quieter measurement machine. The noisy WSL2/Docker Desktop host may account for part of the spikes.
 * OPEN, needs a user decision before P5: PATCH deletes the old secret, but older immutable versions still hold its `secret_ref`. A P5 rollback (copy an old version, SPEC section 5.2) would point at a deleted secret. M1.4 reads only the current version.
 * Redis outage vs revocation: see the known limit below; the user asked what it means (it is about Redis being unavailable at some moment, not about never starting) and has not decided yet.
 * REQ-11.1-6: the revocation push is implemented in M1.4 (`config:invalidated`); the traceability row only becomes meaningful once M1.5 enforces it on requests.
@@ -126,7 +133,7 @@ Nothing.
 
 ## Resume Point
 
-Phase 1 modules are done (M1.1 to M1.9). Wait for the user to ask for Checkpoint 1; do not start it or Phase 2 on your own. The benchmark wiring for the checkpoint script is on `chore/checkpoint-bench-wiring` (Next, item 2). Open decisions still waiting for the user: Redis-outage revocation window (Blockers), the P5 secret-rollback question.
+Branch `feat/checkpoint-1`. Commit/push the pending work, open the PR, and ask the user how to treat the S2 p99 budget (Blockers). Everything else for Checkpoint 1 is done except steps 4 to 8 of the protocol.
 
 ## Last Updated
 

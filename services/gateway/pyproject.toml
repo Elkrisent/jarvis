@@ -7,9 +7,14 @@ dependencies = [
     "asyncpg==0.32.0",
     "fastapi==0.156.5",
     "httpcore==1.0.9",
+    # uvicorn uses it automatically for HTTP parsing when installed (faster than pure-Python h11).
+    "httptools==0.9.0",
     "httpx==0.28.1",
     "jarvis-core",
     "redis==8.0.1",
+    # httpcore imports sniffio on every pool operation; without it each call pays a failed module
+    # search (about 1 ms of CPU per proxied request). anyio no longer pulls it in.
+    "sniffio==1.3.1",
     "uvicorn==0.34.2",
     "uvloop==0.21.0",
 ]
