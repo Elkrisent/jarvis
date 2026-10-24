@@ -19,13 +19,16 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def build_rows(
-    results: dict[str, float], budgets: dict[str, Budget], baseline: dict[str, float] | None
+    results: dict[str, float],
+    budgets: dict[str, Budget],
+    baseline: dict[str, float] | None,
+    phase: int | None = None,
 ) -> list[dict[str, str]]:
     rows = []
     for name in sorted(results):
         value = results[name]
         budget = budgets.get(name)
-        status = judge(value, budget)
+        status = judge(value, budget, phase)
         limit = "—"
         if budget and budget.budget is not None:
             limit = f"{'≤' if budget.direction == 'lower' else '≥'} {budget.budget:g}"
@@ -62,13 +65,18 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--budgets", type=Path, default=ROOT / "benchmarks" / "budgets.yaml")
     ap.add_argument("--baseline", type=Path, help="results from main, for the change column")
     ap.add_argument("--enforce", action="store_true", help="exit 1 when a budget is exceeded")
+    ap.add_argument(
+        "--phase",
+        type=int,
+        help="checkpoint being judged: budgets with enforce_from_phase above it are only reported",
+    )
     args = ap.parse_args(argv)
 
     results: dict[str, float] = {}
     for path in args.results:
         results.update(read_json(path))
     baseline = read_json(args.baseline) if args.baseline and args.baseline.exists() else None
-    rows = build_rows(results, load_budgets(args.budgets), baseline)
+    rows = build_rows(results, load_budgets(args.budgets), baseline, args.phase)
     table = render(rows)
 
     print(table)
@@ -79,6 +87,12 @@ def main(argv: list[str] | None = None) -> int:
     unknown = [r for r in rows if r["status"] == "unknown metric"]
     for r in unknown:
         print(f"check_budgets: metric {r['metric']!r} is not in budgets.yaml", file=sys.stderr)
+    for r in rows:
+        if r["status"] == "deferred":
+            print(
+                f"check_budgets: {r['metric']} = {r['value']} misses {r['budget']}; enforced later",
+                file=sys.stderr,
+            )
     for r in over:
         print(
             f"check_budgets: {r['metric']} = {r['value']} violates {r['budget']}", file=sys.stderr

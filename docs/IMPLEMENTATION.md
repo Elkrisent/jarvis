@@ -510,7 +510,7 @@ Run the Part D protocol and stop.
 - *Given* a key revoked via the API, *when* the next request arrives 1 s later, *then* it is rejected.
 - *Given* Postgres is down and a snapshot exists, *when* the gateway restarts, *then* it serves traffic.
 
-Benchmarks in scope: overhead (S2 only, since there's no cache yet), `config_propagation_p99`, micro-benchmarks. Run the Part D protocol and stop.
+Benchmarks in scope: overhead (S2 only, since there's no cache yet), `config_propagation_p99`, micro-benchmarks. Of the S2 overhead budgets, p50 (≤ 3 ms) is enforced here; the p99 budget (≤ 15 ms) is measured and reported but enforced from Checkpoint 3 (`enforce_from_phase` in `benchmarks/budgets.yaml`; user decision at Checkpoint 1, after profiling found no fixable cause: see `docs/PROGRESS.md`). Run the Part D protocol and stop.
 
 ---
 
@@ -617,7 +617,7 @@ Benchmarks in scope: overhead (S2 only, since there's no cache yet), `config_pro
 - *Given* a quota of 60/min, *when* 200 requests arrive in a minute, *then* the upstream receives ≤ 60.
 - *Given* Redis is killed during load, *when* traffic continues, *then* no request fails because of JARVIS.
 
-Benchmarks in scope: S2, S4, S8, retry-storm ratio, micro-benchmarks. Run the Part D protocol and stop.
+Benchmarks in scope: S2, S4, S8, retry-storm ratio, micro-benchmarks. The S2 overhead p99 budget deferred from Checkpoint 1 is enforced here: profile the request path with py-spy first (the S2 p99 tail at 100 req/s was about 20 ms above the direct path with no cause found by tuning). Run the Part D protocol and stop.
 
 ---
 

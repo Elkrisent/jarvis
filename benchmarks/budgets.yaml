@@ -8,7 +8,9 @@ metrics:
   gw_overhead_hit_p50:   {unit: ms, direction: lower, budget: 2,  spec: "§13 gateway overhead, cache hit"}
   gw_overhead_hit_p99:   {unit: ms, direction: lower, budget: 10, spec: "§13 gateway overhead, cache hit"}
   gw_overhead_miss_p50:  {unit: ms, direction: lower, budget: 3,  spec: "§13 gateway overhead, upstream call"}
-  gw_overhead_miss_p99:  {unit: ms, direction: lower, budget: 15, spec: "§13 gateway overhead, upstream call"}
+  # enforce_from_phase: 3 (user decision at Checkpoint 1): p99 was 12 to 80 ms at 100 req/s with unexplained
+  # tails; profiling is planned for Phase 3. Until then it is measured and reported as "deferred".
+  gw_overhead_miss_p99:  {unit: ms, direction: lower, budget: 15, enforce_from_phase: 3, spec: "§13 gateway overhead, upstream call"}
   gw_throughput_hit_rps: {unit: req/s, direction: higher, budget: 2000, spec: "§13 throughput, 2 vCPU, cache-hit-heavy"}
   gw_redis_roundtrips_pre:  {unit: count/req, direction: lower, budget: 2, spec: "§13 hot-path I/O"}
   gw_redis_roundtrips_post: {unit: count/req, direction: lower, budget: 1, spec: "§13 hot-path I/O"}

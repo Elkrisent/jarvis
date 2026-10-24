@@ -53,12 +53,13 @@ def render(budgets: dict[str, Budget], checkpoints: dict[int, dict[str, Any]]) -
             limit = f"{'≤' if b.direction == 'lower' else '≥'} {b.budget:g} {b.unit}"
         cells = []
         latest: float | None = None
+        latest_phase = 0
         for p in PHASES:
             value = checkpoints.get(p, {}).get("results", {}).get(name)
             cells.append("—" if value is None else f"{value:.4g}")
             if value is not None:
-                latest = value
-        status = "not measured" if latest is None else judge(latest, b)
+                latest, latest_phase = value, p
+        status = "not measured" if latest is None else judge(latest, b, latest_phase)
         lines.append("| " + " | ".join([name, limit, *cells, status]) + " |")
     return "\n".join(lines) + "\n"
 
