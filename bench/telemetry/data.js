@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792855346711,
+  "lastUpdate": 1792858393146,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Telemetry overhead": [
@@ -135,6 +135,40 @@ window.BENCHMARK_DATA = {
           {
             "name": "telemetry_overhead_p99_redis_down",
             "value": 0.017,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "ab4e3a80820fb25691dd49f1929299926cb5e134",
+          "message": "Merge pull request #31 from Elkrisent/perf/gc-freeze\n\nperf(gateway): freeze startup objects out of the GC; S2 stall investigation notes",
+          "timestamp": "2026-10-24T21:40:25+05:30",
+          "tree_id": "0676b8b84c2d1203cb851aec37f81eecba215621",
+          "url": "https://github.com/Elkrisent/jarvis/commit/ab4e3a80820fb25691dd49f1929299926cb5e134"
+        },
+        "date": 1792858392227,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "telemetry_overhead_p99",
+            "value": 0.214,
+            "unit": "ms"
+          },
+          {
+            "name": "telemetry_overhead_p99_redis_down",
+            "value": -0.055,
             "unit": "ms"
           }
         ]
