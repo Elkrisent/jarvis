@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792828335461,
+  "lastUpdate": 1792839223629,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Micro benchmarks": [
@@ -618,6 +618,44 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 6.127317502495938e-7",
             "extra": "mean: 1.5066618282307025 usec\nrounds: 81018"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "c5307e8ab007aa45f1a8e954bc6a63e209e167d6",
+          "message": "Merge pull request #27 from Elkrisent/feat/m1.9-telemetry\n\nfeat: telemetry emitter (M1.9)",
+          "timestamp": "2026-10-24T16:23:11+05:30",
+          "tree_id": "1f5a872b28bfc091a625fe538c84c3f565226fc9",
+          "url": "https://github.com/Elkrisent/jarvis/commit/c5307e8ab007aa45f1a8e954bc6a63e209e167d6"
+        },
+        "date": 1792839222874,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "packages/core/tests/bench/test_bench_route_template_match.py::test_bench_route_template_match",
+            "value": 201493.85271922348,
+            "unit": "iter/sec",
+            "range": "stddev: 5.737995619586155e-7",
+            "extra": "mean: 4.962930563412644 usec\nrounds: 17786"
+          },
+          {
+            "name": "packages/core/tests/bench/test_bench_token_bucket_take.py::test_bench_token_bucket_take",
+            "value": 828455.5249180057,
+            "unit": "iter/sec",
+            "range": "stddev: 2.9166167485265094e-7",
+            "extra": "mean: 1.2070654005222217 usec\nrounds: 84403"
           }
         ]
       }
