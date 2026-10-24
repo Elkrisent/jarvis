@@ -1,10 +1,15 @@
+import asyncio
 import ipaddress
+import logging
+import time
 from collections.abc import Sequence
 
 import pytest
 from jarvis_core.clock import FakeClock
 from jarvis_core.errors import DestinationBlockedError
 from jarvis_core.ssrf import (
+    INTERNAL_LOOKUP_TIMEOUT_S,
+    INTERNAL_RETRY_S,
     DestinationChecker,
     DestinationResolver,
     HostNotResolved,
@@ -461,42 +466,109 @@ async def test_an_entry_that_names_loopback_specifically_allows_it() -> None:
         await resolver.resolve("0.0.0.0", 8080, on_allowlist=True)  # not covered by 127.0.0.0/8
 
 
-@pytest.mark.req("REQ-4.13-3")
-async def test_a_failed_internal_lookup_fails_closed_for_allowlisted_private_addresses() -> None:
-    class Down(StubResolver):
-        async def __call__(self, host: str, port: int) -> Sequence[str]:
-            if port == 0 and host == "api":
+class FlakyInternal(StubResolver):
+    """Looks up the JARVIS container ``api`` (port 0) with a switchable outcome."""
+
+    def __init__(self, answers: dict[str, Sequence[str]]) -> None:
+        super().__init__(answers)
+        self.down = True
+        self.hang = False
+        self.api_address = "172.18.0.3"
+
+    async def __call__(self, host: str, port: int) -> Sequence[str]:
+        if port == 0 and host == "api":
+            self.calls.append((host, port))
+            if self.hang:
+                await asyncio.sleep(3600)
+            if self.down:
                 raise OSError("dns hiccup")
-            return await super().__call__(host, port)
+            return [self.api_address]
+        return await super().__call__(host, port)
 
+
+def _api_lookups(stub: StubResolver) -> int:
+    return stub.calls.count(("api", 0))
+
+
+@pytest.mark.req("REQ-4.13-3")
+async def test_a_container_name_that_has_never_resolved_has_no_address_to_protect(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # The container is not running (a stopped Postgres, say): there is nothing to hit by mistake.
     policy = SsrfPolicy.from_env({"JARVIS_SSRF_ALLOWLIST": "172.16.0.0/12"})
-    stub = Down({"by-ip.example": ["172.18.0.3"], "pub.example": [PUBLIC]})
+    stub = FlakyInternal({"by-ip.example": ["172.18.0.9"], "pub.example": [PUBLIC]})
     resolver = DestinationResolver(policy, stub, FakeClock())
-    with pytest.raises(DestinationBlockedError):
-        await resolver.resolve("by-ip.example", 443, on_allowlist=False)
+    with caplog.at_level(logging.WARNING, logger="jarvis_core.ssrf"):
+        assert await resolver.resolve("by-ip.example", 443, on_allowlist=False) == ["172.18.0.9"]
     assert await resolver.resolve("pub.example", 443, on_allowlist=False) == [PUBLIC]
+    assert "api" in caplog.text  # the name is logged, never an address
+    assert "172." not in caplog.text
 
 
-async def test_an_incomplete_internal_lookup_is_not_cached() -> None:
-    state = {"down": True}
-
-    class Flaky(StubResolver):
-        async def __call__(self, host: str, port: int) -> Sequence[str]:
-            if port == 0 and host == "api":
-                if state["down"]:
-                    raise OSError("dns hiccup")
-                return ["172.18.0.3"]
-            return await super().__call__(host, port)
-
+@pytest.mark.req("REQ-4.13-3")
+async def test_a_container_that_resolved_before_and_now_fails_still_fails_closed() -> None:
+    clock = FakeClock()
     policy = SsrfPolicy.from_env({"JARVIS_SSRF_ALLOWLIST": "172.16.0.0/12"})
-    stub = Flaky({"by-ip.example": ["172.18.0.3"], "other.example": ["172.18.0.9"]})
-    resolver = DestinationResolver(policy, stub, FakeClock())
+    stub = FlakyInternal({"other.example": ["172.18.0.9"]})
+    stub.down = False
+    resolver = DestinationResolver(policy, stub, clock)
+    assert await resolver.resolve("other.example", 443, on_allowlist=False) == ["172.18.0.9"]
+    stub.down = True
+    clock.advance(60)  # the cache expired and the refresh fails: the old address might have moved
     with pytest.raises(DestinationBlockedError):
         await resolver.resolve("other.example", 443, on_allowlist=False)
-    state["down"] = False  # no clock advance: a failed lookup must not have been cached
-    assert await resolver.resolve("other.example", 443, on_allowlist=False) == ["172.18.0.9"]
+
+
+@pytest.mark.req("REQ-4.13-3")
+async def test_a_name_that_was_unknown_is_blocked_once_it_resolves() -> None:
+    clock = FakeClock()
+    policy = SsrfPolicy.from_env({"JARVIS_SSRF_ALLOWLIST": "172.16.0.0/12"})
+    stub = FlakyInternal({"by-ip.example": ["172.18.0.3"]})
+    resolver = DestinationResolver(policy, stub, clock)
+    assert await resolver.resolve("by-ip.example", 443, on_allowlist=False) == ["172.18.0.3"]
+    stub.down = False  # the container started
+    clock.advance(INTERNAL_RETRY_S + 1)  # the short retry window passed, not the 30 s TTL
     with pytest.raises(DestinationBlockedError):
         await resolver.resolve("by-ip.example", 443, on_allowlist=False)
+
+
+async def test_a_failed_lookup_is_not_repeated_for_every_connection() -> None:
+    clock = FakeClock()
+    policy = SsrfPolicy.from_env({"JARVIS_SSRF_ALLOWLIST": "172.16.0.0/12"})
+    stub = FlakyInternal({"pub.example": [PUBLIC]})
+    resolver = DestinationResolver(policy, stub, clock)
+    for _ in range(50):
+        await resolver.resolve("pub.example", 443, on_allowlist=False)
+    assert _api_lookups(stub) == 1
+    clock.advance(INTERNAL_RETRY_S + 1)
+    await resolver.resolve("pub.example", 443, on_allowlist=False)
+    assert _api_lookups(stub) == 2
+
+
+async def test_concurrent_connections_share_one_internal_lookup() -> None:
+    policy = SsrfPolicy.from_env({"JARVIS_SSRF_ALLOWLIST": "172.16.0.0/12"})
+    stub = FlakyInternal({"pub.example": [PUBLIC]})
+    stub.down = False
+    resolver = DestinationResolver(policy, stub, FakeClock())
+    results = await asyncio.gather(
+        *(resolver.resolve("pub.example", 443, on_allowlist=False) for _ in range(40))
+    )
+    assert all(r == [PUBLIC] for r in results)
+    assert _api_lookups(stub) == 1
+
+
+async def test_a_hung_internal_lookup_is_cut_at_the_timeout_and_not_started_again() -> None:
+    policy = SsrfPolicy.from_env({"JARVIS_SSRF_ALLOWLIST": "172.16.0.0/12"})
+    stub = FlakyInternal({"pub.example": [PUBLIC]})
+    stub.hang = True
+    resolver = DestinationResolver(policy, stub, FakeClock())
+    started = time.monotonic()
+    results = await asyncio.gather(
+        *(resolver.resolve("pub.example", 443, on_allowlist=False) for _ in range(10))
+    )
+    assert time.monotonic() - started < INTERNAL_LOOKUP_TIMEOUT_S + 1.5
+    assert all(r == [PUBLIC] for r in results)
+    assert _api_lookups(stub) == 1
 
 
 async def test_the_last_known_internal_addresses_are_kept_when_a_refresh_fails() -> None:
