@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792844005860,
+  "lastUpdate": 1792846674134,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Telemetry overhead": [
@@ -67,6 +67,40 @@ window.BENCHMARK_DATA = {
           {
             "name": "telemetry_overhead_p99_redis_down",
             "value": -0.042,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "867099a7e413520b6a6c3a3bb7fae25e24316fa9",
+          "message": "Merge pull request #29 from Elkrisent/chore/checkpoint-bench-wiring\n\nchore: run propagation and telemetry benchmarks in the checkpoint script",
+          "timestamp": "2026-10-24T18:24:34+05:30",
+          "tree_id": "8c5b85284be111e9b15317f19bdad9824291bd0d",
+          "url": "https://github.com/Elkrisent/jarvis/commit/867099a7e413520b6a6c3a3bb7fae25e24316fa9"
+        },
+        "date": 1792846673222,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "telemetry_overhead_p99",
+            "value": 0.245,
+            "unit": "ms"
+          },
+          {
+            "name": "telemetry_overhead_p99_redis_down",
+            "value": 0.044,
             "unit": "ms"
           }
         ]
