@@ -61,7 +61,9 @@ def _assert_credential(call: dict[str, Any], mode: str) -> None:
         assert "appid" not in query
 
 
-@pytest.mark.req("REQ-4.1-1", "REQ-4.5-2", "REQ-4.5-3", "REQ-4.5-4", "REQ-4.5-5", "REQ-3-4")
+@pytest.mark.req(
+    "REQ-4.1-1", "REQ-4.5-2", "REQ-4.5-3", "REQ-4.5-4", "REQ-4.5-5", "REQ-3-4", "REQ-2-12"
+)
 @pytest.mark.parametrize(("method", "body_kind", "mode"), _cases())
 async def test_the_upstream_receives_exactly_the_forwarded_request(
     make_gateway: GatewayFactory, upstream: Upstream, method: str, body_kind: str, mode: str
@@ -94,7 +96,7 @@ async def test_the_upstream_receives_exactly_the_forwarded_request(
     assert "x-jarvis-key" not in call["headers"]
 
 
-@pytest.mark.req("REQ-4.5-6")
+@pytest.mark.req("REQ-4.5-6", "REQ-2-12")
 @pytest.mark.parametrize("mode", ["bearer", "header", "query"])
 async def test_client_values_in_the_injected_slot_never_reach_the_upstream(
     make_gateway: GatewayFactory, upstream: Upstream, mode: str
@@ -164,6 +166,7 @@ async def test_a_large_streamed_response_arrives_whole_with_its_length(
     assert response.headers["content-length"] == str(2 * 1024 * 1024)
 
 
+@pytest.mark.req("REQ-17-1")
 async def test_upstream_redirects_are_returned_not_followed(
     make_gateway: GatewayFactory, upstream: Upstream
 ) -> None:
@@ -194,6 +197,7 @@ async def test_oversized_bodies_are_413_with_and_without_a_declared_length(
     assert exact.status_code == 200
 
 
+@pytest.mark.req("REQ-2-13")
 async def test_streaming_requests_are_rejected_with_a_clear_error(
     make_gateway: GatewayFactory, upstream: Upstream
 ) -> None:
@@ -270,7 +274,7 @@ async def test_a_new_snapshot_with_a_replaced_secret_is_used_by_the_next_request
 # --- secrecy -------------------------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-4.5-7")
+@pytest.mark.req("REQ-4.5-7", "REQ-17-3")
 async def test_no_log_record_or_response_contains_a_secret_or_the_key(
     make_gateway: GatewayFactory, upstream: Upstream, caplog: pytest.LogCaptureFixture
 ) -> None:

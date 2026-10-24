@@ -76,6 +76,9 @@ Check names appear exactly as listed once each workflow has run at least once.
   quick local checks. `bench-propagation` needs `DATABASE_URL` and `REDIS_URL` (as the integration
   tests do), `bench-telemetry` needs `REDIS_URL`;
   `bench-load` needs `make bench-up` first.
+- A budget in `benchmarks/budgets.yaml` may carry `enforce_from_phase: <n>`: before checkpoint n it is
+  measured and shown as "deferred" instead of failing the checkpoint. Use it only for a documented user
+  decision (today: `gw_overhead_miss_p99`, from Checkpoint 3).
 - `make bench-checkpoint PHASE=<n>` (for n >= 1 it also needs `DATABASE_URL` and `REDIS_URL` and stops at once without them) produces the **numbers of record** on your machine: it runs
   everything, enforces the budgets in `benchmarks/budgets.yaml`, writes
   `benchmarks/checkpoints/P<n>.json` (results, raw data, `env.json`) and regenerates

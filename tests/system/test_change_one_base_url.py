@@ -38,7 +38,17 @@ class WeatherClient:
         )
 
 
-@pytest.mark.req("REQ-3-4", "REQ-4.1-1", "REQ-4.5-2", "REQ-4.5-6", "REQ-4.5-7", "REQ-4.4-1")
+@pytest.mark.req(
+    "REQ-3-4",
+    "REQ-4.1-1",
+    "REQ-4.5-2",
+    "REQ-4.5-6",
+    "REQ-4.5-7",
+    "REQ-4.4-1",
+    "REQ-1.1-2",
+    "REQ-3-1",
+    "REQ-2-12",
+)
 def test_a_client_works_unchanged_after_swapping_its_base_url_and_key(
     mock_upstream: MockUpstream,
 ) -> None:

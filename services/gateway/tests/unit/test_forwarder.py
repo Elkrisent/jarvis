@@ -270,6 +270,7 @@ def test_upstream_errors_pass_through_unchanged(status: int) -> None:
     assert response.headers["x-jarvis-source"] == "upstream"
 
 
+@pytest.mark.req("REQ-17-1")
 def test_upstream_redirects_are_returned_not_followed() -> None:
     moved = _resp(302, headers={"Location": "https://elsewhere.example/"})
     rig = Rig([_api("a1", "weather")], lambda r: moved)
@@ -333,6 +334,7 @@ def test_an_invalid_content_length_does_not_crash_ingress() -> None:
     assert response.status_code in (200, 400)
 
 
+@pytest.mark.req("REQ-2-13")
 @pytest.mark.parametrize("accept", ["text/event-stream", "TEXT/EVENT-STREAM;q=0.8, */*"])
 def test_streaming_requests_are_rejected_before_authentication(accept: str) -> None:
     rig = _rig()
@@ -449,6 +451,7 @@ def test_an_unknown_slug_and_a_bad_key_never_reach_the_upstream() -> None:
     assert rig.requests == []
 
 
+@pytest.mark.req("REQ-17-3")
 def test_nothing_secret_is_logged_on_success_or_failure(caplog: pytest.LogCaptureFixture) -> None:
     rig = _rig({"mode": "query", "param_name": "appid"})
     with caplog.at_level(logging.DEBUG):

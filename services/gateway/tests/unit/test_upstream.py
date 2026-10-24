@@ -211,3 +211,42 @@ async def test_unix_sockets_are_refused_and_sleep_is_delegated() -> None:
     with pytest.raises(httpcore.ConnectError):
         await backend.connect_unix_socket("/var/run/docker.sock")
     await backend.sleep(0)
+
+
+# --- upstream TLS verification (REQ-11.3-3) -------------------------------------------------------
+
+
+@pytest.mark.req("REQ-11.3-3")
+def test_upstream_tls_is_verified_by_default_and_the_forwarder_never_turns_it_off() -> None:
+    from jarvis_core.secretbox import AesGcmSecretBox
+    from jarvis_gateway.credentials import CredentialVault
+    from jarvis_gateway.forwarder import Forwarder
+
+    def context(transport: PinnedTransport) -> ssl.SSLContext:
+        pool: Any = transport._pool
+        return pool._ssl_context  # type: ignore[no-any-return]
+
+    default = context(PinnedTransport(SsrfPolicy()))
+    assert default.verify_mode == ssl.CERT_REQUIRED
+    assert default.check_hostname is True
+
+    # The transport the forwarder builds for a real upstream uses exactly that default.
+    forwarder = Forwarder(
+        SsrfPolicy(), CredentialVault(AesGcmSecretBox(bytes(range(32)))), max_body_bytes=1024
+    )
+    built = forwarder._factory()
+    assert isinstance(built, PinnedTransport)
+    assert context(built).verify_mode == ssl.CERT_REQUIRED
+    assert context(built).check_hostname is True
+
+
+@pytest.mark.req("REQ-11.3-3")
+@pytest.mark.parametrize("field", ["verify", "verify_tls", "tls_verify", "insecure", "ssl_verify"])
+def test_an_api_cannot_ask_for_tls_verification_to_be_turned_off(field: str) -> None:
+    from jarvis_core.config import ApiDependency
+    from pydantic import ValidationError
+
+    raw = {"slug": "weather", "name": "Weather", "base_url": "https://api.example.com"}
+    assert ApiDependency.model_validate(raw).slug == "weather"
+    with pytest.raises(ValidationError):
+        ApiDependency.model_validate({**raw, field: False})
