@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792860707651,
+  "lastUpdate": 1792862166442,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Load (throughput)": [
@@ -633,6 +633,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "mock_direct_rps",
             "value": 1829.8400673645324,
+            "unit": "req/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "4fccfcfa5507b27ba072982664feb7fe19c76eae",
+          "message": "Merge pull request #33 from Elkrisent/docs/progress-checkpoint-1-tagged\n\ndocs: record Checkpoint 1 merged and v0.1.0 tagged",
+          "timestamp": "2026-10-24T22:42:13+05:30",
+          "tree_id": "e661e14cdeb1ec4762e6b20cade71e007293741f",
+          "url": "https://github.com/Elkrisent/jarvis/commit/4fccfcfa5507b27ba072982664feb7fe19c76eae"
+        },
+        "date": 1792862166045,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "mock_direct_rps",
+            "value": 1894.2839814739352,
             "unit": "req/s"
           }
         ]
