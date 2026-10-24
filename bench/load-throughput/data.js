@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792858445272,
+  "lastUpdate": 1792860707651,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Load (throughput)": [
@@ -604,6 +604,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "mock_direct_rps",
             "value": 1883.1610903422034,
+            "unit": "req/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "ae6cf9de7717d68d0a673dfbd4d37848cbc1c687",
+          "message": "Merge pull request #32 from Elkrisent/feat/checkpoint-1-finish\n\nCheckpoint 1: Proxy",
+          "timestamp": "2026-10-24T22:17:49+05:30",
+          "tree_id": "4aec3602530c8adc2379c1096651d5a1689a4eef",
+          "url": "https://github.com/Elkrisent/jarvis/commit/ae6cf9de7717d68d0a673dfbd4d37848cbc1c687"
+        },
+        "date": 1792860707030,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "mock_direct_rps",
+            "value": 1829.8400673645324,
             "unit": "req/s"
           }
         ]
