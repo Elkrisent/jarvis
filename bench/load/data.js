@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792839404250,
+  "lastUpdate": 1792844047996,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Load (latency)": [
@@ -773,6 +773,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "mock_direct_p99",
             "value": 6.424974889999992,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "5990438f7656c146a2c4b58c33060589ff026084",
+          "message": "Merge pull request #28 from Elkrisent/docs/progress-m1.9-complete\n\ndocs: record M1.9 complete in PROGRESS.md",
+          "timestamp": "2026-10-24T17:40:20+05:30",
+          "tree_id": "b93ff99dce7ccee263a347c55c26a3eef2c73ea4",
+          "url": "https://github.com/Elkrisent/jarvis/commit/5990438f7656c146a2c4b58c33060589ff026084"
+        },
+        "date": 1792844047635,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "mock_direct_p50",
+            "value": 5.2355895,
+            "unit": "ms"
+          },
+          {
+            "name": "mock_direct_p95",
+            "value": 5.97183425,
+            "unit": "ms"
+          },
+          {
+            "name": "mock_direct_p99",
+            "value": 6.667507840000003,
             "unit": "ms"
           }
         ]
