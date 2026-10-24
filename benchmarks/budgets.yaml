@@ -12,6 +12,8 @@ metrics:
   gw_throughput_hit_rps: {unit: req/s, direction: higher, budget: 2000, spec: "§13 throughput, 2 vCPU, cache-hit-heavy"}
   gw_redis_roundtrips_pre:  {unit: count/req, direction: lower, budget: 2, spec: "§13 hot-path I/O"}
   gw_redis_roundtrips_post: {unit: count/req, direction: lower, budget: 1, spec: "§13 hot-path I/O"}
+  telemetry_overhead_p99:   {unit: ms, direction: lower, budget: 0.5, spec: "M1.9 DoD: telemetry on vs off, p99 difference"}
+  telemetry_overhead_p99_redis_down: {unit: ms, direction: lower, budget: 0.5, spec: "M1.9 DoD: Redis unreachable, p99 difference"}
   config_propagation_p99:   {unit: ms, direction: lower, budget: 1000, spec: "§13 config propagation"}
   circuit_open_fail_fast_p99: {unit: ms, direction: lower, budget: null, spec: "tracked (M2.4)"}
   dedup_upstream_calls_per_1000_identical: {unit: count, direction: lower, budget: null, spec: "tracked (REQ-4.10-6 expects 1)"}
