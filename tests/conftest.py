@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import time
@@ -61,6 +62,18 @@ def wait_until[T](
     raise AssertionError(
         f"timed out after {timeout_s}s waiting for {what} (last error: {last_error})"
     )
+
+
+def telemetry_events() -> list[dict[str, object]]:
+    """Every event now in the Redis Stream ``telemetry`` (read through the redis container)."""
+    out = compose("exec", "-T", "redis", "redis-cli", "XRANGE", "telemetry", "-", "+").stdout
+    lines = [line for line in out.splitlines() if line]
+    # Non-tty redis-cli prints three lines per entry: the entry id, the field name, the value.
+    events: list[dict[str, object]] = []
+    for index in range(0, len(lines) - 2, 3):
+        assert lines[index + 1] == "event", lines[index : index + 3]
+        events.append(json.loads(lines[index + 2]))
+    return events
 
 
 def readyz(service: str) -> httpx.Response:
