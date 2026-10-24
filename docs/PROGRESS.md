@@ -109,7 +109,7 @@ Nothing.
 ## Next
 
 1. Run Checkpoint 1 (IMPLEMENTATION.md "Checkpoint 1" and Part D protocol) only when the user says so. Acceptance stories: change one base URL and key (real credential reaches the upstream, never the JARVIS key); a base URL of `http://169.254.169.254` is rejected on save; a key revoked via the API is rejected 1 s later; with Postgres down and a snapshot present the gateway restarts and serves. Benchmarks in scope: overhead (S2 only), `config_propagation_p99`, micro-benchmarks, plus the telemetry overhead metrics.
-2. Before the P1 checkpoint: wire `make bench-propagation` (needs `DATABASE_URL`/`REDIS_URL`) and `make bench-telemetry` (needs `REDIS_URL`) into `scripts/bench/run_checkpoint.sh`. Today the checkpoint skips them, so `config_propagation_p99` and the two `telemetry_overhead_p99*` metrics stay "not measured" in the `BENCHMARKS.md` table and the interim sections there are dropped by the next `make bench-checkpoint`.
+2. (Done on `chore/checkpoint-bench-wiring`, pending merge.) `scripts/bench/run_checkpoint.sh` runs `make bench-propagation bench-telemetry` for phase >= 1 and stops at once if `DATABASE_URL` or `REDIS_URL` is unset. Checkpoint 1 therefore needs a Postgres role that may create databases and a Redis server reachable from the machine, as well as Docker.
 
 ## Blockers / Questions
 
@@ -126,7 +126,7 @@ Nothing.
 
 ## Resume Point
 
-Phase 1 modules are done (M1.1 to M1.9). Wait for the user to ask for Checkpoint 1; do not start it or Phase 2 on your own. First wire the two benchmarks into `scripts/bench/run_checkpoint.sh` (Next, item 2). Open decisions still waiting for the user: Redis-outage revocation window (Blockers), the P5 secret-rollback question.
+Phase 1 modules are done (M1.1 to M1.9). Wait for the user to ask for Checkpoint 1; do not start it or Phase 2 on your own. The benchmark wiring for the checkpoint script is on `chore/checkpoint-bench-wiring` (Next, item 2). Open decisions still waiting for the user: Redis-outage revocation window (Blockers), the P5 secret-rollback question.
 
 ## Last Updated
 

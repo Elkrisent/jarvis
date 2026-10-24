@@ -42,10 +42,8 @@ The `bench` workflow's first run on a GitHub-hosted runner (main at `b17187d`) r
 |---|---|---|---|---|
 | config_propagation_p99 | ≤ 1000 ms | 10.8 ms | 20.8 ms | ok |
 
-Three local runs gave p50 10.5 to 10.8 ms and p99 17.7 to 20.8 ms. The table above gets this
-metric only once the checkpoint script runs the propagation benchmark. It does not yet:
-`scripts/bench/run_checkpoint.sh` skips `make bench-propagation` (which needs `DATABASE_URL` and
-`REDIS_URL`), and the next `make bench-checkpoint` regenerates this file and drops this section.
+Three local runs gave p50 10.5 to 10.8 ms and p99 17.7 to 20.8 ms. `make bench-checkpoint PHASE=1` and later run this benchmark (and `make bench-telemetry`) and
+put the numbers in the table above; that run regenerates this file and drops the interim sections.
 
 ## Interim measurements: telemetry overhead (M1.9, not a checkpoint)
 
