@@ -41,3 +41,13 @@ regexes = [
 paths = [
   '''services/gateway/tests/bench/test_telemetry_overhead\.py''',
 ]
+
+[[allowlists]]
+description = "Throwaway provider credential in the first version of the S2 benchmark setup script (protects nothing; it now generates the value at run time)"
+condition = "AND"
+regexes = [
+  '''sk-s2-bench-placeholder''',
+]
+paths = [
+  '''scripts/bench/s2_setup\.py''',
+]
