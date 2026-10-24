@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gc
 import os
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
@@ -77,8 +78,14 @@ def create_app(
     clock: Clock | None = None,
     forwarder: Forwarder | None = None,
     sink: TelemetrySink | None = None,
+    freeze_gc: bool = False,
 ) -> FastAPI:
-    """Without ``config`` the app only reports its dependencies, exactly as in M0.3."""
+    """Without ``config`` the app only reports its dependencies, exactly as in M0.3.
+
+    ``freeze_gc`` moves everything alive after startup (modules, framework and config objects) out
+    of the garbage collector's reach, so a full collection under load no longer walks them: those
+    pauses were 20 to 70 ms every 30 s at 100 req/s. The gateway process turns it on.
+    """
     clock = SystemClock() if clock is None else clock
 
     managed_sink = sink if isinstance(sink, ManagedSink) else None
@@ -94,6 +101,9 @@ def create_app(
                     return
                 try:
                     await config.start()
+                    if freeze_gc:
+                        gc.collect()
+                        gc.freeze()
                     yield
                 finally:
                     await config.stop()
@@ -175,4 +185,5 @@ def create_app_from_env() -> FastAPI:
         clock=clock,
         forwarder=forwarder,
         sink=sink,
+        freeze_gc=True,
     )
