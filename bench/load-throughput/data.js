@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792855398335,
+  "lastUpdate": 1792858445272,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Load (throughput)": [
@@ -575,6 +575,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "mock_direct_rps",
             "value": 2216.110727949432,
+            "unit": "req/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "ab4e3a80820fb25691dd49f1929299926cb5e134",
+          "message": "Merge pull request #31 from Elkrisent/perf/gc-freeze\n\nperf(gateway): freeze startup objects out of the GC; S2 stall investigation notes",
+          "timestamp": "2026-10-24T21:40:25+05:30",
+          "tree_id": "0676b8b84c2d1203cb851aec37f81eecba215621",
+          "url": "https://github.com/Elkrisent/jarvis/commit/ab4e3a80820fb25691dd49f1929299926cb5e134"
+        },
+        "date": 1792858444917,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "mock_direct_rps",
+            "value": 1883.1610903422034,
             "unit": "req/s"
           }
         ]
