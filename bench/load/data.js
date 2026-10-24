@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792844047996,
+  "lastUpdate": 1792846721029,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Load (latency)": [
@@ -812,6 +812,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "mock_direct_p99",
             "value": 6.667507840000003,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "867099a7e413520b6a6c3a3bb7fae25e24316fa9",
+          "message": "Merge pull request #29 from Elkrisent/chore/checkpoint-bench-wiring\n\nchore: run propagation and telemetry benchmarks in the checkpoint script",
+          "timestamp": "2026-10-24T18:24:34+05:30",
+          "tree_id": "8c5b85284be111e9b15317f19bdad9824291bd0d",
+          "url": "https://github.com/Elkrisent/jarvis/commit/867099a7e413520b6a6c3a3bb7fae25e24316fa9"
+        },
+        "date": 1792846720706,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "mock_direct_p50",
+            "value": 3.428533,
+            "unit": "ms"
+          },
+          {
+            "name": "mock_direct_p95",
+            "value": 4.0556008,
+            "unit": "ms"
+          },
+          {
+            "name": "mock_direct_p99",
+            "value": 4.822433160000002,
             "unit": "ms"
           }
         ]
