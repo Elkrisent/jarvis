@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792915680096,
+  "lastUpdate": 1792922130607,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Telemetry overhead": [
@@ -269,6 +269,40 @@ window.BENCHMARK_DATA = {
           {
             "name": "telemetry_overhead_p99_redis_down",
             "value": -0.01,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "79d6973f57c44dd5ac4cc2826258f2f10d08aa42",
+          "message": "Merge pull request #34 from Elkrisent/fix/revocation-poll-redis-down\n\nfix: poll Postgres every 5 s while the config pub/sub link is down",
+          "timestamp": "2026-10-25T15:22:25+05:30",
+          "tree_id": "abaf990b5fa977e4345d15d606ca1e1380eaaf86",
+          "url": "https://github.com/Elkrisent/jarvis/commit/79d6973f57c44dd5ac4cc2826258f2f10d08aa42"
+        },
+        "date": 1792922129962,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "telemetry_overhead_p99",
+            "value": 0.237,
+            "unit": "ms"
+          },
+          {
+            "name": "telemetry_overhead_p99_redis_down",
+            "value": -0.004,
             "unit": "ms"
           }
         ]
