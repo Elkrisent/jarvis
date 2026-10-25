@@ -10,7 +10,6 @@ from __future__ import annotations
 import asyncio
 import http.cookiejar
 import logging
-import time
 from collections.abc import AsyncIterator, Callable
 from typing import Any
 from urllib.parse import unquote
@@ -18,6 +17,8 @@ from urllib.parse import unquote
 import httpx
 from fastapi import Request
 from fastapi.responses import Response, StreamingResponse
+from jarvis_core.clock import Clock, SystemClock
+from jarvis_core.deadline import Deadline
 from jarvis_core.errors import (
     AuthInvalidError,
     BodyTooLargeError,
@@ -90,8 +91,10 @@ class Forwarder:
         *,
         max_body_bytes: int,
         transport_factory: Callable[[], httpx.AsyncBaseTransport] | None = None,
+        clock: Clock | None = None,
     ) -> None:
         self._vault = vault
+        self._clock = SystemClock() if clock is None else clock
         self.max_body_bytes = max_body_bytes
         self._factory = transport_factory or (lambda: PinnedTransport(policy))
         self._clients: dict[Origin, httpx.AsyncClient] = {}
@@ -133,14 +136,19 @@ class Forwarder:
             self._clients[origin] = client
         return client
 
-    async def _read_body(self, request: Request) -> bytes:
+    async def _read_body(self, request: Request, deadline: Deadline) -> bytes:
+        """The request body, within the deadline: a stalled upload is answered 504."""
         chunks: list[bytes] = []
         total = 0
-        async for chunk in request.stream():
-            total += len(chunk)
-            if total > self.max_body_bytes:
-                raise BodyTooLargeError("request body is too large")
-            chunks.append(chunk)
+        try:
+            async with asyncio.timeout(deadline.remaining()):
+                async for chunk in request.stream():
+                    total += len(chunk)
+                    if total > self.max_body_bytes:
+                        raise BodyTooLargeError("request body is too large")
+                    chunks.append(chunk)
+        except TimeoutError:
+            raise UpstreamTimeoutError("the request was not completed in time") from None
         return b"".join(chunks)
 
     async def forward(
@@ -151,9 +159,10 @@ class Forwarder:
         started: float,
         record: RequestRecord,
     ) -> Response:
-        """``started`` is the ``time.monotonic()`` of ingress: the deadline runs from there."""
+        """``started`` is the clock's ``monotonic()`` at ingress: the deadline runs from there."""
         api = authenticated.api
         config = api.config
+        deadline = Deadline(self._clock, started, config.deadline_ms)
         # No await between the caller's snapshot read and this lookup: the secret is the one that
         # belongs to the policy that was just resolved.
         try:
@@ -167,11 +176,12 @@ class Forwarder:
             config.credential,
             secret,
         )
-        body = await self._read_body(request)
+        body = await self._read_body(request, deadline)
         record.add_request_bytes(len(body))
-        remaining = config.deadline_ms / 1000 - (time.monotonic() - started)
-        if remaining <= 0:
+        if deadline.expired:
             raise UpstreamTimeoutError("the upstream did not answer in time")
+        # One attempt, bounded by its own timeout and by what is left of the deadline (SPEC 4.6).
+        attempt_s = deadline.attempt_timeout(config.attempt_timeout_ms / 1000)
         try:
             client = self._client(httpx.URL(url))
             upstream_request = client.build_request(
@@ -179,17 +189,17 @@ class Forwarder:
                 url,
                 headers=_wire(headers, config.credential.mode in ("bearer", "header")),
                 content=body or None,
-                timeout=httpx.Timeout(config.attempt_timeout_ms / 1000),
+                timeout=httpx.Timeout(attempt_s),
             )
             record.mark_attempt()
-            async with asyncio.timeout(remaining):
+            async with asyncio.timeout(attempt_s):
                 upstream = await client.send(upstream_request, stream=True)
             record.mark_headers_received()
         except (TimeoutError, httpx.TimeoutException):
             raise UpstreamTimeoutError("the upstream did not answer in time") from None
         except (httpx.TransportError, httpx.InvalidURL):
             raise UpstreamUnreachableError("could not reach the upstream") from None
-        return _stream_back(upstream, request_id, record)
+        return _stream_back(upstream, request_id, record, deadline)
 
 
 def _origin(url: httpx.URL) -> Origin:
@@ -211,12 +221,24 @@ class _RecordedStream(StreamingResponse):
             self._record.finish(status=self.status_code, source="upstream", error_code=None)
 
 
-def _stream_back(upstream: httpx.Response, request_id: str, record: RequestRecord) -> Response:
+def _stream_back(
+    upstream: httpx.Response, request_id: str, record: RequestRecord, deadline: Deadline
+) -> Response:
     async def body() -> AsyncIterator[bytes]:
+        chunks = upstream.aiter_raw().__aiter__()
         try:
-            async for chunk in upstream.aiter_raw():
+            while True:
+                try:
+                    # The deadline covers the whole request, the body included (REQ-4.6-5).
+                    async with asyncio.timeout(deadline.remaining()):
+                        chunk = await anext(chunks)
+                except StopAsyncIteration:
+                    return
                 record.add_response_bytes(len(chunk))
                 yield chunk
+        except TimeoutError:
+            log.warning("the upstream response was cut at the request deadline")
+            raise UpstreamBodyError("the upstream response exceeded the deadline") from None
         except httpx.HTTPError as exc:
             log.warning("the upstream response was interrupted (%s)", type(exc).__name__)
             raise UpstreamBodyError("the upstream response was interrupted") from None

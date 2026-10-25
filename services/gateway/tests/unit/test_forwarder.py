@@ -16,7 +16,8 @@ import pytest
 from fastapi.testclient import TestClient
 from jarvis_core.clock import SystemClock
 from jarvis_core.config import ApiDependency
-from jarvis_core.errors import DestinationBlockedError
+from jarvis_core.deadline import Deadline
+from jarvis_core.errors import DestinationBlockedError, UpstreamTimeoutError
 from jarvis_core.keys import hash_jarvis_key
 from jarvis_core.secretbox import AesGcmSecretBox
 from jarvis_core.ssrf import SsrfPolicy
@@ -481,6 +482,79 @@ def test_an_upstream_that_breaks_mid_body_aborts_the_response_without_leaking(
         rig.call()
     assert "ReadError" in caplog.text
     assert "LEAKME" not in caplog.text
+
+
+class _Trickle(httpx.AsyncByteStream):
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        yield b"abc"
+        await asyncio.sleep(5)
+        yield b"def"
+
+
+@pytest.mark.req("REQ-4.6-5")
+def test_a_response_body_still_running_at_the_deadline_is_cut(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    rig = Rig(
+        [_api("a1", "weather", deadline_ms=200, attempt_timeout_ms=100, min_attempt_ms=50)],
+        lambda r: httpx.Response(200, headers={"Content-Length": "6"}, stream=_Trickle()),
+    )
+    started = time.monotonic()
+    with caplog.at_level(logging.WARNING), pytest.raises(UpstreamBodyError):
+        rig.call()
+    assert time.monotonic() - started < 1
+    assert "request deadline" in caplog.text
+
+
+@pytest.mark.req("REQ-4.6-5")
+def test_a_stalled_upload_is_answered_504_when_the_deadline_passes() -> None:
+    rig = _rig(deadline_ms=200, attempt_timeout_ms=100, min_attempt_ms=50)
+
+    def stalled() -> Any:
+        yield b"x"
+        time.sleep(0.5)  # the client goes quiet past the whole deadline
+        yield b"y"
+
+    # The test client cannot answer before its upload ends; the real-socket case (an upload that
+    # never ends) is in tests/functional/test_deadlines.py.
+    _json_error(rig.call("POST", content=stalled()), "JV_UPSTREAM_TIMEOUT", 504)
+    assert rig.requests == []
+
+
+@pytest.mark.req("REQ-4.6-5")
+async def test_an_upload_that_never_ends_is_cut_at_the_deadline() -> None:
+    class Stalled:
+        async def stream(self) -> AsyncIterator[bytes]:
+            yield b"x"
+            await asyncio.sleep(30)
+
+    forwarder = Forwarder(SsrfPolicy(), CredentialVault(BOX), max_body_bytes=LIMIT)
+    clock = SystemClock()
+    started = clock.monotonic()
+    with pytest.raises(UpstreamTimeoutError):
+        await forwarder._read_body(cast(Any, Stalled()), Deadline(clock, started, 150))
+    assert clock.monotonic() - started < 1
+
+
+@pytest.mark.req("REQ-4.6-5")
+def test_the_attempt_is_bounded_by_the_time_left_not_only_by_its_own_timeout() -> None:
+    async def slow(request: httpx.Request) -> httpx.Response:
+        await asyncio.sleep(2)
+        return _resp(200)
+
+    # 300 ms of the 400 ms deadline go on the upload; the 350 ms attempt timeout must not apply.
+    rig = Rig(
+        [_api("a1", "weather", deadline_ms=400, attempt_timeout_ms=350, min_attempt_ms=50)], slow
+    )
+
+    def upload() -> Any:
+        for _ in range(3):
+            time.sleep(0.1)
+            yield b"x"
+
+    started = time.monotonic()
+    _json_error(rig.call("POST", content=upload()), "JV_UPSTREAM_TIMEOUT", 504)
+    assert time.monotonic() - started < 0.4 + 0.15
 
 
 def test_the_forwarder_is_closed_when_the_app_shuts_down() -> None:
