@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792942872472,
+  "lastUpdate": 1792944768170,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Load (latency)": [
@@ -1278,6 +1278,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "mock_direct_p99",
             "value": 6.694080600000002,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "156198a7f514589e35997cfd69c81d8e103ecc4c",
+          "message": "Merge pull request #41 from Elkrisent/feat/m2.6-fallback\n\nfeat: fallback API with shared deadline, own circuit and credential (M2.6)",
+          "timestamp": "2026-10-25T21:39:05+05:30",
+          "tree_id": "5e5fa8a8beddc085498e4be90b8f86201b764233",
+          "url": "https://github.com/Elkrisent/jarvis/commit/156198a7f514589e35997cfd69c81d8e103ecc4c"
+        },
+        "date": 1792944767605,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "mock_direct_p50",
+            "value": 5.094872,
+            "unit": "ms"
+          },
+          {
+            "name": "mock_direct_p95",
+            "value": 5.547264599999999,
+            "unit": "ms"
+          },
+          {
+            "name": "mock_direct_p99",
+            "value": 6.341414480000001,
             "unit": "ms"
           }
         ]
