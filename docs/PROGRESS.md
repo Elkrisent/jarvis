@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 merged (PR #20, merge commit `b17187d`); M1.5 merged (PR #21, merge commit `d756c4c`); M1.6 merged (PR #23, merge commit `937a936`); M1.7 merged (PR #24, merge commit `a3d3942`); M1.8 merged (PR #25, merge commit `0ea3df7`); M1.9 merged (PR #27, merge commit `c5307e8`). Checkpoint 1 done (PR #32, merge commit `ae6cf9d`; report `docs/checkpoints/P1-proxy.md`; pre-release `v0.1.0` tagged on `ae6cf9d`); Checkpoint 1 approved by the user on 2026-10-25. Phase 2 in progress: M2.1 to M2.4 merged (PR #36, #37, #38, #39); M2.5 implemented on `feat/m2.5-rate-limiters` (not pushed).
+Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 merged (PR #20, merge commit `b17187d`); M1.5 merged (PR #21, merge commit `d756c4c`); M1.6 merged (PR #23, merge commit `937a936`); M1.7 merged (PR #24, merge commit `a3d3942`); M1.8 merged (PR #25, merge commit `0ea3df7`); M1.9 merged (PR #27, merge commit `c5307e8`). Checkpoint 1 done (PR #32, merge commit `ae6cf9d`; report `docs/checkpoints/P1-proxy.md`; pre-release `v0.1.0` tagged on `ae6cf9d`); Checkpoint 1 approved by the user on 2026-10-25. Phase 2 in progress: M2.1 to M2.5 merged (PR #36 to #40); M2.6 implemented on `feat/m2.6-fallback`.
 
 ## Current Phase
 
@@ -10,7 +10,7 @@ Phase 2: Reliability (Phase 1 approved 2026-10-25).
 
 ## Current Module
 
-M2.5 Rate limiters: code and tests done locally on `feat/m2.5-rate-limiters` (from main after PR #39); PR and CI pending. Next module: M2.6 Fallback.
+M2.6 Fallback: code and tests done on `feat/m2.6-fallback` (PR pending). All Phase 2 modules are then done; the next step is Checkpoint 2 (Phase 2 acceptance and benchmarks), run only on the user's instruction.
 
 ## Completed
 
@@ -153,6 +153,14 @@ M2.5 Rate limiters: code and tests done locally on `feat/m2.5-rate-limiters` (fr
   * Found: redis-py's default pool raises `MaxConnectionsError` after 100 concurrent calls, which would have sent the limiter to its looser local bucket under load; the limiter now uses a blocking pool of 100 (callers wait up to 1 s). The retry budget and circuit store clients still use the default pool; they are called far less often, but the same change may be worth making in the performance phase (together with the httpx pool size noted under M2.3).
   * Not wired to the UI or the management API yet: limits are set through the API's `rate_limits` config field (already validated, REQ-4.11-7).
 
+* M2.6 Fallback (branch `feat/m2.6-fallback`, from main):
+  * Gateway: when the primary fails (circuit open, attempt timeout or connection error after the retries, or a final 5xx) and the API names `fallback_api`, `Forwarder` repeats pipeline steps 6 to 8 against that API of the same project: its own circuit, upstream quota, retries, retry budget, base URL and credential, the same path, query and body, the same request deadline (and no attempt starts with less than the fallback's `min_attempt_ms` left). The answer carries `X-Jarvis-Source: fallback` and the request event has `source: "fallback"` (core telemetry now accepts that value); `X-Jarvis-Attempts` counts attempts on both APIs. A fallback API's own fallback is never followed (the fallback is served with none, so even an inconsistent config cannot chain). If the fallback fails too, the caller gets the primary's own 5xx answer, or else the primary's controlled error (`JV_CIRCUIT_OPEN`, `JV_UPSTREAM_TIMEOUT`, `JV_UPSTREAM_UNREACHABLE`). 4xx (429 included) and JARVIS's own refusals (rate limit, quota) never trigger a fallback. A fallback slug that is missing, ambiguous or in another project means no fallback. Each fallback attempt emits a `kind: "event"`, `type: "fallback"` record (`api_id`, `fallback_api_id`, `reason`, `served`).
+  * Management API (config validation time): saving an API with a `fallback_api` is a 422 on `body.fallback.fallback_api` when no such API exists in the project, when that API has a fallback of its own, or when this API is already someone's fallback (chains). Self-reference was already refused by the model (REQ-4.12-5). A fallback the dashboard sets cannot be created before its target exists; a target deleted later leaves a dangling slug, which the gateway treats as no fallback.
+  * Decisions made (SPEC silent): the fallback is used for a final upstream 5xx, not only for circuit-open and transport failures; the inbound limiter and key scope are checked against the primary only; `serve_stale` is M3.2 (REQ-4.12-1 stays uncovered until then).
+  * Tests: pure forwarder unit tests (path, credential isolation, open circuit, both failing in each way, unexpected failures, deadline, chain, missing or ambiguous slug, event), 13 functional tests on real sockets (including the IMPLEMENTATION case: primary circuit OPEN, served by the fallback with `X-Jarvis-Source: fallback` and no call to the primary; both failing gives a controlled error), management API tests (REQ-4.12-2, -3, -5). Mutation checks: treating 4xx as a failure, passing a failing fallback's 5xx through, and letting the fallback keep its own fallback each fail a named test.
+  * Verified locally with a local Redis: `make lint typecheck` clean; 1915 unit + functional + Redis integration tests pass (the API's Postgres integration tests were not run); `forwarder.py` fully covered. Not run: Postgres-backed integration, system, e2e, chaos, security, the CI gate.
+  * Refactor note: `Forwarder.forward` is now `forward` (shared per-request state in `_Call`, fallback decision) over `_serve` (circuit admit and probe) over `_attempts` (quota, credential, attempt loop). No behavior change for APIs without a fallback (all earlier tests unchanged).
+
 ## In Progress
 
 Nothing besides the item above. Checkpoint 1 notes kept for reference (what was found while running it):
@@ -185,7 +193,7 @@ Nothing besides the item above. Checkpoint 1 notes kept for reference (what was 
 
 ## Resume Point
 
-M2.1 is in PR #36 (user merged #34; #35 landed on the fix branch). M2.5 is on `feat/m2.5-rate-limiters`, not pushed. Next: push and open its PR, wait for CI, then M2.6 Fallback.
+M2.1 is in PR #36 (user merged #34; #35 landed on the fix branch). M2.6 is on `feat/m2.6-fallback`. Next: its PR, CI, merge; then, when the user says so, run the Checkpoint 2 protocol (docs/IMPLEMENTATION.md) and stop for approval.
 
 ## Last Updated
 

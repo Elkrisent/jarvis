@@ -13,6 +13,7 @@ import logging
 import math
 import uuid
 from collections.abc import AsyncIterator, Callable
+from dataclasses import dataclass
 from typing import Any
 from urllib.parse import unquote
 
@@ -26,14 +27,16 @@ from jarvis_core.errors import (
     AuthInvalidError,
     BodyTooLargeError,
     CircuitOpenError,
+    JarvisError,
     QuotaExceededError,
     RateLimitedError,
     UpstreamTimeoutError,
     UpstreamUnreachableError,
 )
-from jarvis_core.interfaces import CircuitState, RateDecision, RateLimiter
+from jarvis_core.interfaces import CircuitState, RateDecision, RateLimiter, TelemetrySink
 from jarvis_core.retry import IDEMPOTENT_METHODS, NO_RETRY, Failure, decide
 from jarvis_core.ssrf import SsrfPolicy
+from jarvis_core.telemetry import SCHEMA_VERSION, format_ts
 from starlette.background import BackgroundTask
 from starlette.types import Receive, Scope, Send
 
@@ -66,6 +69,42 @@ class _ProbeState:
 
     def __init__(self, pending: bool) -> None:
         self.pending = pending
+
+
+class _Held(Exception):
+    """The primary's final answer was a 5xx and a fallback is configured: the response stays open
+    so the caller can still pass it through if the fallback fails too."""
+
+    def __init__(self, upstream: httpx.Response) -> None:
+        super().__init__("upstream failure held for the fallback")
+        self.upstream = upstream
+
+
+@dataclass
+class _Call:
+    """What one client request shares between the primary API and its fallback."""
+
+    request: Request
+    request_id: str
+    deadline: Deadline
+    record: RequestRecord
+    path: str
+    query: str
+    headers: list[tuple[str, str]]  # filtered: no JARVIS key, no hop-by-hop headers
+    body: bytes | None = None
+    attempts: int = 0
+
+
+def _reason(
+    failure: CircuitOpenError | UpstreamTimeoutError | UpstreamUnreachableError | _Held,
+) -> str:
+    if isinstance(failure, CircuitOpenError):
+        return "circuit_open"
+    if isinstance(failure, UpstreamTimeoutError):
+        return "timeout"
+    if isinstance(failure, UpstreamUnreachableError):
+        return "unreachable"
+    return "upstream_5xx"
 
 
 class UpstreamBodyError(Exception):
@@ -113,12 +152,15 @@ class Forwarder:
         retry_budget: RetryBudget | None = None,
         circuit: CircuitBreaker | None = None,
         limiter: RateLimiter | None = None,
+        events: TelemetrySink | None = None,
     ) -> None:
         self._vault = vault
         self._random = SystemRandom() if random is None else random
         self._budget = retry_budget
         self._circuit = circuit
         self._limiter = limiter
+        self._events = events
+        self._snapshot: Snapshot | None = None
         self._clock = SystemClock() if clock is None else clock
         self.max_body_bytes = max_body_bytes
         self._factory = transport_factory or (lambda: PinnedTransport(policy))
@@ -129,7 +171,10 @@ class Forwarder:
         return list(self._clients)
 
     def retain(self, snapshot: Snapshot) -> None:
-        """Drop the clients of origins that no API in ``snapshot`` uses (a store listener)."""
+        """Drop the clients of origins that no API in ``snapshot`` uses (a store listener).
+
+        Also remembers the snapshot, so a fallback API can be found by slug."""
+        self._snapshot = snapshot
         used = {_origin(httpx.URL(a.config.base_url)) for a in snapshot.apis.values()}
         for origin in [o for o in self._clients if o not in used]:
             self._discard(self._clients.pop(origin))
@@ -221,11 +266,97 @@ class Forwarder:
         started: float,
         record: RequestRecord,
     ) -> Response:
-        """Circuit check, then the attempts. ``started`` is the clock's ``monotonic()`` at ingress:
-        the deadline runs from there."""
-        api = authenticated.api
+        """Pipeline steps 6 to 9. ``started`` is the clock's ``monotonic()`` at ingress: the
+        deadline runs from there and is shared with the fallback API, if one is used."""
+        primary = authenticated.api
+        path, query = _target_parts(request, primary.slug)
+        call = _Call(
+            request=request,
+            request_id=request_id,
+            deadline=Deadline(self._clock, started, primary.config.deadline_ms),
+            record=record,
+            path=path,
+            query=query,
+            headers=filter_request_headers(authenticated.forward_headers(_raw_headers(request))),
+        )
+        fallback = self._fallback_api(primary)
+        try:
+            return await self._serve(call, primary, hold_failure=fallback is not None)
+        except (CircuitOpenError, UpstreamTimeoutError, UpstreamUnreachableError, _Held) as failure:
+            if fallback is None:
+                raise
+            return await self._fall_back(call, primary, fallback, failure)
+
+    async def _fall_back(
+        self,
+        call: _Call,
+        primary: ApiEntry,
+        fallback: ApiEntry,
+        failure: CircuitOpenError | UpstreamTimeoutError | UpstreamUnreachableError | _Held,
+    ) -> Response:
+        """SPEC §4.12 step 2: repeat steps 6 to 8 against the fallback API. A chain is never
+        followed: the fallback is served with no fallback of its own."""
+        reason = _reason(failure)
+        held = failure.upstream if isinstance(failure, _Held) else None
+        try:
+            if not call.deadline.can_start_attempt(fallback.config.min_attempt_ms):
+                raise UpstreamTimeoutError("no time left to try the fallback API")
+            response = await self._serve(call, fallback, hold_failure=True, source="fallback")
+        except (JarvisError, _Held) as fallback_failure:
+            if isinstance(fallback_failure, _Held):
+                await fallback_failure.upstream.aclose()  # a 5xx from the fallback is no answer
+            self._emit_fallback(primary, fallback, reason, served=False)
+            if held is not None:  # both failed: the caller gets the primary's own answer
+                return _stream_back(held, call, "upstream", self._circuit_state(primary))
+            raise failure from None
+        except BaseException:
+            if held is not None:
+                await held.aclose()
+            raise
+        if held is not None:
+            await held.aclose()
+        self._emit_fallback(primary, fallback, reason, served=True)
+        return response
+
+    def _circuit_state(self, api: ApiEntry) -> str | None:
+        return self._circuit.state(api.api_id).value if self._circuit is not None else None
+
+    def _fallback_api(self, primary: ApiEntry) -> ApiEntry | None:
+        """The configured fallback API of this project, if it exists and is unambiguous."""
+        slug = primary.config.fallback.fallback_api
+        if slug is None or self._snapshot is None:
+            return None
+        found = [
+            a
+            for a in self._snapshot.apis_with_slug(slug)
+            if a.project_id == primary.project_id and a.api_id != primary.api_id
+        ]
+        return found[0] if len(found) == 1 else None
+
+    def _emit_fallback(
+        self, primary: ApiEntry, fallback: ApiEntry, reason: str, *, served: bool
+    ) -> None:
+        if self._events is None:
+            return
+        self._events.emit(
+            {
+                "v": SCHEMA_VERSION,
+                "kind": "event",
+                "type": "fallback",
+                "ts": format_ts(self._clock.now()),
+                "project_id": primary.project_id,
+                "api_id": primary.api_id,
+                "fallback_api_id": fallback.api_id,
+                "reason": reason,
+                "served": served,
+            }
+        )
+
+    async def _serve(
+        self, call: _Call, api: ApiEntry, *, hold_failure: bool, source: str = "upstream"
+    ) -> Response:
+        """Pipeline steps 6 to 8 for one API: circuit check, quota, then the attempts."""
         config = api.config
-        deadline = Deadline(self._clock, started, config.deadline_ms)
         ticket = Ticket("allow", CircuitState.CLOSED)
         if self._circuit is not None:
             ticket = await self._circuit.admit(
@@ -234,30 +365,25 @@ class Forwarder:
                 api.project_id,
                 probe_ttl_s=math.ceil(config.deadline_ms / 1000) + 1,
             )
-            record.set_circuit(ticket.state.value)
+            if source == "upstream":
+                call.record.set_circuit(ticket.state.value)
             if ticket.action == "reject":
                 rejected = CircuitOpenError("the circuit for this API is open")
                 rejected.circuit_state = ticket.state.value
                 raise rejected
         probe = _ProbeState(ticket.action == "probe")
         try:
-            return await self._send(request, authenticated, request_id, deadline, record, probe)
+            return await self._attempts(call, api, probe, hold_failure, source)
         finally:
             if probe.pending and self._circuit is not None:  # cancelled or failed before a verdict
                 await self._circuit.finish_probe(
                     api.api_id, config.circuit, api.project_id, "cancelled"
                 )
 
-    async def _send(
-        self,
-        request: Request,
-        authenticated: Authenticated,
-        request_id: str,
-        deadline: Deadline,
-        record: RequestRecord,
-        probe: _ProbeState,
+    async def _attempts(
+        self, call: _Call, api: ApiEntry, probe: _ProbeState, hold_failure: bool, source: str
     ) -> Response:
-        api = authenticated.api
+        request, record, deadline = call.request, call.record, call.deadline
         config = api.config
         # No await between the caller's snapshot read and this lookup: the secret is the one that
         # belongs to the policy that was just resolved.
@@ -270,15 +396,15 @@ class Forwarder:
             exceeded = QuotaExceededError("the upstream quota for this API is used up")
             exceeded.retry_after_s = refused.retry_after_s
             raise exceeded
-        path, query = _target_parts(request, api.slug)
-        url = build_target_url(config.base_url, path, query, config.credential, secret)
-        forwarded = filter_request_headers(authenticated.forward_headers(_raw_headers(request)))
+        url = build_target_url(config.base_url, call.path, call.query, config.credential, secret)
         forwarded = _with_idempotency_key(
-            forwarded, request.method, config.retry.idempotency_header
+            call.headers, request.method, config.retry.idempotency_header
         )
         headers = inject_credential_header(forwarded, config.credential, secret)
-        body = await self._read_body(request, deadline)
-        record.add_request_bytes(len(body))
+        if call.body is None:
+            call.body = await self._read_body(request, deadline)
+            record.add_request_bytes(len(call.body))
+        body = call.body
         client = self._client(httpx.URL(url))
         if self._budget is not None:
             self._budget.record_request(api.api_id)
@@ -287,6 +413,7 @@ class Forwarder:
             if deadline.expired:
                 raise UpstreamTimeoutError("the upstream did not answer in time")
             attempts += 1
+            call.attempts += 1
             # One attempt, bounded by its own timeout and by what is left of the deadline (4.6).
             attempt_s = deadline.attempt_timeout(config.attempt_timeout_ms / 1000)
             upstream: httpx.Response | None = None
@@ -352,7 +479,7 @@ class Forwarder:
                         api.api_id,
                         config.retry.budget_ratio,
                         project_id=api.project_id,
-                        request_id=request_id,
+                        request_id=call.request_id,
                     )
                     else NO_RETRY
                 )
@@ -360,14 +487,9 @@ class Forwarder:
                 if error is not None:
                     raise error from None
                 assert upstream is not None
-                return _stream_back(
-                    upstream,
-                    request_id,
-                    record,
-                    deadline,
-                    attempts,
-                    self._circuit.state(api.api_id).value if self._circuit is not None else None,
-                )
+                if hold_failure and is_failure(status=upstream.status_code):
+                    raise _Held(upstream)  # a fallback may still answer; the caller decides
+                return _stream_back(upstream, call, source, self._circuit_state(api))
             if upstream is not None:
                 await upstream.aclose()
             await self._clock.sleep(decision.delay_s)
@@ -393,25 +515,23 @@ def _origin(url: httpx.URL) -> Origin:
 class _RecordedStream(StreamingResponse):
     """Finishes the request's telemetry record however the response ends (done, cut, cancelled)."""
 
-    def __init__(self, *args: Any, record: RequestRecord, **kwargs: Any) -> None:
+    def __init__(self, *args: Any, record: RequestRecord, source: str, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._record = record
+        self._source = source
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         try:
             await super().__call__(scope, receive, send)
         finally:
-            self._record.finish(status=self.status_code, source="upstream", error_code=None)
+            self._record.finish(status=self.status_code, source=self._source, error_code=None)
 
 
 def _stream_back(
-    upstream: httpx.Response,
-    request_id: str,
-    record: RequestRecord,
-    deadline: Deadline,
-    attempts: int,
-    circuit: str | None = None,
+    upstream: httpx.Response, call: _Call, source: str, circuit: str | None = None
 ) -> Response:
+    record, deadline = call.record, call.deadline
+
     async def body() -> AsyncIterator[bytes]:
         chunks = upstream.aiter_raw().__aiter__()
         try:
@@ -438,9 +558,9 @@ def _stream_back(
         (n, v) for n, v in filter_response_headers(pairs) if not n.lower().startswith("x-jarvis-")
     ]
     kept += [
-        ("X-Jarvis-Request-Id", request_id),
-        ("X-Jarvis-Source", "upstream"),
-        ("X-Jarvis-Attempts", str(attempts)),
+        ("X-Jarvis-Request-Id", call.request_id),
+        ("X-Jarvis-Source", source),
+        ("X-Jarvis-Attempts", str(call.attempts)),
     ]
     if circuit is not None:
         kept.append(("X-Jarvis-Circuit", circuit))
@@ -449,6 +569,7 @@ def _stream_back(
         status_code=upstream.status_code,
         background=BackgroundTask(upstream.aclose),
         record=record,
+        source=source,
     )
     response.raw_headers = [(n.lower().encode("latin-1"), v.encode("latin-1")) for n, v in kept]
     return response

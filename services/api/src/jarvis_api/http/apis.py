@@ -82,6 +82,7 @@ async def _save(
         api: ApiDependency = body.to_dependency(secret_ref)
         if services.destinations is not None:
             await _check_destination(services.destinations, api.base_url)
+        await _check_fallback(services, project_id, api_id, api)
         saved = await services.apis.put_version(
             project_id,
             api,
@@ -95,6 +96,35 @@ async def _save(
             await services.secrets.delete(new_secret_ref)
         raise
     return saved
+
+
+def _fallback_error(message: str) -> RequestValidationError:
+    return RequestValidationError(
+        [{"type": "value_error", "loc": ("body", "fallback", "fallback_api"), "msg": message}]
+    )
+
+
+async def _check_fallback(
+    services: Services, project_id: str, api_id: str | None, api: ApiDependency
+) -> None:
+    """SPEC §4.12: a fallback API must exist in the project and chains are not allowed.
+
+    A chain is a fallback that has a fallback of its own, or an API that is itself used as someone
+    else's fallback and gets one. Only the project's other APIs are looked at.
+    """
+    target_slug = api.fallback.fallback_api
+    if target_slug is None:
+        return
+    others = [s for s in await services.apis.list_stored(project_id) if s.id != api_id]
+    target = next((s for s in others if s.config.slug == target_slug), None)
+    if target is None:
+        raise _fallback_error("no API with this slug exists in the project")
+    if target.config.fallback.fallback_api is not None:
+        raise _fallback_error("that API has a fallback of its own; fallback chains are not allowed")
+    if any(s.config.fallback.fallback_api == api.slug for s in others):
+        raise _fallback_error(
+            "this API is the fallback of another API; fallback chains are not allowed"
+        )
 
 
 async def _check_destination(destinations: DestinationChecker, base_url: str) -> None:

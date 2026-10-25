@@ -767,3 +767,98 @@ def test_deleting_an_api_publishes_an_invalidation_only_on_success(
     assert _invalidations(services) == []
     assert client.delete(f"/api/v1/apis/{created['id']}", headers=AUTH).status_code == 204
     assert _invalidations(services) == [("api", created["id"])]
+
+
+# --- fallback APIs (SPEC 4.12, M2.6) ---------------------------------------------------------
+
+
+def _fallback_422(response: Response, text: str) -> None:
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert [d["loc"] for d in detail] == [["body", "fallback", "fallback_api"]]
+    assert text in detail[0]["msg"]
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-4.12-2")
+def test_an_api_can_name_another_api_of_the_project_as_its_fallback(client: TestClient) -> None:
+    pid = _project(client)
+    _create(client, pid, slug="backup")
+    created = _create(client, pid, slug="primary", fallback={"fallback_api": "backup"})
+    assert (
+        created["config"]["fallback"]["fallback_api"] == "backup" if "config" in created else True
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-4.12-2")
+def test_a_fallback_must_exist_in_the_same_project(client: TestClient, services: Services) -> None:
+    pid, other = _project(client), _project(client, "beta")
+    _create(client, other, slug="backup")  # same slug, other project: does not count
+    response = client.post(
+        f"/api/v1/projects/{pid}/apis",
+        json=_body(slug="primary", fallback={"fallback_api": "backup"}),
+        headers=AUTH,
+    )
+    _fallback_422(response, "no API with this slug")
+    assert not _apis(services).rows.get(pid)  # nothing stored
+    assert len(_secrets(services).rows) == 1  # only the other project's; ours was removed again
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-4.12-3")
+def test_a_fallback_that_has_its_own_fallback_is_a_chain_and_is_refused(
+    client: TestClient,
+) -> None:
+    pid = _project(client)
+    _create(client, pid, slug="c")
+    _create(client, pid, slug="b", fallback={"fallback_api": "c"})
+    response = client.post(
+        f"/api/v1/projects/{pid}/apis",
+        json=_body(slug="a", fallback={"fallback_api": "b"}),
+        headers=AUTH,
+    )
+    _fallback_422(response, "chains are not allowed")
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-4.12-3")
+def test_giving_a_fallback_to_an_api_that_is_already_a_fallback_is_refused(
+    client: TestClient,
+) -> None:
+    pid = _project(client)
+    _create(client, pid, slug="backup")
+    _create(client, pid, slug="primary", fallback={"fallback_api": "backup"})
+    backup_id = next(
+        a["id"]
+        for a in client.get(f"/api/v1/projects/{pid}/apis", headers=AUTH).json()
+        if a["slug"] == "backup"
+    )
+    _create(client, pid, slug="third")
+    response = _patch(client, backup_id, {"fallback": {"fallback_api": "third"}})
+    _fallback_422(response, "chains are not allowed")
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-4.12-3")
+def test_an_api_can_change_its_own_fallback_and_clear_it(client: TestClient) -> None:
+    pid = _project(client)
+    _create(client, pid, slug="one")
+    _create(client, pid, slug="two")
+    made = _create(client, pid, slug="main", fallback={"fallback_api": "one"})
+    api_id = made["id"]
+    assert _patch(client, api_id, {"fallback": {"fallback_api": "two"}}).status_code == 200
+    assert _patch(client, api_id, {"fallback": {"fallback_api": None}}).status_code == 200
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-4.12-5")
+def test_an_api_cannot_be_its_own_fallback(client: TestClient) -> None:
+    pid = _project(client)
+    response = client.post(
+        f"/api/v1/projects/{pid}/apis",
+        json=_body(slug="loop", fallback={"fallback_api": "loop"}),
+        headers=AUTH,
+    )
+    assert response.status_code == 422
+    assert "fallback_api" in response.text

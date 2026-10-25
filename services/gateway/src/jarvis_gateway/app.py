@@ -196,6 +196,7 @@ def create_app_from_env() -> FastAPI:
         max_body_bytes=settings.max_body_bytes,
         retry_budget=budget,
         circuit=circuit,
+        events=sink,
         limiter=FallbackRateLimiter(
             RedisRateLimiter(settings.redis_url, clock=clock),
             InMemoryRateLimiter(clock),
