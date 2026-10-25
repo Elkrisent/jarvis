@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import http.cookiejar
 import logging
+import uuid
 from collections.abc import AsyncIterator, Callable
 from typing import Any
 from urllib.parse import unquote
@@ -17,7 +18,7 @@ from urllib.parse import unquote
 import httpx
 from fastapi import Request
 from fastapi.responses import Response, StreamingResponse
-from jarvis_core.clock import Clock, SystemClock
+from jarvis_core.clock import Clock, Random, SystemClock, SystemRandom
 from jarvis_core.deadline import Deadline
 from jarvis_core.errors import (
     AuthInvalidError,
@@ -25,6 +26,7 @@ from jarvis_core.errors import (
     UpstreamTimeoutError,
     UpstreamUnreachableError,
 )
+from jarvis_core.retry import IDEMPOTENT_METHODS, Failure, decide
 from jarvis_core.ssrf import SsrfPolicy
 from starlette.background import BackgroundTask
 from starlette.types import Receive, Scope, Send
@@ -92,8 +94,10 @@ class Forwarder:
         max_body_bytes: int,
         transport_factory: Callable[[], httpx.AsyncBaseTransport] | None = None,
         clock: Clock | None = None,
+        random: Random | None = None,
     ) -> None:
         self._vault = vault
+        self._random = SystemRandom() if random is None else random
         self._clock = SystemClock() if clock is None else clock
         self.max_body_bytes = max_body_bytes
         self._factory = transport_factory or (lambda: PinnedTransport(policy))
@@ -171,35 +175,77 @@ class Forwarder:
             raise UpstreamUnreachableError("the upstream credential is not available") from None
         path, query = _target_parts(request, api.slug)
         url = build_target_url(config.base_url, path, query, config.credential, secret)
-        headers = inject_credential_header(
-            filter_request_headers(authenticated.forward_headers(_raw_headers(request))),
-            config.credential,
-            secret,
+        forwarded = filter_request_headers(authenticated.forward_headers(_raw_headers(request)))
+        forwarded = _with_idempotency_key(
+            forwarded, request.method, config.retry.idempotency_header
         )
+        headers = inject_credential_header(forwarded, config.credential, secret)
         body = await self._read_body(request, deadline)
         record.add_request_bytes(len(body))
-        if deadline.expired:
-            raise UpstreamTimeoutError("the upstream did not answer in time")
-        # One attempt, bounded by its own timeout and by what is left of the deadline (SPEC 4.6).
-        attempt_s = deadline.attempt_timeout(config.attempt_timeout_ms / 1000)
-        try:
-            client = self._client(httpx.URL(url))
-            upstream_request = client.build_request(
-                request.method,
-                url,
-                headers=_wire(headers, config.credential.mode in ("bearer", "header")),
-                content=body or None,
-                timeout=httpx.Timeout(attempt_s),
+        client = self._client(httpx.URL(url))
+        attempts = 0
+        while True:
+            if deadline.expired:
+                raise UpstreamTimeoutError("the upstream did not answer in time")
+            attempts += 1
+            # One attempt, bounded by its own timeout and by what is left of the deadline (4.6).
+            attempt_s = deadline.attempt_timeout(config.attempt_timeout_ms / 1000)
+            upstream: httpx.Response | None = None
+            error: Exception | None = None
+            try:
+                upstream_request = client.build_request(
+                    request.method,
+                    url,
+                    headers=_wire(headers, config.credential.mode in ("bearer", "header")),
+                    content=body or None,
+                    timeout=httpx.Timeout(attempt_s),
+                )
+                record.mark_attempt()
+                async with asyncio.timeout(attempt_s):
+                    upstream = await client.send(upstream_request, stream=True)
+                record.mark_headers_received()
+            except (TimeoutError, httpx.TimeoutException):
+                failure = Failure("timeout")
+                error = UpstreamTimeoutError("the upstream did not answer in time")
+            except httpx.TransportError:
+                failure = Failure("connect")
+                error = UpstreamUnreachableError("could not reach the upstream")
+            except httpx.InvalidURL:  # deterministic: never retried
+                raise UpstreamUnreachableError("could not reach the upstream") from None
+            else:
+                failure = Failure(
+                    "status", upstream.status_code, upstream.headers.get("retry-after")
+                )
+            decision = decide(
+                config.retry,
+                method=request.method,
+                failure=failure,
+                attempts_made=attempts,
+                deadline=deadline,
+                min_attempt_ms=config.min_attempt_ms,
+                rng=self._random,
+                now_epoch=self._clock.now(),
             )
-            record.mark_attempt()
-            async with asyncio.timeout(attempt_s):
-                upstream = await client.send(upstream_request, stream=True)
-            record.mark_headers_received()
-        except (TimeoutError, httpx.TimeoutException):
-            raise UpstreamTimeoutError("the upstream did not answer in time") from None
-        except (httpx.TransportError, httpx.InvalidURL):
-            raise UpstreamUnreachableError("could not reach the upstream") from None
-        return _stream_back(upstream, request_id, record, deadline)
+            if not decision.retry:
+                if error is not None:
+                    raise error from None
+                assert upstream is not None
+                return _stream_back(upstream, request_id, record, deadline, attempts)
+            if upstream is not None:
+                await upstream.aclose()
+            await self._clock.sleep(decision.delay_s)
+
+
+def _with_idempotency_key(
+    headers: list[tuple[str, str]], method: str, header: str | None
+) -> list[tuple[str, str]]:
+    """Add one generated idempotency key for a POST/PATCH-like request (SPEC 4.7), reused on every
+    attempt because the header list is built once. A key the caller already sent is kept."""
+    if header is None or method.upper() in IDEMPOTENT_METHODS:
+        return headers
+    if any(name.lower() == header.lower() for name, _ in headers):
+        return headers
+    return [*headers, (header, uuid.uuid4().hex)]
 
 
 def _origin(url: httpx.URL) -> Origin:
@@ -222,7 +268,11 @@ class _RecordedStream(StreamingResponse):
 
 
 def _stream_back(
-    upstream: httpx.Response, request_id: str, record: RequestRecord, deadline: Deadline
+    upstream: httpx.Response,
+    request_id: str,
+    record: RequestRecord,
+    deadline: Deadline,
+    attempts: int,
 ) -> Response:
     async def body() -> AsyncIterator[bytes]:
         chunks = upstream.aiter_raw().__aiter__()
@@ -252,7 +302,7 @@ def _stream_back(
     kept += [
         ("X-Jarvis-Request-Id", request_id),
         ("X-Jarvis-Source", "upstream"),
-        ("X-Jarvis-Attempts", "1"),
+        ("X-Jarvis-Attempts", str(attempts)),
     ]
     response = _RecordedStream(
         body(),

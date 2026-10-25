@@ -28,5 +28,9 @@ class Deadline:
 
     def can_start_attempt(self, min_attempt_ms: int) -> bool:
         """A new attempt starts only if at least ``min_attempt_ms`` remains."""
+        return self.can_start_attempt_after(0.0, min_attempt_ms)
+
+    def can_start_attempt_after(self, wait_s: float, min_attempt_ms: int) -> bool:
+        """Would at least ``min_attempt_ms`` still remain once ``wait_s`` has been waited?"""
         # Rounded to the microsecond so float noise (5.0 - 4.7 = 0.29999...) cannot flip the edge.
-        return round(self.remaining() * 1000, 3) >= min_attempt_ms
+        return round((self.remaining() - wait_s) * 1000, 3) >= min_attempt_ms
