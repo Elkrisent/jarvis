@@ -4,13 +4,15 @@
 
 Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 merged (PR #20, merge commit `b17187d`); M1.5 merged (PR #21, merge commit `d756c4c`); M1.6 merged (PR #23, merge commit `937a936`); M1.7 merged (PR #24, merge commit `a3d3942`); M1.8 merged (PR #25, merge commit `0ea3df7`); M1.9 merged (PR #27, merge commit `c5307e8`). Checkpoint 1 done (PR #32, merge commit `ae6cf9d`; report `docs/checkpoints/P1-proxy.md`; pre-release `v0.1.0` tagged on `ae6cf9d`); Checkpoint 1 approved by the user on 2026-10-25. Phase 2 in progress: M2.1 to M2.6 merged (PR #36 to #41); M2.7 implemented on `feat/m2.7-redis-fail-open`.
 
+Checkpoint 1 approved by the user on 2026-10-25. Phase 2 (Reliability): all seven modules are built and merged to `main` (M2.1 deadlines PR #36, M2.2 retries #37, M2.3 retry budget #38, M2.4 circuit breaker #39, M2.5 rate limiters #40, M2.6 fallback #41, M2.7 Redis fail-open #42; revocation poll fix #34). PR #43 (open, CI green) fixes the stack test that M2.7 broke on `main` and adds the S4 and S8 k6 scenarios. Checkpoint 2 has not been started: it needs about one to two hours of work (see Resume Point).
+
 ## Current Phase
 
-Phase 2: Reliability (Phase 1 approved 2026-10-25).
+Phase 2: Reliability. All modules done; Checkpoint 2 pending (not started).
 
 ## Current Module
 
-M2.7 Redis-down fail-open mode: code and tests done on `feat/m2.7-redis-fail-open` (PR pending). It is the last Phase 2 module (the earlier note that M2.6 was the last was wrong: Phase 2 has seven modules). After it merges, Checkpoint 2 is next, run only on the user's instruction.
+None active. M2.7 was the last Phase 2 module (merged). Next step is the Checkpoint 2 protocol, after PR #43 is merged.
 
 ## Completed
 
@@ -179,7 +181,7 @@ M2.7 Redis-down fail-open mode: code and tests done on `feat/m2.7-redis-fail-ope
 
 ## In Progress
 
-Nothing besides the item above. Checkpoint 1 notes kept for reference (what was found while running it):
+Nothing is being implemented. PR #43 waits for the user's merge. The Checkpoint 1 notes below are kept for reference (what was found while running it):
 
 * Step 3, acceptance stories: all four automated in `tests/e2e/test_checkpoint_1.py` and passing on the Docker stack (change base URL and key; metadata base URL rejected on save; revoked key rejected 1 s later; restart with Postgres down serves from the snapshot). Story 4 failed at first and exposed a real bug (next bullet); after the fix it passed in 10 of 11 stack runs, the one failure (first full-suite run) was not reproduced and not explained, so watch it.
 * Bug found by story 4 and fixed (user chose the narrow option): with a JARVIS container stopped (Postgres), `DestinationResolver` looked up every container name again for every new upstream connection (about 2 s timeout each, 8 s inside the resolver thread) and refused allowlisted private upstreams, so such traffic got 504s. Now lookups are single-flight and reused for 5 s when incomplete; a container name that has never resolved is treated as not running (WARNING logged with the name), a name that resolved before and now fails still fails closed. Regression tests in `test_ssrf.py` and the security suite (the old test that pinned the first-lookup fail-closed rule was rewritten for the new rule, not loosened: the previously-resolved case is still tested). Known residual: if Postgres dies while the gateway is running, its name had resolved, so allowlisted private upstreams are refused from the next lookup (at most 30 s later) until it returns.
@@ -190,11 +192,14 @@ Nothing besides the item above. Checkpoint 1 notes kept for reference (what was 
 
 ## Next
 
-1. Push `fix/revocation-poll-redis-down` and `feat/m2.1-deadlines` (ask the user first), open PRs, get CI green (integration coverage gate: gateway and core 1-point drop rule), merge, then start M2.2 Retry policy (uses `Deadline.can_start_attempt`).
-2. Before Checkpoint 3: profile the request path with py-spy (S2 p99 budget is enforced from there). The user declined a hosted-runner workflow for S2; an optional check on a different machine (plain Linux, 2 vCPU) would show how much of the p99 is this laptop.
+1. User merges PR #43. Then run the Checkpoint 2 protocol (docs/IMPLEMENTATION.md Part D) when the user says so; stop for approval before the `v0.2.0` pre-release and before any Phase 3 work.
+2. Checkpoint 2 work list: (a) write `tests/e2e/test_checkpoint_2.py` with the four acceptance stories (circuit opens and one probe closes it with an upstream failing 60% of the time; POST without idempotency config is not retried on 503; a 60/min quota lets the upstream receive at most 60 of 200 requests; no request fails because of JARVIS when Redis is killed during load); (b) full suites on Docker (`make test-all test-chaos test-security`, Postgres-backed integration); (c) py-spy profile of the request path; (d) `make bench-checkpoint PHASE=2` (needs `DATABASE_URL` for a role that can create databases, e.g. a throwaway `timescale/timescaledb:2.17.2-pg16` container, and `REDIS_URL`); (e) `make traceability COMPLETED_PHASE=2 TRACE_MARKERS="not perf"`; (f) report `docs/checkpoints/P2-reliability.md` and the pre-release. Estimated one to two hours.
+3. Before Checkpoint 3: profile the request path with py-spy (the S2 p99 budget is enforced from there); decide the httpx pool size (default 100 connections per upstream) and the redis-py pool size for the retry budget and circuit clients.
 
 ## Blockers / Questions
 
+* OPEN, user to confirm (SPEC silent, recorded in the module entries above): (1) `JARVIS_REDIS_FAIL_OPEN=false` answers 503 `JV_NOT_READY` while Redis is down (M2.7); (2) a final upstream 5xx triggers the fallback API, and the fallback is checked against the primary's inbound limit and key scope only (M2.6); (3) the retry budget is strict: no retries until about five requests are in the window at ratio 0.2 (M2.3); (4) a caller-supplied idempotency key is kept, a generated one is added only for POST/PATCH-like requests (M2.2); (5) the first retry's backoff ceiling is `base_ms` (M2.2).
+* Known limits found in Phase 2: the gateway's httpx pool is 100 connections per upstream (more concurrent requests to one upstream get pool-timeout 504s); the retry budget and circuit store Redis clients still use redis-py's default pool of 100; in Docker the name `redis` takes about 4 s to fail DNS while the container is down, which dominates the 2.6 s S8 recovery; the `bench` workflow's `load` job failed on `main` after #39 and #40 because the mock upstream's own latency doubled (runner noise, not confirmed).
 * RESOLVED at Checkpoint 1 (user decision): the S2 overhead p99 budget (<= 15 ms) is enforced from Checkpoint 3; p50 (<= 3 ms) stays enforced. Today: p50 2.72 ms, p99 29.3 ms (five pairs 13.9 to 1,302 ms). Phase 3 must profile the request path with py-spy first; the stall investigation found no leak, no big stalls beyond GC (fixed), and ruled out host jitter, single-core queueing, telemetry and connection churn.
 * RESOLVED (user: "go with your recommendations", 2026-10-25), for P5: keep deleting a replaced secret on PATCH (no sealed credential kept past its use). The P5 rollback (copy an old version, SPEC 5.2) must check the copied version's `secret_ref`: if the secret is gone, it either keeps the current version's secret or requires a new `credential.secret` in the request (422 naming the field otherwise); it never saves a dangling ref. Build this in P5; no code change now.
 * RESOLVED (same decision): Redis outage vs revocation. SPEC D3 (fail open) and 4.2 (revocation <= 1 s) cannot both hold with Redis down, so SPEC stays as is and the window is bounded instead: while the pub/sub link is down the gateway polls Postgres every 5 s (`RETRY_INTERVAL_S`) instead of every 60 s, so a revoked key stops working within about 5 s of the next poll, not 60 s. With Redis down and Postgres down too, the snapshot caveat still applies. Branch `fix/revocation-poll-redis-down`; tests in `test_config_manager.py` and `test_config_events.py` (the manager test fails without the fix).
@@ -209,7 +214,7 @@ Nothing besides the item above. Checkpoint 1 notes kept for reference (what was 
 
 ## Resume Point
 
-M2.1 is in PR #36 (user merged #34; #35 landed on the fix branch). M2.7 is on `feat/m2.7-redis-fail-open`. Next: its PR, CI, merge; then, when the user says so, run the Checkpoint 2 protocol (docs/IMPLEMENTATION.md) and stop for approval. Checkpoint 2 needs a Docker host and k6 for S2/S4/S8 and the acceptance stories, and py-spy profiling of the request path first (S2 p99 is enforced from Checkpoint 3 per the Checkpoint 1 decision, so Checkpoint 2 only reports it).
+Phase 2 is built and merged; Checkpoint 2 is not started. First ask the user to merge PR #43 (branch `fix/chaos-telemetry-events`). Then, on the user's instruction, run the Checkpoint 2 protocol following the work list under Next (start with the e2e acceptance stories in `tests/e2e/test_checkpoint_2.py`). Docker, Compose and the k6 image work on this machine; `make bench-s4 bench-s8` run against the compose test stack (`docker compose -p jarvis-test --profile test -f deploy/docker-compose.yml -f deploy/docker-compose.test.yml --env-file deploy/.env.example up -d --build --wait`). A local Redis for the in-process tests: `redis-server --port 6390 --save "" --daemonize yes` with `REDIS_URL=redis://localhost:6390/0`.
 
 ## Last Updated
 

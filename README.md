@@ -6,7 +6,7 @@ must do and [`docs/IMPLEMENTATION.md`](docs/IMPLEMENTATION.md) for the build ord
 
 ## Status
 
-Phase 1 (Proxy) is complete (Checkpoint 1: [`docs/checkpoints/P1-proxy.md`](docs/checkpoints/P1-proxy.md); `v0.1.0` pre-release) and awaiting approval before Phase 2. JARVIS forwards calls end to end with key checks, credential injection, SSRF protection, hot config reload and telemetry; it does not retry, cache or rate-limit yet. The repository scaffold, tooling, CI, benchmark infrastructure and the
+Phase 1 (Proxy) is complete (Checkpoint 1: [`docs/checkpoints/P1-proxy.md`](docs/checkpoints/P1-proxy.md); `v0.1.0` pre-release). Phase 2 (Reliability) is built and awaiting its checkpoint: on top of the Phase 1 proxy (key checks, credential injection, SSRF protection, hot config reload, telemetry) the gateway now enforces a per-request deadline and per-attempt timeouts, retries with backoff and `Retry-After` (and an idempotency key for POST/PATCH when the API sets one), a per-API retry budget, a circuit breaker shared through Redis, inbound and upstream-quota rate limits (off by default), a fallback API, and keeps serving on local state when Redis is down (`JARVIS_REDIS_FAIL_OPEN`, `JARVIS_EXPECTED_INSTANCES`). It does not cache or deduplicate yet. The repository scaffold, tooling, CI, benchmark infrastructure and the
 `jarvis_core` package (config models, errors, interfaces with in-memory implementations) exist, and
 the `api` service now owns the Postgres schema: Alembic migrations run at startup under an advisory
 lock, and `PostgresConfigSource` stores API policies as immutable versions. M1.2 added the AES-256-GCM `SecretBox`,
@@ -30,6 +30,8 @@ make security-scan  # bandit + pip-audit
 make bench-micro    # pytest-benchmark micro-benchmarks
 make bench-propagation   # config propagation p99 (needs DATABASE_URL and REDIS_URL)
 make bench-telemetry     # telemetry on/off overhead at p99 (needs REDIS_URL)
+make bench-circuit       # fail-fast latency of an open circuit
+make bench-s4 bench-s8   # failing upstream; Redis killed under load (need the full compose test stack and Docker)
 make bench-up bench-load bench-down   # k6 dry run against the mock upstream (needs Docker)
 make bench-checkpoint PHASE=0         # numbers of record -> BENCHMARKS.md (local machine; phase >= 1 also needs DATABASE_URL and REDIS_URL)
 pre-commit install  # enable git hooks
@@ -55,7 +57,7 @@ them current through Redis events (within 1 s) and a full resync every `JARVIS_R
 volume) so it can start from that file while Postgres is down. Compose starts the gateway only after Postgres is healthy, so with Postgres down a plain `docker compose up` will not start it; snapshot starts work through the restart policy, `docker compose restart gateway` or `docker start`. A gateway started from the file serves keys revoked while it was down until Postgres returns (revocation within 1 s does not hold in that mode), so a file synced more than `JARVIS_SNAPSHOT_MAX_AGE_S` ago (default 24 h) is ignored and the gateway stays not ready. Its `/readyz` adds `config`
 (`source`, `apis`, `keys`, `synced_at`; counts only): `degraded` when serving the snapshot file or
 when no full sync succeeded for 3 intervals, `unavailable` (503) when no config is loaded at all.
-`/readyz` also reports `telemetry` (`queue`, `dropped_total`: numbers only). Events are dropped and counted when the queue is full or Redis is unavailable, and that never changes the status or any response. Tune it with `JARVIS_TELEMETRY_*` (`deploy/.env.example`).
+`/readyz` also reports `redis` (`mode`: `normal`, or `degraded` while the gateway runs on local state because Redis is down) and `telemetry` (`queue`, `dropped_total`: numbers only). Events are dropped and counted when the queue is full or Redis is unavailable, and that never changes the status or any response. Tune it with `JARVIS_TELEMETRY_*` (`deploy/.env.example`).
 `make test-system`, `make test-chaos` and `make test-security` start their own stack
 (project `jarvis-test`, ports 18080-18082, mock upstream on 19000 via the `test` profile) and need Docker.
 
