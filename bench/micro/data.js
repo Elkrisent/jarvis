@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792941012883,
+  "lastUpdate": 1792942677851,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Micro benchmarks": [
@@ -1131,6 +1131,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 3.8692584882546056e-7",
             "extra": "mean: 1.2253482106593745 usec\nrounds: 70443"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "955fa8818953165ff96591f989c28b6a6c967be1",
+          "message": "Merge pull request #40 from Elkrisent/feat/m2.5-rate-limiters\n\nfeat: Redis token-bucket rate limiters, inbound and upstream quota (M2.5)",
+          "timestamp": "2026-10-25T21:07:25+05:30",
+          "tree_id": "5f1b2e26f8e9b821e2e27b34643865069a85b580",
+          "url": "https://github.com/Elkrisent/jarvis/commit/955fa8818953165ff96591f989c28b6a6c967be1"
+        },
+        "date": 1792942677484,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "packages/core/tests/bench/test_bench_backoff_compute.py::test_bench_backoff_compute",
+            "value": 492975.87347641913,
+            "unit": "iter/sec",
+            "range": "stddev: 7.062384570763993e-7",
+            "extra": "mean: 2.0284968368697127 usec\nrounds: 24817"
+          },
+          {
+            "name": "packages/core/tests/bench/test_bench_route_template_match.py::test_bench_route_template_match",
+            "value": 142018.35062336133,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000014759830673312602",
+            "extra": "mean: 7.041343570113993 usec\nrounds: 43080"
+          },
+          {
+            "name": "packages/core/tests/bench/test_bench_token_bucket_take.py::test_bench_token_bucket_take",
+            "value": 637432.2934152565,
+            "unit": "iter/sec",
+            "range": "stddev: 5.773612947084437e-7",
+            "extra": "mean: 1.5687940669622586 usec\nrounds: 81813"
           }
         ]
       }
