@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792937105742,
+  "lastUpdate": 1792938560018,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Config propagation": [
@@ -546,6 +546,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "config_propagation_p99",
             "value": 17.674,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "fb34af96fe3a048448a9a859c018679175aa6751",
+          "message": "Merge pull request #38 from Elkrisent/feat/m2.3-retry-budget\n\nfeat: per-API retry budget in Redis with local fallback (M2.3)",
+          "timestamp": "2026-10-25T19:57:44+05:30",
+          "tree_id": "137eed30e7c2a48a9a1f43017bd7ec08d89f4c7f",
+          "url": "https://github.com/Elkrisent/jarvis/commit/fb34af96fe3a048448a9a859c018679175aa6751"
+        },
+        "date": 1792938559119,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "config_propagation_p99",
+            "value": 25.523,
             "unit": "ms"
           }
         ]
