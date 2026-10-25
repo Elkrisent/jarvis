@@ -52,16 +52,17 @@ class SnapshotWriter(Protocol):
     async def aclose(self) -> None: ...
 
 
-Subscriber = Callable[
-    [
-        str,
-        Callable[[ConfigEvent], Awaitable[None]],
-        Callable[[], Awaitable[None]],
-        Clock,
-        asyncio.Event,
-    ],
-    Awaitable[None],
-]
+class Subscriber(Protocol):
+    def __call__(
+        self,
+        redis_url: str,
+        on_event: Callable[[ConfigEvent], Awaitable[None]],
+        on_connected: Callable[[], Awaitable[None]],
+        clock: Clock,
+        stop: asyncio.Event,
+        *,
+        on_disconnected: Callable[[], None],
+    ) -> Awaitable[None]: ...
 
 
 @dataclass(frozen=True)
@@ -110,6 +111,9 @@ class ConfigManager:
         # A failed targeted refresh asks the supervisor for an early full resync.
         self._resync_pending = False
         self._wake = asyncio.Event()
+        # While the pub/sub link is down, pushes (incl. revocations) are missed: poll Postgres at
+        # the retry interval instead of the resync interval.
+        self._subscriber_up = True
         self._last_supervised: float = 0.0
 
     @property
@@ -223,6 +227,8 @@ class ConfigManager:
         while True:
             urgent = self._last_sync_ok is None or self._resync_pending
             delay = RETRY_INTERVAL_S if urgent else self._interval
+            if not self._subscriber_up:  # no pushes arriving: poll at least that often
+                delay = min(delay, RETRY_INTERVAL_S)
             try:
                 await self._pause(delay)
                 self._last_supervised = self._clock.monotonic()
@@ -234,6 +240,7 @@ class ConfigManager:
 
     async def _pause(self, delay: float) -> None:
         """Sleep ``delay``, or until woken for an early resync (at most one per 5 s)."""
+        began = self._clock.monotonic()
         sleeper = asyncio.ensure_future(self._clock.sleep(delay))
         waker = asyncio.ensure_future(self._wake.wait())
         try:
@@ -245,17 +252,29 @@ class ConfigManager:
             await asyncio.gather(sleeper, waker, return_exceptions=True)
         if woken:
             self._wake.clear()
-            remaining = self._last_supervised + RETRY_INTERVAL_S - self._clock.monotonic()
+            # Never later than the scheduled resync would have been.
+            target = min(self._last_supervised + RETRY_INTERVAL_S, began + delay)
+            remaining = target - self._clock.monotonic()
             if remaining > 0:
                 await self._clock.sleep(remaining)
 
     async def _subscribe(self, redis_url: str) -> None:
         async def on_connected() -> None:
+            self._subscriber_up = True
             await self.resync()
+
+        def on_disconnected() -> None:
+            self._subscriber_up = False
+            self._wake.set()
 
         try:
             await self._subscriber_fn(
-                redis_url, self.handle_event, on_connected, self._clock, self._stop
+                redis_url,
+                self.handle_event,
+                on_connected,
+                self._clock,
+                self._stop,
+                on_disconnected=on_disconnected,
             )
         except asyncio.CancelledError:
             raise

@@ -135,9 +135,13 @@ async def subscribe(
     clock: Clock,
     stop: asyncio.Event,
     *,
+    on_disconnected: Callable[[], None] | None = None,
     connect: Callable[[str], PubSubConnection] = connect_redis,
 ) -> None:
     """Listen on ``CHANNELS`` until ``stop`` is set, reconnecting forever.
+
+    ``on_disconnected`` is called (synchronously, errors ignored) each time a connection attempt or
+    a live connection fails, so the caller can poll faster while pushes are not arriving.
 
     ``on_connected`` runs once both subscriptions are confirmed, on every (re)connect, so the caller
     can resync whatever was missed while disconnected. Retries back off from 0.5 s, doubling to a
@@ -162,6 +166,7 @@ async def subscribe(
             raise
         except Exception as exc:  # Redis, socket or anything else: log the type, never the text
             if not stop.is_set():
+                _notify(on_disconnected)
                 log.warning(
                     "config subscriber lost Redis (%s); retrying in %.1f s",
                     type(exc).__name__,
@@ -175,6 +180,15 @@ async def subscribe(
         backoff = _next_backoff(backoff, up_since, clock)
         await _pause(clock, backoff, stop)
         backoff = min(backoff * 2, _MAX_BACKOFF_S)
+
+
+def _notify(callback: Callable[[], None] | None) -> None:
+    if callback is None:
+        return
+    try:
+        callback()
+    except Exception as exc:
+        log.error("subscriber disconnect callback failed (%s)", type(exc).__name__)
 
 
 def _next_backoff(backoff: float, up_since: float | None, clock: Clock) -> float:
