@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792938641452,
+  "lastUpdate": 1792941156512,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Telemetry overhead": [
@@ -405,6 +405,40 @@ window.BENCHMARK_DATA = {
           {
             "name": "telemetry_overhead_p99_redis_down",
             "value": -0.008,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "42532a71abf6edd5e70b3ce96695b2ca06a1ead8",
+          "message": "Merge pull request #39 from Elkrisent/feat/m2.4-circuit-breaker\n\nfeat: circuit breaker with shared Redis state, local mirror and singl…",
+          "timestamp": "2026-10-25T20:39:41+05:30",
+          "tree_id": "dfeccb558dd92a1d4b905d5fae74d8ec658c8100",
+          "url": "https://github.com/Elkrisent/jarvis/commit/42532a71abf6edd5e70b3ce96695b2ca06a1ead8"
+        },
+        "date": 1792941155908,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "telemetry_overhead_p99",
+            "value": 0.189,
+            "unit": "ms"
+          },
+          {
+            "name": "telemetry_overhead_p99_redis_down",
+            "value": 0.016,
             "unit": "ms"
           }
         ]
