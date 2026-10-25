@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import time
 from collections.abc import Mapping
 
@@ -14,6 +15,8 @@ from jarvis_core.errors import (
     CircuitOpenError,
     JarvisError,
     NotImplementedYetError,
+    QuotaExceededError,
+    RateLimitedError,
     StreamingUnsupportedError,
 )
 from jarvis_core.interfaces import TelemetrySink
@@ -32,18 +35,27 @@ METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
 
 
 def _jarvis_response(
-    status: int, body: Mapping[str, object], request_id: str, circuit: str | None = None
+    status: int,
+    body: Mapping[str, object],
+    request_id: str,
+    circuit: str | None = None,
+    retry_after: str | None = None,
 ) -> JSONResponse:
     headers = {"X-Jarvis-Request-Id": request_id, "X-Jarvis-Source": "jarvis"}
     if circuit is not None:
         headers["X-Jarvis-Circuit"] = circuit
+    if retry_after is not None:
+        headers["Retry-After"] = retry_after
     return JSONResponse(body, status_code=status, headers=headers)
 
 
 def _error(error: JarvisError, request_id: str) -> JSONResponse:
     error.request_id = request_id
     circuit = error.circuit_state if isinstance(error, CircuitOpenError) else None
-    return _jarvis_response(error.http_status, error.to_body(), request_id, circuit)
+    retry_after = None
+    if isinstance(error, RateLimitedError | QuotaExceededError) and error.retry_after_s is not None:
+        retry_after = str(max(1, math.ceil(error.retry_after_s)))
+    return _jarvis_response(error.http_status, error.to_body(), request_id, circuit, retry_after)
 
 
 def _ingress(request: Request, forwarder: Forwarder) -> None:
@@ -110,6 +122,7 @@ def build_gw_router(
             )
             if forwarder is None:
                 raise NotImplementedYetError("forwarding is not implemented yet")
+            await forwarder.check_inbound(authenticated)  # pipeline step 3
             return await forwarder.forward(request, authenticated, request_id, started, record)
         except JarvisError as error:
             record.finish(status=error.http_status, source="jarvis", error_code=error.code)

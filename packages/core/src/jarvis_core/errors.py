@@ -38,11 +38,13 @@ class AuthInvalidError(JarvisError):
 class RateLimitedError(JarvisError):
     code = "JV_RATE_LIMITED"
     http_status = 429
+    retry_after_s: float | None = None  # becomes the Retry-After header
 
 
 class QuotaExceededError(JarvisError):
     code = "JV_QUOTA_EXCEEDED"
     http_status = 429
+    retry_after_s: float | None = None
 
 
 class CircuitOpenError(JarvisError):

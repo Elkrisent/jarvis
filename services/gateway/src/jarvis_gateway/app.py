@@ -18,7 +18,7 @@ from jarvis_core.health import (
     tcp_reachable,
 )
 from jarvis_core.interfaces import TelemetrySink
-from jarvis_core.memory import InMemoryCircuitStore
+from jarvis_core.memory import InMemoryCircuitStore, InMemoryRateLimiter
 
 from jarvis_gateway.circuit import CircuitBreaker
 from jarvis_gateway.circuit_store import FallbackCircuitStore, RedisCircuitStore
@@ -28,6 +28,7 @@ from jarvis_gateway.config.snapshot_file import CoalescingWriter, SnapshotFile
 from jarvis_gateway.config.store import ConfigStore
 from jarvis_gateway.credentials import CredentialVault
 from jarvis_gateway.forwarder import Forwarder
+from jarvis_gateway.rate_limit import FallbackRateLimiter, RedisRateLimiter
 from jarvis_gateway.retry_budget import RedisBudgetBackend, RetryBudget
 from jarvis_gateway.routes import build_gw_router
 from jarvis_gateway.routing import TemplateRegistry
@@ -195,6 +196,12 @@ def create_app_from_env() -> FastAPI:
         max_body_bytes=settings.max_body_bytes,
         retry_budget=budget,
         circuit=circuit,
+        limiter=FallbackRateLimiter(
+            RedisRateLimiter(settings.redis_url, clock=clock),
+            InMemoryRateLimiter(clock),
+            expected_instances=settings.expected_instances,
+            clock=clock,
+        ),
     )
     store.add_listener(vault.refresh)  # secrets are opened before the forwarder can see the config
     store.add_listener(forwarder.retain)

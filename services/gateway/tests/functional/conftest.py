@@ -15,7 +15,7 @@ from typing import Any, cast
 import httpx
 import pytest
 import uvicorn
-from jarvis_core.interfaces import TelemetrySink
+from jarvis_core.interfaces import RateLimiter, TelemetrySink
 from jarvis_core.keys import hash_jarvis_key
 from jarvis_core.secretbox import AesGcmSecretBox
 from jarvis_core.ssrf import SsrfPolicy
@@ -35,6 +35,7 @@ sys.path.insert(0, str(Path(__file__).parent))  # for the shared helpers in rig.
 from rig import (
     BOX,
     KEY,
+    KEY2,
     MAX_BODY,
     MODES,
     Gateway,
@@ -87,6 +88,7 @@ async def make_gateway(upstream: Upstream) -> AsyncIterator[GatewayFactory]:
         sink: TelemetrySink | None = None,
         retry_budget: RetryBudget | None = None,
         circuit_breaker: CircuitBreaker | None = None,
+        limiter: RateLimiter | None = None,
         **cfg: Any,
     ) -> Gateway:
         target = port or upstream.port
@@ -101,7 +103,10 @@ async def make_gateway(upstream: Upstream) -> AsyncIterator[GatewayFactory]:
         store = ConfigStore()
         vault = CredentialVault(vault_box)
         store.add_listener(vault.refresh)
-        keys = {hash_jarvis_key(KEY): KeyEntry("k1", "p1", frozenset(), False)}
+        keys = {
+            hash_jarvis_key(KEY): KeyEntry("k1", "p1", frozenset(), False),
+            hash_jarvis_key(KEY2): KeyEntry("k2", "p1", frozenset(), False),
+        }
         store.replace(
             Snapshot.empty("postgres", 1.0).with_changes(
                 apis={e.api_id: e for e in entries}, keys=keys
@@ -118,6 +123,7 @@ async def make_gateway(upstream: Upstream) -> AsyncIterator[GatewayFactory]:
             max_body_bytes=max_body_bytes,
             retry_budget=retry_budget,
             circuit=circuit_breaker,
+            limiter=limiter,
             transport_factory=lambda: PinnedTransport(policy, resolver=resolve),
         )
         store.add_listener(forwarder.retain)

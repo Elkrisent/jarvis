@@ -54,6 +54,7 @@ class Settings:
     telemetry_queue_size: int = DEFAULT_TELEMETRY_QUEUE_SIZE
     telemetry_batch_size: int = DEFAULT_TELEMETRY_BATCH_SIZE
     telemetry_maxlen: int = DEFAULT_TELEMETRY_MAXLEN
+    expected_instances: int = 1
 
     def __repr__(self) -> str:
         return (
@@ -171,4 +172,5 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         telemetry_maxlen=_positive_int(
             source, "JARVIS_TELEMETRY_STREAM_MAXLEN", DEFAULT_TELEMETRY_MAXLEN
         ),
+        expected_instances=_positive_int(source, "JARVIS_EXPECTED_INSTANCES", 1),
     )

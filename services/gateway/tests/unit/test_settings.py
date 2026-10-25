@@ -151,3 +151,15 @@ def test_telemetry_enabled_rejects_unknown_words() -> None:
     with pytest.raises(SettingsError, match="JARVIS_TELEMETRY_ENABLED") as exc:
         load_settings({**BASE, "JARVIS_TELEMETRY_ENABLED": "maybe"})
     assert "maybe" not in str(exc.value)
+
+
+@pytest.mark.req("REQ-4.11-4")
+def test_expected_instances_defaults_to_one_and_can_be_set() -> None:
+    assert load_settings(BASE).expected_instances == 1
+    assert load_settings({**BASE, "JARVIS_EXPECTED_INSTANCES": "3"}).expected_instances == 3
+
+
+def test_expected_instances_must_be_a_positive_whole_number() -> None:
+    for bad in ("0", "-1", "1.5", "many"):
+        with pytest.raises(SettingsError, match="JARVIS_EXPECTED_INSTANCES"):
+            load_settings({**BASE, "JARVIS_EXPECTED_INSTANCES": bad})
