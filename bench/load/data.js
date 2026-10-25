@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792946677543,
+  "lastUpdate": 1792948795145,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Load (latency)": [
@@ -1356,6 +1356,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "mock_direct_p99",
             "value": 2.9675089500000005,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0b7cd7b5a60ecef7303073e7efe981249c1c96d8",
+          "message": "Merge pull request #43 from Elkrisent/fix/chaos-telemetry-events\n\nPhase 2 on Docker: telemetry stream test fix, S4 and S8 scenarios",
+          "timestamp": "2026-10-25T22:46:21+05:30",
+          "tree_id": "37640637dfef9d63b37ce6950b8b842c49f98130",
+          "url": "https://github.com/Elkrisent/jarvis/commit/0b7cd7b5a60ecef7303073e7efe981249c1c96d8"
+        },
+        "date": 1792948794639,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "mock_direct_p50",
+            "value": 5.076753,
+            "unit": "ms"
+          },
+          {
+            "name": "mock_direct_p95",
+            "value": 5.49159165,
+            "unit": "ms"
+          },
+          {
+            "name": "mock_direct_p99",
+            "value": 6.11627732,
             "unit": "ms"
           }
         ]
