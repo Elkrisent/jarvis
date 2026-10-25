@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792944725970,
+  "lastUpdate": 1792946622570,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Telemetry overhead": [
@@ -507,6 +507,40 @@ window.BENCHMARK_DATA = {
           {
             "name": "telemetry_overhead_p99_redis_down",
             "value": 0.032,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "c0f19a8ba3a7495da8afd017c7a53d22736bd194",
+          "message": "Merge pull request #42 from Elkrisent/feat/m2.7-redis-fail-open\n\nfeat: Redis-down fail-open mode with a health breaker (M2.7)",
+          "timestamp": "2026-10-25T22:10:47+05:30",
+          "tree_id": "154cc2dd28f6c0faaf91390bd017c05c220459ae",
+          "url": "https://github.com/Elkrisent/jarvis/commit/c0f19a8ba3a7495da8afd017c7a53d22736bd194"
+        },
+        "date": 1792946621645,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "telemetry_overhead_p99",
+            "value": 0.222,
+            "unit": "ms"
+          },
+          {
+            "name": "telemetry_overhead_p99_redis_down",
+            "value": -0.038,
             "unit": "ms"
           }
         ]
