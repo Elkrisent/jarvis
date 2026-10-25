@@ -38,7 +38,7 @@ class RedisHealth:
         clock: Clock | None = None,
         sink: TelemetrySink | None = None,
         failure_threshold: int = 3,
-        probe_interval_s: float = 1.0,
+        probe_interval_s: float = 0.5,
         ping_timeout_s: float = 0.5,
         closer: Callable[[], Awaitable[None]] | None = None,
     ) -> None:

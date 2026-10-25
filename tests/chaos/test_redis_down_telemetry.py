@@ -82,10 +82,17 @@ def test_requests_succeed_while_redis_is_down_and_events_resume_after(
             )
             request_id = response.headers["x-jarvis-request-id"]
             wait_until(
-                lambda: any(e["request_id"] == request_id for e in telemetry_events()) or None,
+                lambda: any(e.get("request_id") == request_id for e in telemetry_events()) or None,
                 timeout_s=30,
                 interval_s=0.5,
                 what="the first event after Redis returned",
+            )
+            wait_until(  # the outage itself is recorded once Redis is back (M2.7)
+                lambda: any(e.get("type") == "redis_unavailable" for e in telemetry_events())
+                or None,
+                timeout_s=30,
+                interval_s=0.5,
+                what="the redis_unavailable event",
             )
         finally:
             api.delete(f"/projects/{pid}")

@@ -1,6 +1,6 @@
 .PHONY: help sync lint format typecheck security-scan bandit pip-audit \
 	test-unit test-integration test-system test-functional test-e2e test-chaos \
-	test-security test-web test-all bench-micro bench-propagation bench-telemetry bench-circuit bench-load bench-soak \
+	test-security test-web test-all bench-micro bench-propagation bench-telemetry bench-circuit bench-s4 bench-s8 bench-load bench-soak \
 	bench-checkpoint bench-up bench-down traceability coverage openapi-snapshot telemetry-snapshot
 
 PYTEST = uv run pytest
@@ -78,6 +78,15 @@ bench-propagation:
 	BENCH_DIR=$(BENCH_DIR) $(PYTEST) -m perf services/gateway/tests/bench/test_config_propagation.py -q -s
 
 # Needs REDIS_URL (a Redis server); the micro-benchmarks do not need Postgres.
+# S4 and S8 need the compose test stack up with every service: `$(COMPOSE_TEST) up -d --build --wait`.
+bench-s4:
+	mkdir -p $(BENCH_DIR)
+	scripts/bench/run_s4.sh $(BENCH_DIR)
+
+bench-s8:
+	mkdir -p $(BENCH_DIR)
+	scripts/bench/run_s8.sh $(BENCH_DIR)
+
 bench-circuit:
 	mkdir -p $(BENCH_DIR)
 	BENCH_DIR=$(BENCH_DIR) $(PYTEST) -m perf services/gateway/tests/bench/test_circuit_fail_fast.py -q -s

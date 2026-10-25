@@ -21,6 +21,9 @@ metrics:
   # --- Redis killed and restored under load (M2.7 DoD, in-process proxy test; S8 on the stack at the checkpoint)
   redis_outage_errors:       {unit: count, direction: lower, budget: 0, spec: "M2.7 DoD: no request fails because of JARVIS"}
   redis_outage_recovery_s:   {unit: s, direction: lower, budget: 5, spec: "M2.7 DoD: recovers within 5 s of Redis returning"}
+  redis_outage_p99_ratio:    {unit: x, direction: lower, budget: 2, spec: "M2.7 DoD: p99 during the outage <= 2x normal p99 (S8)"}
+  retry_storm_calls_per_request: {unit: count, direction: lower, budget: 1.2, spec: "M2.3 DoD: upstream calls per client request <= 1 + budget_ratio (S4)"}
+  s4_circuit_open_ratio:     {unit: ratio, direction: higher, budget: null, spec: "tracked (S4: share refused by the open circuit)"}
   redis_normal_p99_ms:       {unit: ms, direction: lower, budget: null, spec: "tracked (M2.7)"}
   redis_outage_p99_ms:       {unit: ms, direction: lower, budget: null, spec: "tracked (M2.7; the test asserts <= 2x normal)"}
   dedup_upstream_calls_per_1000_identical: {unit: count, direction: lower, budget: null, spec: "tracked (REQ-4.10-6 expects 1)"}

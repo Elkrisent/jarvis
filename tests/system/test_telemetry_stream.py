@@ -56,7 +56,7 @@ def test_proxied_requests_become_events_with_the_exact_schema(
             assert len(ids) == 20
 
             def mine() -> list[dict[str, object]] | None:
-                found = [e for e in telemetry_events() if e["request_id"] in ids]
+                found = [e for e in telemetry_events() if e.get("request_id") in ids]
                 return found if len(found) == 20 else None
 
             events = wait_until(mine, timeout_s=15, interval_s=0.3, what="20 telemetry events")
