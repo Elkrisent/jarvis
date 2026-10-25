@@ -15,6 +15,8 @@ from jarvis_core.clock import Clock, SystemClock
 from jarvis_core.interfaces import CallStats, CircuitSnapshot, CircuitState, CircuitStore
 from redis import asyncio as redis_asyncio
 
+from jarvis_gateway.redis_health import RedisHealth, RedisUnavailable
+
 log = logging.getLogger(__name__)
 
 PREFIX = "jarvis:cb:"
@@ -47,7 +49,7 @@ return 1
 
 
 class RedisCircuitStore:
-    def __init__(self, url: str, *, clock: Clock | None = None, timeout_s: float = 1.0) -> None:
+    def __init__(self, url: str, *, clock: Clock | None = None, timeout_s: float = 0.5) -> None:
         self._clock = SystemClock() if clock is None else clock
         self._client = redis_asyncio.from_url(
             url, socket_connect_timeout=timeout_s, socket_timeout=timeout_s
@@ -155,18 +157,29 @@ class FallbackCircuitStore:
     """Redis first; any failure uses the in-memory store instead (SPEC D3: local circuit state)."""
 
     def __init__(
-        self, primary: CircuitStore, fallback: CircuitStore, *, clock: Clock | None = None
+        self,
+        primary: CircuitStore,
+        fallback: CircuitStore,
+        *,
+        clock: Clock | None = None,
+        health: RedisHealth | None = None,
     ) -> None:
         self._primary = primary
         self._fallback = fallback
         self._clock = SystemClock() if clock is None else clock
+        self._health = health
         self._last_warned: float | None = None
 
     async def _run[T](self, name: str, *args: Any, **kwargs: Any) -> T:
-        try:
-            async with asyncio.timeout(0.5):
+        async def attempt() -> T:
+            async with asyncio.timeout(0.25):
                 result: T = await getattr(self._primary, name)(*args, **kwargs)
                 return result
+
+        try:
+            return await attempt() if self._health is None else await self._health.call(attempt)
+        except RedisUnavailable:
+            pass  # known down and logged: use the local state straight away
         except Exception as exc:
             now = self._clock.monotonic()
             if self._last_warned is None or now - self._last_warned >= 30.0:
@@ -174,8 +187,8 @@ class FallbackCircuitStore:
                 log.warning(
                     "circuit store: Redis unavailable (%s); using local state", type(exc).__name__
                 )
-            fallback: T = await getattr(self._fallback, name)(*args, **kwargs)
-            return fallback
+        fallback: T = await getattr(self._fallback, name)(*args, **kwargs)
+        return fallback
 
     async def get(self, api_id: str) -> CircuitSnapshot:
         return await self._run("get", api_id)

@@ -55,6 +55,7 @@ services:
       JARVIS_TELEMETRY_BATCH_SIZE: ${JARVIS_TELEMETRY_BATCH_SIZE:-}
       JARVIS_TELEMETRY_STREAM_MAXLEN: ${JARVIS_TELEMETRY_STREAM_MAXLEN:-}
       JARVIS_EXPECTED_INSTANCES: ${JARVIS_EXPECTED_INSTANCES:-}
+      JARVIS_REDIS_FAIL_OPEN: ${JARVIS_REDIS_FAIL_OPEN:-}
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}

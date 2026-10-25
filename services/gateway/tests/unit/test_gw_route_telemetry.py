@@ -37,6 +37,9 @@ class ExplodingForwarder:
     def __init__(self, error: BaseException) -> None:
         self._error = error
 
+    def check_shared_state(self) -> None:
+        return None
+
     async def check_inbound(self, *args: Any, **kwargs: Any) -> None:
         return None
 

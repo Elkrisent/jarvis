@@ -122,6 +122,7 @@ def build_gw_router(
             )
             if forwarder is None:
                 raise NotImplementedYetError("forwarding is not implemented yet")
+            forwarder.check_shared_state()
             await forwarder.check_inbound(authenticated)  # pipeline step 3
             return await forwarder.forward(request, authenticated, request_id, started, record)
         except JarvisError as error:

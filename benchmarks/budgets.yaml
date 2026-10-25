@@ -18,6 +18,11 @@ metrics:
   telemetry_overhead_p99_redis_down: {unit: ms, direction: lower, budget: 0.5, spec: "M1.9 DoD: Redis unreachable, p99 difference"}
   config_propagation_p99:   {unit: ms, direction: lower, budget: 1000, spec: "§13 config propagation"}
   circuit_open_fail_fast_p99: {unit: ms, direction: lower, budget: null, spec: "tracked (M2.4)"}
+  # --- Redis killed and restored under load (M2.7 DoD, in-process proxy test; S8 on the stack at the checkpoint)
+  redis_outage_errors:       {unit: count, direction: lower, budget: 0, spec: "M2.7 DoD: no request fails because of JARVIS"}
+  redis_outage_recovery_s:   {unit: s, direction: lower, budget: 5, spec: "M2.7 DoD: recovers within 5 s of Redis returning"}
+  redis_normal_p99_ms:       {unit: ms, direction: lower, budget: null, spec: "tracked (M2.7)"}
+  redis_outage_p99_ms:       {unit: ms, direction: lower, budget: null, spec: "tracked (M2.7; the test asserts <= 2x normal)"}
   dedup_upstream_calls_per_1000_identical: {unit: count, direction: lower, budget: null, spec: "tracked (REQ-4.10-6 expects 1)"}
   upstream_calls_avoided_ratio: {unit: "%", direction: higher, budget: null, spec: "tracked"}
   # --- Soak and footprint

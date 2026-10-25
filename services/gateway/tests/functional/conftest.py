@@ -26,6 +26,7 @@ from jarvis_gateway.config.snapshot import ApiEntry, KeyEntry, Snapshot
 from jarvis_gateway.config.store import ConfigStore
 from jarvis_gateway.credentials import CredentialVault
 from jarvis_gateway.forwarder import Forwarder
+from jarvis_gateway.redis_health import RedisHealth
 from jarvis_gateway.retry_budget import RetryBudget
 from jarvis_gateway.upstream import PinnedTransport
 from mock_upstream.app import create_app as create_mock_upstream
@@ -89,6 +90,9 @@ async def make_gateway(upstream: Upstream) -> AsyncIterator[GatewayFactory]:
         retry_budget: RetryBudget | None = None,
         circuit_breaker: CircuitBreaker | None = None,
         limiter: RateLimiter | None = None,
+        redis_health: RedisHealth | None = None,
+        redis_fail_open: bool = True,
+        events: TelemetrySink | None = None,
         **cfg: Any,
     ) -> Gateway:
         target = port or upstream.port
@@ -124,11 +128,17 @@ async def make_gateway(upstream: Upstream) -> AsyncIterator[GatewayFactory]:
             retry_budget=retry_budget,
             circuit=circuit_breaker,
             limiter=limiter,
+            redis_health=redis_health,
+            redis_fail_open=redis_fail_open,
+            events=events,
             transport_factory=lambda: PinnedTransport(policy, resolver=resolve),
         )
         store.add_listener(forwarder.retain)
         app = create_app(
-            config=cast(ConfigManager, StoreOnly(store)), forwarder=forwarder, sink=sink
+            config=cast(ConfigManager, StoreOnly(store)),
+            forwarder=forwarder,
+            sink=sink,
+            redis_health=redis_health,
         )
         client = httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app), base_url="http://gateway", timeout=10

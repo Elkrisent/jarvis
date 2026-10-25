@@ -163,3 +163,16 @@ def test_expected_instances_must_be_a_positive_whole_number() -> None:
     for bad in ("0", "-1", "1.5", "many"):
         with pytest.raises(SettingsError, match="JARVIS_EXPECTED_INSTANCES"):
             load_settings({**BASE, "JARVIS_EXPECTED_INSTANCES": bad})
+
+
+@pytest.mark.req("REQ-2-4")
+def test_redis_fail_open_is_one_global_setting_on_by_default() -> None:
+    assert load_settings(BASE).redis_fail_open is True
+    assert load_settings({**BASE, "JARVIS_REDIS_FAIL_OPEN": "false"}).redis_fail_open is False
+    assert load_settings({**BASE, "JARVIS_REDIS_FAIL_OPEN": "TRUE"}).redis_fail_open is True
+
+
+def test_redis_fail_open_rejects_unknown_words() -> None:
+    with pytest.raises(SettingsError, match="JARVIS_REDIS_FAIL_OPEN") as exc:
+        load_settings({**BASE, "JARVIS_REDIS_FAIL_OPEN": "sometimes"})
+    assert "sometimes" not in str(exc.value)

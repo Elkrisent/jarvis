@@ -19,6 +19,8 @@ from jarvis_core.interfaces import TelemetrySink
 from jarvis_core.telemetry import SCHEMA_VERSION, format_ts
 from redis import asyncio as redis_asyncio
 
+from jarvis_gateway.redis_health import RedisHealth, RedisUnavailable
+
 log = logging.getLogger(__name__)
 
 WINDOW_S = 60
@@ -58,7 +60,7 @@ class BudgetBackend(Protocol):
 
 
 class RedisBudgetBackend:
-    def __init__(self, url: str, *, timeout_s: float = 1.0) -> None:
+    def __init__(self, url: str, *, timeout_s: float = 0.5) -> None:
         self._client = redis_asyncio.from_url(
             url, socket_connect_timeout=timeout_s, socket_timeout=timeout_s
         )
@@ -114,6 +116,7 @@ class RetryBudget:
         flush_interval_s: float = 1.0,
         command_timeout_s: float = 0.25,
         event_interval_s: float = 1.0,
+        health: RedisHealth | None = None,
     ) -> None:
         self._backend = backend
         self._clock = SystemClock() if clock is None else clock
@@ -121,6 +124,7 @@ class RetryBudget:
         self._flush_interval_s = flush_interval_s
         self._command_timeout_s = command_timeout_s
         self._event_interval_s = event_interval_s
+        self._health = health
         self._local: defaultdict[str, _Window] = defaultdict(_Window)
         self._pending: defaultdict[str, int] = defaultdict(int)
         self._last_event: dict[str, float] = {}
@@ -144,9 +148,16 @@ class RetryBudget:
         allowed: bool | None = None
         if self._backend is not None:
             pending = self._pending.pop(api_id, 0)
-            try:
+            backend = self._backend
+
+            async def acquire() -> bool:
                 async with asyncio.timeout(self._command_timeout_s):
-                    allowed = await self._backend.acquire(api_id, now_s, pending, ratio)
+                    return await backend.acquire(api_id, now_s, pending, ratio)
+
+            try:
+                allowed = await (acquire() if self._health is None else self._health.call(acquire))
+            except RedisUnavailable:
+                pass  # known down and logged: this instance's counts decide
             except Exception as exc:  # Redis down or slow: fall back to this instance's counts
                 self._pending[api_id] += pending
                 self._warn(exc)
@@ -184,11 +195,19 @@ class RetryBudget:
 
     async def _flush(self) -> None:
         assert self._backend is not None
+        if self._health is not None and not self._health.available:
+            self._pending.clear()  # the window is 60 s: counts from an outage are not worth keeping
+            return
+        backend = self._backend
         now_s = int(self._clock.now())
         for api_id in [a for a, n in self._pending.items() if n > 0]:
             count = self._pending.pop(api_id, 0)
+
+            async def add(api: str = api_id, n: int = count) -> None:
+                await backend.add_requests(api, now_s, n)
+
             try:
-                await self._backend.add_requests(api_id, now_s, count)
+                await (add() if self._health is None else self._health.call(add))
             except BaseException:
                 self._pending[api_id] += count
                 raise

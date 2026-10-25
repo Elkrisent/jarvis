@@ -44,7 +44,8 @@ class TestRedisRateLimiter(RateLimiterContract):
 @pytest.mark.req("REQ-4.11-1")
 async def test_hundreds_of_simultaneous_takes_never_over_admit(redis_url: str) -> None:
     key = f"it_{uuid.uuid4().hex[:8]}"
-    limiter = RedisRateLimiter(redis_url, clock=FakeClock())  # frozen time: no refill at all
+    # Frozen time: no refill at all. A long timeout: this test is about admission, not latency.
+    limiter = RedisRateLimiter(redis_url, clock=FakeClock(), timeout_s=10.0)
     results = await asyncio.gather(
         *(limiter.take(key, capacity=100, refill_per_s=1.0) for _ in range(600))
     )
@@ -56,7 +57,7 @@ async def test_hundreds_of_simultaneous_takes_never_over_admit(redis_url: str) -
 async def test_three_instances_share_one_bucket(redis_url: str) -> None:
     key = f"it_{uuid.uuid4().hex[:8]}"
     clock = FakeClock()
-    instances = [RedisRateLimiter(redis_url, clock=clock) for _ in range(3)]
+    instances = [RedisRateLimiter(redis_url, clock=clock, timeout_s=10.0) for _ in range(3)]
     results = await asyncio.gather(
         *(instances[n % 3].take(key, capacity=50, refill_per_s=1.0) for n in range(300))
     )

@@ -343,3 +343,29 @@ def test_startup_freezes_the_gc_only_when_asked(freeze: bool) -> None:
             assert (gc.get_freeze_count() > 0) is freeze
     finally:
         gc.unfreeze()
+
+
+# --- Redis health in /readyz (M2.7) -----------------------------------------------------------
+
+
+@pytest.mark.req("REQ-2-3")
+def test_readyz_reports_the_redis_mode_and_degrades_while_running_on_local_state() -> None:
+    from jarvis_gateway.redis_health import RedisHealth
+
+    async def ping() -> None: ...
+
+    health = RedisHealth(ping, failure_threshold=1, probe_interval_s=3600)
+
+    async def probe(host: str, port: int) -> bool:
+        return True  # the TCP probe says Redis is reachable; the health tracker knows better
+
+    client = TestClient(create_app(dependencies_from_env(ENV), probe, redis_health=health))
+    body = client.get("/readyz").json()
+    assert body["status"] == "ok"
+    assert body["redis"] == {"mode": "normal"}
+
+    health._down_since = 1.0  # what a tripped tracker looks like to /readyz
+    body = client.get("/readyz").json()
+    assert body["status"] == "degraded"
+    assert body["redis"] == {"mode": "degraded"}
+    assert client.get("/readyz").status_code == 200  # degraded still serves

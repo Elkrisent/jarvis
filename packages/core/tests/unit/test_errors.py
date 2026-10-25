@@ -69,7 +69,13 @@ def test_error_for_unknown_code_raises() -> None:
         error_for_code("JV_NOPE")
 
 
-MANAGEMENT_CODES = {"JV_AUTH_REQUIRED", "JV_NOT_FOUND", "JV_CONFLICT", "JV_NOT_IMPLEMENTED"}
+MANAGEMENT_CODES = {
+    "JV_AUTH_REQUIRED",
+    "JV_NOT_FOUND",
+    "JV_CONFLICT",
+    "JV_NOT_IMPLEMENTED",
+    "JV_NOT_READY",
+}
 
 
 def test_management_api_codes_are_separate_from_the_spec_codes() -> None:
@@ -82,6 +88,7 @@ def test_management_api_codes_are_separate_from_the_spec_codes() -> None:
         "JV_NOT_FOUND": 404,
         "JV_CONFLICT": 409,
         "JV_NOT_IMPLEMENTED": 501,
+        "JV_NOT_READY": 503,
     }
 
 
