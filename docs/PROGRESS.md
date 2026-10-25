@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 merged (PR #20, merge commit `b17187d`); M1.5 merged (PR #21, merge commit `d756c4c`); M1.6 merged (PR #23, merge commit `937a936`); M1.7 merged (PR #24, merge commit `a3d3942`); M1.8 merged (PR #25, merge commit `0ea3df7`); M1.9 merged (PR #27, merge commit `c5307e8`). Checkpoint 1 done (PR #32, merge commit `ae6cf9d`; report `docs/checkpoints/P1-proxy.md`; pre-release `v0.1.0` tagged on `ae6cf9d`); Checkpoint 1 approved by the user on 2026-10-25. Phase 2 in progress: M2.1 implemented on branch `feat/m2.1-deadlines` (not pushed or merged yet).
+Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 merged (PR #20, merge commit `b17187d`); M1.5 merged (PR #21, merge commit `d756c4c`); M1.6 merged (PR #23, merge commit `937a936`); M1.7 merged (PR #24, merge commit `a3d3942`); M1.8 merged (PR #25, merge commit `0ea3df7`); M1.9 merged (PR #27, merge commit `c5307e8`). Checkpoint 1 done (PR #32, merge commit `ae6cf9d`; report `docs/checkpoints/P1-proxy.md`; pre-release `v0.1.0` tagged on `ae6cf9d`); Checkpoint 1 approved by the user on 2026-10-25. Phase 2 in progress: M2.1 in PR #36 (CI running when last checked); M2.2 implemented on branch `feat/m2.2-retry-policy` (not pushed).
 
 ## Current Phase
 
@@ -10,7 +10,7 @@ Phase 2: Reliability (Phase 1 approved 2026-10-25).
 
 ## Current Module
 
-M2.1 Deadlines and attempt timeouts: code and tests done locally on `feat/m2.1-deadlines`; PR and CI pending. Next module: M2.2 Retry policy.
+M2.2 Retry policy: code and tests done locally on `feat/m2.2-retry-policy` (stacked on M2.1, PR #36 pending merge); PR and CI pending. Next module: M2.3 Retry budget.
 
 ## Completed
 
@@ -119,6 +119,14 @@ M2.1 Deadlines and attempt timeouts: code and tests done locally on `feat/m2.1-d
   * Verified locally: `make lint typecheck` clean; 1069 unit + functional tests pass (core and gateway; gateway unit coverage of `forwarder.py` complete). NOT run here: integration, system, e2e, chaos and security suites and the CI coverage gate (no Postgres, Redis or Docker on this machine today; `make coverage` errors in the api integration tests for that reason), so CI on the PR decides.
   * Known: the timing assertions (hang within 50 ms of the attempt timeout) can flake on a loaded machine.
 
+* M2.2 Retry policy (branch `feat/m2.2-retry-policy`, local; plan: none written, module is small):
+  * `jarvis_core.retry` (pure): `Failure`, `method_retryable`, `condition_retryable`, `parse_retry_after` (delta-seconds as digits only, or HTTP-date; malformed gives None so backoff applies), `backoff_ceiling_s`/`backoff_delay_s` (full jitter on the injected `Random`), `decide` (enabled, `max_attempts`, method x idempotency header, condition, `Retry-After` for 429/503, then the deadline check). `Deadline.can_start_attempt_after(wait, min_attempt_ms)`.
+  * `Forwarder` now loops over attempts: a retryable status closes that response, waits the decided delay on the injected clock and tries again; when no retry is allowed the last answer is passed through (a retryable status as the upstream sent it) or the timeout/connection error is raised as before. `X-Jarvis-Attempts` and the telemetry `attempts` count real attempts. Request bodies are already buffered, so they are resent as is. An invalid URL is never retried. Bodies cut mid-stream are not retried (the answer had started).
+  * Interpretations to confirm (SPEC is silent): (1) `backoff` index is 0 for the first retry, so the first ceiling is `base_ms`; (2) a retry needs the wait plus `min_attempt_ms` to fit in the remaining deadline, which also gives "Retry-After that does not fit means no retry"; (3) a caller-supplied idempotency header is kept and only POST/PATCH-like requests get a generated one (SPEC says JARVIS generates it once per request); (4) existing tests that assumed one attempt were adapted, not loosened: the hung-upstream deadline test now sets `max_attempts: 1`, the unreachable-upstream telemetry test expects `attempts == 3`.
+  * Retry budget (REQ-4.7-7, -8) is M2.3.
+  * Tests: `test_retry.py` (decision table over status x method x idempotency, hypothesis backoff bounds, Retry-After seconds and date, deadline edges), forwarder unit tests, `services/gateway/tests/functional/test_retries.py` (scripted upstream on real sockets: 503 then 200 with `X-Jarvis-Attempts: 2`, POST/PATCH never retried without config and the upstream sees one call, same key on every attempt, 4xx/500/501 never retried, Retry-After honored and refused beyond the deadline, attempt timeout retried, deadline never exceeded). Micro-benchmark `backoff_compute` (`packages/core/tests/bench`): 1.65 us mean locally (budget stays null). Mutation checks: method rule, deadline fit and `max_attempts` removed each fail a named test. REQ-4.7-1 to -6 and -9 linked (rows patched by hand).
+  * Verified locally: `make lint typecheck` clean; 1429 unit + functional tests pass; `forwarder.py` fully covered by unit tests. Not run here (no Postgres, Redis or Docker): integration, system, e2e, chaos, security, the CI coverage gate.
+
 ## In Progress
 
 Nothing besides the item above. Checkpoint 1 notes kept for reference (what was found while running it):
@@ -151,7 +159,7 @@ Nothing besides the item above. Checkpoint 1 notes kept for reference (what was 
 
 ## Resume Point
 
-M2.1 is implemented on `feat/m2.1-deadlines` (stacked on `fix/revocation-poll-redis-down`); nothing pushed. Next: push and PR both with the user's go-ahead, wait for CI, then M2.2.
+M2.1 is in PR #36 (user merged #34; #35 landed on the fix branch). M2.2 is on `feat/m2.2-retry-policy`, not pushed. Next: push and PR M2.2 once #36 is merged, wait for CI, then M2.3 Retry budget.
 
 ## Last Updated
 

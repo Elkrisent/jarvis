@@ -21,7 +21,9 @@ EPSILON = 0.05  # SPEC/IMPLEMENTATION M2.1: total latency <= deadline + 50 ms
 async def test_a_hung_upstream_is_cut_at_the_attempt_timeout(
     make_gateway: GatewayFactory, upstream: Upstream
 ) -> None:
-    gateway = make_gateway(deadline_ms=2000, attempt_timeout_ms=400, min_attempt_ms=100)
+    gateway = make_gateway(
+        deadline_ms=2000, attempt_timeout_ms=400, min_attempt_ms=100, retry={"max_attempts": 1}
+    )
     await upstream.rules({"path_prefix": "/", "hang": True})
     started = time.monotonic()
     response = await gateway.call("GET", "/gw/none/x")

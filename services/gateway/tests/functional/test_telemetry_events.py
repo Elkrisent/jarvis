@@ -124,7 +124,7 @@ async def test_an_unreachable_upstream_is_a_jarvis_error_event(
     assert (await gateway.call("GET", "/gw/dead/x")).status_code == 502
     event = only(sink)
     assert event["error_code"] == "JV_UPSTREAM_UNREACHABLE"
-    assert event["attempts"] == 1
+    assert event["attempts"] == 3  # a GET is retried on a connection error (default max_attempts)
 
 
 @pytest.mark.req("REQ-6.1-2")

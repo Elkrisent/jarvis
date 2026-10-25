@@ -557,6 +557,109 @@ def test_the_attempt_is_bounded_by_the_time_left_not_only_by_its_own_timeout() -
     assert time.monotonic() - started < 0.4 + 0.15
 
 
+FAST_RETRY = {"base_ms": 1, "cap_ms": 2}
+
+
+def _sequence(
+    *answers: Exception | Callable[[], httpx.Response],
+) -> Callable[[httpx.Request], httpx.Response]:
+    """A handler giving each call the next answer (the last repeats); exceptions are raised."""
+    calls: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        answer = answers[min(len(calls), len(answers) - 1)]
+        calls.append(1)
+        if isinstance(answer, Exception):
+            raise answer
+        return cast(httpx.Response, answer())  # a new response each time: attempts close them
+
+    return handler
+
+
+@pytest.mark.req("REQ-4.7-1")
+def test_a_503_is_retried_and_the_attempts_header_counts_the_attempts() -> None:
+    rig = Rig(
+        [_api("a1", "weather", retry=FAST_RETRY)], _sequence(lambda: _resp(503), lambda: _resp(200))
+    )
+    response = rig.call()
+    assert response.status_code == 200
+    assert response.headers["X-Jarvis-Attempts"] == "2"
+    assert len(rig.requests) == 2
+
+
+@pytest.mark.req("REQ-4.7-9")
+def test_the_last_retryable_answer_is_returned_after_max_attempts() -> None:
+    rig = Rig(
+        [_api("a1", "weather", retry={**FAST_RETRY, "max_attempts": 2})],
+        _sequence(lambda: _resp(503)),
+    )
+    response = rig.call()
+    assert response.status_code == 503
+    assert response.headers["X-Jarvis-Attempts"] == "2"
+    assert len(rig.requests) == 2
+
+
+@pytest.mark.req("REQ-4.7-1")
+def test_connection_errors_are_retried_then_reported() -> None:
+    rig = Rig(
+        [_api("a1", "weather", retry=FAST_RETRY)],
+        _sequence(httpx.ConnectError("x"), httpx.ReadTimeout("t"), lambda: _resp(200)),
+    )
+    assert rig.call().headers["X-Jarvis-Attempts"] == "3"
+    rig = Rig([_api("a1", "weather", retry=FAST_RETRY)], _sequence(httpx.ConnectError("x")))
+    _json_error(rig.call(), "JV_UPSTREAM_UNREACHABLE", 502)
+
+
+@pytest.mark.req("REQ-4.7-1")
+def test_an_invalid_url_is_not_retried() -> None:
+    calls: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        raise httpx.InvalidURL("bad")
+
+    _json_error(
+        Rig([_api("a1", "weather", retry=FAST_RETRY)], handler).call(),
+        "JV_UPSTREAM_UNREACHABLE",
+        502,
+    )
+    assert len(calls) == 1
+
+
+@pytest.mark.req("REQ-4.7-3")
+def test_a_post_without_an_idempotency_header_is_not_retried() -> None:
+    rig = Rig(
+        [_api("a1", "weather", retry=FAST_RETRY)], _sequence(lambda: _resp(503), lambda: _resp(200))
+    )
+    assert rig.call("POST", content=b"{}").status_code == 503
+    assert len(rig.requests) == 1
+
+
+@pytest.mark.req("REQ-4.7-5")
+def test_one_idempotency_key_is_generated_per_request_and_reused_on_every_attempt() -> None:
+    retry = {**FAST_RETRY, "idempotency_header": "Idempotency-Key"}
+    rig = Rig(
+        [_api("a1", "weather", retry=retry)],
+        _sequence(lambda: _resp(503), lambda: _resp(502), lambda: _resp(200)),
+    )
+    assert rig.call("POST", content=b"{}").headers["X-Jarvis-Attempts"] == "3"
+    keys = [r.headers["Idempotency-Key"] for r in rig.requests]
+    assert len(keys[0]) == 32
+    assert keys == [keys[0]] * 3
+    rig.call("POST", content=b"{}")
+    assert rig.requests[-1].headers["Idempotency-Key"] != keys[0]
+
+
+@pytest.mark.req("REQ-4.7-5")
+def test_a_callers_idempotency_key_is_kept_and_safe_methods_get_none() -> None:
+    retry = {**FAST_RETRY, "idempotency_header": "Idempotency-Key"}
+    rig = Rig([_api("a1", "weather", retry=retry)])
+    rig.call("POST", content=b"{}", headers={"idempotency-key": "mine"})
+    assert rig.requests[-1].headers["Idempotency-Key"] == "mine"
+    rig.call("GET")
+    assert "Idempotency-Key" not in rig.requests[-1].headers
+
+
 def test_the_forwarder_is_closed_when_the_app_shuts_down() -> None:
     rig = _rig()
     closed: list[bool] = []
