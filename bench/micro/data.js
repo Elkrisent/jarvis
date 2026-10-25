@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792929192818,
+  "lastUpdate": 1792937035975,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Micro benchmarks": [
@@ -996,6 +996,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 4.945877234390329e-7",
             "extra": "mean: 1.5277933353025097 usec\nrounds: 74212"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "e8f6dda1d36a4a0e588e60ce92e9cdf9716af369",
+          "message": "Merge pull request #37 from Elkrisent/feat/m2.2-retry-policy\n\nfeat: retry policy with full-jitter backoff and Retry-After (M2.2)",
+          "timestamp": "2026-10-25T19:33:24+05:30",
+          "tree_id": "08d7815b7df0093e0fdb8fefdb439a8f59db5df5",
+          "url": "https://github.com/Elkrisent/jarvis/commit/e8f6dda1d36a4a0e588e60ce92e9cdf9716af369"
+        },
+        "date": 1792937035197,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "packages/core/tests/bench/test_bench_backoff_compute.py::test_bench_backoff_compute",
+            "value": 516984.6698034034,
+            "unit": "iter/sec",
+            "range": "stddev: 5.145944211911853e-7",
+            "extra": "mean: 1.9342933328763414 usec\nrounds: 29008"
+          },
+          {
+            "name": "packages/core/tests/bench/test_bench_route_template_match.py::test_bench_route_template_match",
+            "value": 146285.2269206816,
+            "unit": "iter/sec",
+            "range": "stddev: 9.57427195063831e-7",
+            "extra": "mean: 6.835960274664081 usec\nrounds: 43398"
+          },
+          {
+            "name": "packages/core/tests/bench/test_bench_token_bucket_take.py::test_bench_token_bucket_take",
+            "value": 654914.4020031991,
+            "unit": "iter/sec",
+            "range": "stddev: 4.2804969823954525e-7",
+            "extra": "mean: 1.5269171008322324 usec\nrounds: 79663"
           }
         ]
       }
