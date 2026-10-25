@@ -722,6 +722,109 @@ def test_closing_the_forwarder_closes_its_budget() -> None:
     assert budget.closed
 
 
+class _Circuit:
+    """Stands in for the CircuitBreaker: records what the forwarder tells it."""
+
+    def __init__(self, action: str = "allow", open_now: bool = False) -> None:
+        self.action = action
+        self.open_now = open_now
+        self.finished: list[str] = []
+        self.recorded: list[bool] = []
+        self.closed = False
+
+    async def admit(self, api_id: str, policy: Any, project_id: str, *, probe_ttl_s: int) -> Any:
+        from jarvis_core.interfaces import CircuitState
+        from jarvis_gateway.circuit import Ticket
+
+        state = CircuitState.HALF_OPEN if self.action == "probe" else CircuitState.OPEN
+        if self.action == "allow":
+            state = CircuitState.CLOSED
+        return Ticket(self.action, state)  # type: ignore[arg-type]
+
+    def state(self, api_id: str) -> Any:
+        from jarvis_core.interfaces import CircuitState
+
+        return CircuitState.OPEN if self.open_now else CircuitState.CLOSED
+
+    def is_open(self, api_id: str) -> bool:
+        return self.open_now
+
+    def record(self, api_id: str, policy: Any, project_id: str, *, failure: bool) -> None:
+        self.recorded.append(failure)
+
+    async def finish_probe(self, api_id: str, policy: Any, project_id: str, outcome: str) -> None:
+        self.finished.append(outcome)
+
+    async def aclose(self) -> None:
+        self.closed = True
+
+
+def _circuit_rig(circuit: _Circuit, handler: Any = None, **cfg: Any) -> Rig:
+    rig = Rig([_api("a1", "weather", retry=FAST_RETRY, **cfg)], handler)
+    rig.forwarder._circuit = cast(Any, circuit)
+    return rig
+
+
+@pytest.mark.req("REQ-4.8-10")
+def test_a_rejected_request_never_reaches_the_upstream() -> None:
+    rig = _circuit_rig(_Circuit("reject"))
+    response = rig.call()
+    _json_error(response, "JV_CIRCUIT_OPEN", 503)
+    assert response.headers["X-Jarvis-Circuit"] == "OPEN"
+    assert rig.requests == []
+
+
+@pytest.mark.req("REQ-4.8-2", "REQ-4.8-3")
+def test_every_attempt_outcome_is_reported_as_failure_or_not() -> None:
+    circuit = _Circuit()
+    rig = _circuit_rig(
+        circuit,
+        _sequence(lambda: _resp(503), httpx.ConnectError("x"), lambda: _resp(404)),
+    )
+    response = rig.call()
+    assert response.status_code == 404
+    assert response.headers["X-Jarvis-Circuit"] == "CLOSED"
+    assert circuit.recorded == [True, True, False]  # 503, connect error, 404 (a 4xx is no failure)
+
+
+@pytest.mark.req("REQ-4.8-7")
+def test_a_probe_that_answers_ok_closes_and_one_that_fails_reopens() -> None:
+    ok = _Circuit("probe")
+    _circuit_rig(ok).call()
+    assert ok.finished == ["success"]
+    assert ok.recorded == []  # the probe's outcome is its verdict, not a counted call
+    bad = _Circuit("probe")
+    _circuit_rig(bad, _sequence(lambda: _resp(500))).call()
+    assert bad.finished == ["failure"]
+
+
+def test_a_probe_that_dies_before_an_answer_gives_the_slot_back() -> None:
+    from jarvis_core.errors import DestinationBlockedError
+
+    circuit = _Circuit("probe")
+
+    def blocked(request: httpx.Request) -> httpx.Response:
+        raise DestinationBlockedError("destination is not allowed")
+
+    _json_error(_circuit_rig(circuit, blocked).call(), "JV_DESTINATION_BLOCKED", 403)
+    assert circuit.finished == ["cancelled"]
+
+
+def test_no_retry_is_sent_once_the_circuit_is_open() -> None:
+    circuit = _Circuit(open_now=True)
+    rig = _circuit_rig(circuit, _sequence(lambda: _resp(503), lambda: _resp(200)))
+    assert rig.call().status_code == 503
+    assert len(rig.requests) == 1
+
+
+def test_closing_the_forwarder_closes_its_circuit_breaker() -> None:
+    circuit = _Circuit()
+    rig = _circuit_rig(circuit)
+    with rig.client:
+        rig.call()
+    assert circuit.closed
+
+
 def test_the_forwarder_is_closed_when_the_app_shuts_down() -> None:
     rig = _rig()
     closed: list[bool] = []

@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 merged (PR #20, merge commit `b17187d`); M1.5 merged (PR #21, merge commit `d756c4c`); M1.6 merged (PR #23, merge commit `937a936`); M1.7 merged (PR #24, merge commit `a3d3942`); M1.8 merged (PR #25, merge commit `0ea3df7`); M1.9 merged (PR #27, merge commit `c5307e8`). Checkpoint 1 done (PR #32, merge commit `ae6cf9d`; report `docs/checkpoints/P1-proxy.md`; pre-release `v0.1.0` tagged on `ae6cf9d`); Checkpoint 1 approved by the user on 2026-10-25. Phase 2 in progress: M2.1 merged (PR #36); M2.2 in PR #37 (CI green); M2.3 implemented on `feat/m2.3-retry-budget` (not pushed).
+Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 merged (PR #20, merge commit `b17187d`); M1.5 merged (PR #21, merge commit `d756c4c`); M1.6 merged (PR #23, merge commit `937a936`); M1.7 merged (PR #24, merge commit `a3d3942`); M1.8 merged (PR #25, merge commit `0ea3df7`); M1.9 merged (PR #27, merge commit `c5307e8`). Checkpoint 1 done (PR #32, merge commit `ae6cf9d`; report `docs/checkpoints/P1-proxy.md`; pre-release `v0.1.0` tagged on `ae6cf9d`); Checkpoint 1 approved by the user on 2026-10-25. Phase 2 in progress: M2.1 and M2.2 merged (PR #36, #37); M2.3 in PR #38 (CI green, awaiting merge); M2.4 implemented on `feat/m2.4-circuit-breaker` (pushed, no PR yet).
 
 ## Current Phase
 
@@ -10,7 +10,7 @@ Phase 2: Reliability (Phase 1 approved 2026-10-25).
 
 ## Current Module
 
-M2.3 Retry budget: code and tests done locally on `feat/m2.3-retry-budget` (stacked on M2.2, PR #37 with CI green, awaiting merge). Next module: M2.4 Circuit breaker.
+M2.4 Circuit breaker: code and tests done locally on `feat/m2.4-circuit-breaker` (stacked on M2.3, PR #38 with CI green, awaiting merge). Next module: M2.5 Rate limiters.
 
 ## Completed
 
@@ -135,6 +135,16 @@ M2.3 Retry budget: code and tests done locally on `feat/m2.3-retry-budget` (stac
   * Verified locally with a local Redis 7 on port 6390 (started for this work): `make lint typecheck` clean; 1539 unit + functional + Redis integration tests pass; coverage of the new code complete. Not run: Postgres-backed integration, system, e2e, chaos, security, and the CI gate (CI decides).
   * Found, not fixed: the gateway's httpx client per upstream uses the default pool (100 connections, 20 keep-alive), so more than 100 concurrent requests to one upstream get pool-timeout 504s (seen when the storm test used 200 at once). Decide in the performance phase whether to raise or configure it.
 
+* M2.4 Circuit breaker (branch `feat/m2.4-circuit-breaker`, stacked on PR #38):
+  * `jarvis_core.circuit` (pure state machine: `admit`, `tripped`, `half_opened`, `probe_succeeded`, `probe_failed`, `window_s`, `is_failure`). 5xx, timeouts and connection errors count; 4xx (429 included) do not. CLOSED to OPEN at the threshold with `min_calls`; OPEN to HALF_OPEN after `open_duration_s`; a failed probe doubles the open duration up to `max_open_duration_s`; a good probe closes it and resets the duration. `CircuitSnapshot` gained an optional `closed_at` (additive, defaults to None): calls before the last close no longer count, so the old failures in the store's window cannot reopen the circuit the moment it closes.
+  * `jarvis_gateway.circuit_store.RedisCircuitStore` passes the shared `CircuitStoreContract` on a real Redis (per-second hashes summed in a Lua script, state hash, probe lock holding its expiry time so the injected clock drives it, pub/sub channel `circuit:changed`). `FallbackCircuitStore` uses the in-memory store when Redis fails (SPEC D3), one WARNING per 30 s with the exception type only.
+  * `jarvis_gateway.circuit.CircuitBreaker`: a local mirror per API (read on the request path, refreshed every 1 s and on pub/sub pushes, read from the store on first sight), outcomes queued with no I/O and counted by a background task, the half-open probe taken through the store lock (50 concurrent requests make exactly one probe), a transition event for every move (`kind: "event"`, `type: "circuit_transition"`, `from`, `to`, `open_duration_s`, `reason`). Any internal error fails open.
+  * `Forwarder`: rejected requests answer `JV_CIRCUIT_OPEN` (503, `X-Jarvis-Circuit`) before the body is read and with zero upstream calls; each attempt's outcome is reported; the first attempt of the probing request is the probe (a request that dies before an answer hands the slot back); no further retries once the circuit is open. `X-Jarvis-Circuit` is on upstream answers too and the telemetry `circuit` field is filled in.
+  * Tests: pure state machine (every transition, `min_calls` floor, 4xx, probe success/failure, doubling and cap, hypothesis over random outcome sequences), breaker unit tests (two instances, first sight, races, store failures), forwarder unit tests, functional (open circuit means zero upstream calls, probe flow, failed probe doubles, 50 concurrent requests make one probe), and integration with two gateways on one Redis (`test_circuit_shared.py`: B sees A's trip; exactly one probe across 50 concurrent requests split over both). Benchmark `circuit_open_fail_fast_p99` (`make bench-circuit`): p50 0.32 ms, p99 0.95 ms locally (budget stays null, tracked). REQ-4.8-1 to -10 linked. Mutation checks: removing the probe lock, counting 4xx, no doubling, and ignoring the last close each fail a named test.
+  * Verified locally with a local Redis: `make lint typecheck` clean; 1626 unit + functional + Redis integration tests pass; new code fully covered. Not run: Postgres-backed integration, system, e2e, chaos, security, the CI gate.
+  * Flake found and fixed while testing: the shared-circuit test depended on timing (probe latency vs the 1 s attempt timeout); the probe now takes 0.7 s.
+  * Not done here: `bench.yml` does not run `bench-circuit` yet (tracked metric only).
+
 ## In Progress
 
 Nothing besides the item above. Checkpoint 1 notes kept for reference (what was found while running it):
@@ -167,7 +177,7 @@ Nothing besides the item above. Checkpoint 1 notes kept for reference (what was 
 
 ## Resume Point
 
-M2.1 is in PR #36 (user merged #34; #35 landed on the fix branch). M2.3 is on `feat/m2.3-retry-budget`, not pushed (stacked on PR #37). Next: user merges #37, push and PR M2.3 against main, wait for CI, then M2.4 Circuit breaker.
+M2.1 is in PR #36 (user merged #34; #35 landed on the fix branch). M2.4 is on `feat/m2.4-circuit-breaker` (stacked on PR #38). Next: user merges #38, rebase M2.4 on main and open its PR, wait for CI, then M2.5 Rate limiters.
 
 ## Last Updated
 

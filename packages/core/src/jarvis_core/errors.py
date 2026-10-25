@@ -48,6 +48,7 @@ class QuotaExceededError(JarvisError):
 class CircuitOpenError(JarvisError):
     code = "JV_CIRCUIT_OPEN"
     http_status = 503
+    circuit_state = "OPEN"  # reported as X-Jarvis-Circuit; HALF_OPEN while a probe is in flight
 
 
 class UpstreamTimeoutError(JarvisError):

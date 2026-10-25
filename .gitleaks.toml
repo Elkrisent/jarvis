@@ -43,6 +43,16 @@ paths = [
 ]
 
 [[allowlists]]
+description = "Made-up JARVIS key used as a fixture in the circuit fail-fast benchmark (protects nothing)"
+condition = "AND"
+regexes = [
+  '''jv_live_benchcircuit001''',
+]
+paths = [
+  '''services/gateway/tests/bench/test_circuit_fail_fast\.py''',
+]
+
+[[allowlists]]
 description = "Throwaway provider credential in the first version of the S2 benchmark setup script (protects nothing; it now generates the value at run time)"
 condition = "AND"
 regexes = [
