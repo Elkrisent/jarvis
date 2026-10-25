@@ -825,6 +825,123 @@ def test_closing_the_forwarder_closes_its_circuit_breaker() -> None:
     assert circuit.closed
 
 
+def _limited_rig(limiter: Any, **cfg: Any) -> Rig:
+    rig = Rig([_api("a1", "weather", **cfg)])
+    rig.forwarder._limiter = limiter
+    return rig
+
+
+class _Limiter:
+    def __init__(self, *, allow: bool = True, retry_after_s: float | None = None) -> None:
+        self.allow = allow
+        self.retry_after_s = retry_after_s
+        self.keys: list[str] = []
+        self.closed = False
+
+    async def take(self, key: str, *, capacity: int, refill_per_s: float, cost: int = 1) -> Any:
+        from jarvis_core.interfaces import RateDecision
+
+        self.keys.append(key)
+        return RateDecision(self.allow, 0.0, None if self.allow else self.retry_after_s)
+
+    async def aclose(self) -> None:
+        self.closed = True
+
+
+@pytest.mark.req("REQ-4.11-2")
+def test_the_inbound_bucket_is_keyed_by_project_key_and_api() -> None:
+    limiter = _Limiter()
+    rig = _limited_rig(limiter, rate_limits={"inbound": {"enabled": True}})
+    assert rig.call().status_code == 200
+    assert limiter.keys == ["in:p1:k1:a1"]
+
+
+@pytest.mark.req("REQ-4.11-3")
+def test_the_upstream_bucket_is_keyed_by_api_only() -> None:
+    limiter = _Limiter()
+    rig = _limited_rig(limiter, rate_limits={"upstream": {"enabled": True}})
+    assert rig.call().status_code == 200
+    assert limiter.keys == ["up:a1"]
+
+
+@pytest.mark.req("REQ-4.11-2", "REQ-4.11-3")
+def test_buckets_that_are_off_are_never_asked() -> None:
+    limiter = _Limiter(allow=False)
+    rig = _limited_rig(limiter)
+    assert rig.call().status_code == 200
+    assert limiter.keys == []
+
+
+@pytest.mark.parametrize(
+    ("side", "code"), [("inbound", "JV_RATE_LIMITED"), ("upstream", "JV_QUOTA_EXCEEDED")]
+)
+@pytest.mark.parametrize(("wait", "header"), [(0.2, "1"), (1.0, "1"), (1.2, "2"), (59.01, "60")])
+def test_a_refusal_is_a_429_with_retry_after_in_whole_seconds(
+    side: str, code: str, wait: float, header: str
+) -> None:
+    rig = _limited_rig(
+        _Limiter(allow=False, retry_after_s=wait), rate_limits={side: {"enabled": True}}
+    )
+    response = rig.call()
+    _json_error(response, code, 429)
+    assert response.headers["Retry-After"] == header
+    assert rig.requests == []
+
+
+def test_a_refusal_that_can_never_succeed_has_no_retry_after() -> None:
+    rig = _limited_rig(
+        _Limiter(allow=False, retry_after_s=None), rate_limits={"inbound": {"enabled": True}}
+    )
+    response = rig.call()
+    _json_error(response, "JV_RATE_LIMITED", 429)
+    assert "Retry-After" not in response.headers
+
+
+@pytest.mark.req("REQ-4.11-4")
+def test_a_limiter_that_breaks_lets_the_request_through(caplog: pytest.LogCaptureFixture) -> None:
+    class Broken(_Limiter):
+        async def take(self, key: str, **kwargs: Any) -> Any:
+            raise ConnectionError("SECRET-MARKER")
+
+    rig = _limited_rig(
+        Broken(), rate_limits={"inbound": {"enabled": True}, "upstream": {"enabled": True}}
+    )
+    with caplog.at_level(logging.WARNING):
+        assert rig.call().status_code == 200
+    assert "ConnectionError" in caplog.text
+    assert "SECRET-MARKER" not in caplog.text
+
+
+@pytest.mark.req("REQ-4.11-3")
+def test_a_retry_that_finds_the_upstream_quota_empty_is_not_sent() -> None:
+    class OneToken(_Limiter):
+        async def take(self, key: str, **kwargs: Any) -> Any:
+            from jarvis_core.interfaces import RateDecision
+
+            self.keys.append(key)
+            return RateDecision(len(self.keys) == 1, 0.0, 1.0)
+
+    limiter = OneToken()
+    rig = Rig(
+        [_api("a1", "weather", retry=FAST_RETRY, rate_limits={"upstream": {"enabled": True}})],
+        _sequence(lambda: _resp(503), lambda: _resp(200)),
+    )
+    rig.forwarder._limiter = limiter
+    response = rig.call()
+    assert response.status_code == 503
+    assert response.headers["X-Jarvis-Attempts"] == "1"
+    assert len(rig.requests) == 1
+    assert limiter.keys == ["up:a1", "up:a1"]
+
+
+def test_closing_the_forwarder_closes_its_limiter() -> None:
+    limiter = _Limiter()
+    rig = _limited_rig(limiter)
+    with rig.client:
+        rig.call()
+    assert limiter.closed
+
+
 def test_the_forwarder_is_closed_when_the_app_shuts_down() -> None:
     rig = _rig()
     closed: list[bool] = []

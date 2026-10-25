@@ -26,10 +26,12 @@ from jarvis_core.errors import (
     AuthInvalidError,
     BodyTooLargeError,
     CircuitOpenError,
+    QuotaExceededError,
+    RateLimitedError,
     UpstreamTimeoutError,
     UpstreamUnreachableError,
 )
-from jarvis_core.interfaces import CircuitState
+from jarvis_core.interfaces import CircuitState, RateDecision, RateLimiter
 from jarvis_core.retry import IDEMPOTENT_METHODS, NO_RETRY, Failure, decide
 from jarvis_core.ssrf import SsrfPolicy
 from starlette.background import BackgroundTask
@@ -37,7 +39,7 @@ from starlette.types import Receive, Scope, Send
 
 from jarvis_gateway.auth import Authenticated
 from jarvis_gateway.circuit import CircuitBreaker, Ticket
-from jarvis_gateway.config.snapshot import Snapshot
+from jarvis_gateway.config.snapshot import ApiEntry, Snapshot
 from jarvis_gateway.credentials import CredentialUnavailable, CredentialVault
 from jarvis_gateway.forward import (
     build_target_url,
@@ -110,11 +112,13 @@ class Forwarder:
         random: Random | None = None,
         retry_budget: RetryBudget | None = None,
         circuit: CircuitBreaker | None = None,
+        limiter: RateLimiter | None = None,
     ) -> None:
         self._vault = vault
         self._random = SystemRandom() if random is None else random
         self._budget = retry_budget
         self._circuit = circuit
+        self._limiter = limiter
         self._clock = SystemClock() if clock is None else clock
         self.max_body_bytes = max_body_bytes
         self._factory = transport_factory or (lambda: PinnedTransport(policy))
@@ -135,6 +139,9 @@ class Forwarder:
             await self._budget.aclose()
         if self._circuit is not None:
             await self._circuit.aclose()
+        closer = getattr(self._limiter, "aclose", None)
+        if closer is not None:
+            await closer()
         clients, self._clients = list(self._clients.values()), {}
         await asyncio.gather(*(c.aclose() for c in clients), return_exceptions=True)
         if self._closing:
@@ -175,6 +182,36 @@ class Forwarder:
         except TimeoutError:
             raise UpstreamTimeoutError("the request was not completed in time") from None
         return b"".join(chunks)
+
+    async def _take(self, key: str, capacity: int, refill_per_s: float) -> RateDecision | None:
+        """One token from ``key``; None if the limiter itself breaks: fail open (SPEC D3)."""
+        assert self._limiter is not None
+        try:
+            return await self._limiter.take(key, capacity=capacity, refill_per_s=refill_per_s)
+        except Exception as exc:
+            log.warning("rate limiter failed (%s); letting the request through", type(exc).__name__)
+            return None
+
+    async def check_inbound(self, authenticated: Authenticated) -> None:
+        """Pipeline step 3: the (project, key, api) bucket, when the API turns it on."""
+        policy = authenticated.api.config.rate_limits.inbound
+        if self._limiter is None or not policy.enabled:
+            return
+        auth = authenticated.auth
+        key = f"in:{auth.project_id}:{auth.key_id}:{authenticated.api.api_id}"
+        decision = await self._take(key, policy.capacity, policy.refill_per_s)
+        if decision is not None and not decision.allowed:
+            limited = RateLimitedError("rate limit exceeded for this key")
+            limited.retry_after_s = decision.retry_after_s
+            raise limited
+
+    async def _upstream_allows(self, api: ApiEntry) -> RateDecision | None:
+        """Pipeline step 7: the per-API quota bucket. None when it is off or allows the call."""
+        policy = api.config.rate_limits.upstream
+        if self._limiter is None or not policy.enabled:
+            return None
+        decision = await self._take(f"up:{api.api_id}", policy.capacity, policy.refill_per_s)
+        return decision if decision is not None and not decision.allowed else None
 
     async def forward(
         self,
@@ -228,6 +265,11 @@ class Forwarder:
             secret = self._vault.secret_for(api)
         except CredentialUnavailable:
             raise UpstreamUnreachableError("the upstream credential is not available") from None
+        refused = await self._upstream_allows(api)  # pipeline step 7
+        if refused is not None:
+            exceeded = QuotaExceededError("the upstream quota for this API is used up")
+            exceeded.retry_after_s = refused.retry_after_s
+            raise exceeded
         path, query = _target_parts(request, api.slug)
         url = build_target_url(config.base_url, path, query, config.credential, secret)
         forwarded = filter_request_headers(authenticated.forward_headers(_raw_headers(request)))
@@ -301,6 +343,8 @@ class Forwarder:
             )
             if decision.retry and self._circuit is not None and self._circuit.is_open(api.api_id):
                 decision = NO_RETRY  # the circuit opened meanwhile: stop hammering
+            if decision.retry and await self._upstream_allows(api) is not None:
+                decision = NO_RETRY  # a retry is a call leaving the gateway: it needs a token too
             if decision.retry and self._budget is not None:
                 decision = (
                     decision

@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 merged (PR #20, merge commit `b17187d`); M1.5 merged (PR #21, merge commit `d756c4c`); M1.6 merged (PR #23, merge commit `937a936`); M1.7 merged (PR #24, merge commit `a3d3942`); M1.8 merged (PR #25, merge commit `0ea3df7`); M1.9 merged (PR #27, merge commit `c5307e8`). Checkpoint 1 done (PR #32, merge commit `ae6cf9d`; report `docs/checkpoints/P1-proxy.md`; pre-release `v0.1.0` tagged on `ae6cf9d`); Checkpoint 1 approved by the user on 2026-10-25. Phase 2 in progress: M2.1 and M2.2 merged (PR #36, #37); M2.3 in PR #38 (CI green, awaiting merge); M2.4 implemented on `feat/m2.4-circuit-breaker` (pushed, no PR yet).
+Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 merged (PR #20, merge commit `b17187d`); M1.5 merged (PR #21, merge commit `d756c4c`); M1.6 merged (PR #23, merge commit `937a936`); M1.7 merged (PR #24, merge commit `a3d3942`); M1.8 merged (PR #25, merge commit `0ea3df7`); M1.9 merged (PR #27, merge commit `c5307e8`). Checkpoint 1 done (PR #32, merge commit `ae6cf9d`; report `docs/checkpoints/P1-proxy.md`; pre-release `v0.1.0` tagged on `ae6cf9d`); Checkpoint 1 approved by the user on 2026-10-25. Phase 2 in progress: M2.1 to M2.4 merged (PR #36, #37, #38, #39); M2.5 implemented on `feat/m2.5-rate-limiters` (not pushed).
 
 ## Current Phase
 
@@ -10,7 +10,7 @@ Phase 2: Reliability (Phase 1 approved 2026-10-25).
 
 ## Current Module
 
-M2.4 Circuit breaker: code and tests done locally on `feat/m2.4-circuit-breaker` (stacked on M2.3, PR #38 with CI green, awaiting merge). Next module: M2.5 Rate limiters.
+M2.5 Rate limiters: code and tests done locally on `feat/m2.5-rate-limiters` (from main after PR #39); PR and CI pending. Next module: M2.6 Fallback.
 
 ## Completed
 
@@ -145,6 +145,14 @@ M2.4 Circuit breaker: code and tests done locally on `feat/m2.4-circuit-breaker`
   * Flake found and fixed while testing: the shared-circuit test depended on timing (probe latency vs the 1 s attempt timeout); the probe now takes 0.7 s.
   * Not done here: `bench.yml` does not run `bench-circuit` yet (tracked metric only).
 
+* M2.5 Rate limiters (branch `feat/m2.5-rate-limiters`, from main):
+  * `jarvis_gateway.rate_limit`: `RedisRateLimiter` (token bucket as one Lua script: refill, clamp to capacity, take or reject without consuming; time from the injected clock, elapsed clamped at zero so a clock that runs behind never drains the bucket; keys expire after `ceil(capacity / refill) + 1` s) passing the shared `RateLimiterContract`; `FallbackRateLimiter` (Redis first, then this instance's in-memory bucket sized `limit / JARVIS_EXPECTED_INSTANCES`, at least one token, one WARNING per 30 s with the exception type only). New gateway setting `JARVIS_EXPECTED_INSTANCES` (default 1; `deploy/.env.example`, compose).
+  * Pipeline: inbound at step 3 (`Forwarder.check_inbound`, called by the route after authentication; bucket `in:<project>:<key>:<api>`; `JV_RATE_LIMITED`) and upstream quota at step 7 (bucket `up:<api>`; `JV_QUOTA_EXCEEDED`), taken after the circuit check and before the body is read, and once more for every retry (a retry is a call leaving the gateway; no token means no retry). Both are 429 with `Retry-After` in whole seconds, at least 1 (absent when waiting could never help). Off by default (`enabled: false`). A limiter that fails outright lets the request through (D3). Rejected requests never reach the upstream and spend no upstream quota.
+  * Tests: contract suite on real Redis; 600 simultaneous takes admit exactly the capacity; three instances share one bucket; a rejected take consumes nothing; clock skew; unit (fallback share, settings, forwarder keys and refusal headers, limiter failure); functional (off by default, separate buckets per key and per API, upstream quota across keys, retries need a token, upstream sees only admitted calls). `token_bucket_take` micro-benchmark already existed (M0.6). REQ-4.11-1 to -7 linked. Mutation checks: no capacity clamp, a rejected take consuming tokens, and no clamp on negative elapsed time each fail a named test.
+  * Verified locally with a local Redis: `make lint typecheck` clean; 1668 unit + functional + Redis integration tests pass; new code fully covered. Not run: Postgres-backed integration, system, e2e, chaos, security, the CI gate.
+  * Found: redis-py's default pool raises `MaxConnectionsError` after 100 concurrent calls, which would have sent the limiter to its looser local bucket under load; the limiter now uses a blocking pool of 100 (callers wait up to 1 s). The retry budget and circuit store clients still use the default pool; they are called far less often, but the same change may be worth making in the performance phase (together with the httpx pool size noted under M2.3).
+  * Not wired to the UI or the management API yet: limits are set through the API's `rate_limits` config field (already validated, REQ-4.11-7).
+
 ## In Progress
 
 Nothing besides the item above. Checkpoint 1 notes kept for reference (what was found while running it):
@@ -177,7 +185,7 @@ Nothing besides the item above. Checkpoint 1 notes kept for reference (what was 
 
 ## Resume Point
 
-M2.1 is in PR #36 (user merged #34; #35 landed on the fix branch). M2.4 is on `feat/m2.4-circuit-breaker` (stacked on PR #38). Next: user merges #38, rebase M2.4 on main and open its PR, wait for CI, then M2.5 Rate limiters.
+M2.1 is in PR #36 (user merged #34; #35 landed on the fix branch). M2.5 is on `feat/m2.5-rate-limiters`, not pushed. Next: push and open its PR, wait for CI, then M2.6 Fallback.
 
 ## Last Updated
 

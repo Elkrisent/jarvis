@@ -25,6 +25,7 @@ BOX = AesGcmSecretBox(bytes(range(32)))
 OTHER_BOX = AesGcmSecretBox(bytes(range(1, 33)))
 SECRET = "sk-REAL-provider-secret-9"
 KEY = "jv_live_functionalkey01"
+KEY2 = "jv_live_functionalkey02"
 BASE_PATH = "/base"
 MAX_BODY = 64 * 1024
 MODES = {
