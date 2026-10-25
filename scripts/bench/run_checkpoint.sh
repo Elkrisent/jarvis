@@ -44,6 +44,13 @@ if [ "$phase" -ge 1 ]; then
   raw+=(--raw "s2_runs=$dir/s2_runs.json")
 fi
 
+if [ "$phase" -ge 2 ]; then
+  # S4 failing upstream (retry storm ratio, circuit fail-fast) and S8 (Redis killed under S5 load).
+  scripts/bench/run_s4.sh "$dir"
+  scripts/bench/run_s8.sh "$dir"
+  raw+=(--raw "s4=$dir/k6/s4.json" --raw "s8=$dir/k6/s8.json")
+fi
+
 uv run python scripts/bench/write_env.py --out "$dir/env.json" --profile default \
   --param k6_duration=10s --param k6_vus=10
 uv run python scripts/bench/checkpoint.py --phase "$phase" --results "$dir/results.json" --env "$dir/env.json" \
