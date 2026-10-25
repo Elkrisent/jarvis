@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792938693398,
+  "lastUpdate": 1792941202171,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Load (latency)": [
@@ -1200,6 +1200,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "mock_direct_p99",
             "value": 3.447754480000006,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "42532a71abf6edd5e70b3ce96695b2ca06a1ead8",
+          "message": "Merge pull request #39 from Elkrisent/feat/m2.4-circuit-breaker\n\nfeat: circuit breaker with shared Redis state, local mirror and singl…",
+          "timestamp": "2026-10-25T20:39:41+05:30",
+          "tree_id": "dfeccb558dd92a1d4b905d5fae74d8ec658c8100",
+          "url": "https://github.com/Elkrisent/jarvis/commit/42532a71abf6edd5e70b3ce96695b2ca06a1ead8"
+        },
+        "date": 1792941201415,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "mock_direct_p50",
+            "value": 5.181744,
+            "unit": "ms"
+          },
+          {
+            "name": "mock_direct_p95",
+            "value": 5.748508449999999,
+            "unit": "ms"
+          },
+          {
+            "name": "mock_direct_p99",
+            "value": 6.29180555,
             "unit": "ms"
           }
         ]
