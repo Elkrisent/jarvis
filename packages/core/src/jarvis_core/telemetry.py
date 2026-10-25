@@ -16,8 +16,8 @@ from typing import Any, Final, Literal
 SCHEMA_VERSION: Final = 1
 STREAM: Final = "telemetry"
 
-Source = Literal["upstream", "jarvis"]
-_SOURCES: Final = ("upstream", "jarvis")
+Source = Literal["upstream", "jarvis", "fallback"]
+_SOURCES: Final = ("upstream", "jarvis", "fallback")
 
 # (name, type) in wire order; the snapshot pins this list.
 EVENT_FIELDS: Final[tuple[tuple[str, str], ...]] = (
@@ -124,7 +124,7 @@ def event_from_outcome(
     if isinstance(status, bool) or not isinstance(status, int) or not 100 <= status <= 599:
         raise ValueError("status must be an HTTP status code")
     if source not in _SOURCES:
-        raise ValueError("source must be 'upstream' or 'jarvis'")
+        raise ValueError("source must be 'upstream', 'jarvis' or 'fallback'")
     if not method:
         raise ValueError("method must not be empty")
     if error_code is not None and not error_code.startswith("JV_"):

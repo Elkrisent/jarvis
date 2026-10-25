@@ -942,6 +942,239 @@ def test_closing_the_forwarder_closes_its_limiter() -> None:
     assert limiter.closed
 
 
+# --- fallback API (SPEC 4.12, M2.6) ----------------------------------------------------------
+
+NO_RETRY_CFG = {"max_attempts": 1}
+
+
+def _fb_rig(handler: Any, **primary_cfg: Any) -> Rig:
+    primary_cfg.setdefault("retry", NO_RETRY_CFG)
+    return Rig(
+        [
+            _api(
+                "a1",
+                "main",
+                base_url="https://primary.example.com/v1",
+                fallback={"fallback_api": "backup"},
+                **primary_cfg,
+            ),
+            _api("a2", "backup", base_url="https://backup.example.com/v2", retry=NO_RETRY_CFG),
+        ],
+        handler,
+    )
+
+
+def _by_host(primary: Any, backup: Any) -> Callable[[httpx.Request], httpx.Response]:
+    def handler(request: httpx.Request) -> httpx.Response:
+        answer = primary if request.url.host == "primary.example.com" else backup
+        if isinstance(answer, Exception):
+            raise answer
+        return cast(httpx.Response, answer())
+
+    return handler
+
+
+@pytest.mark.req("REQ-4.12-2")
+@pytest.mark.parametrize(
+    "primary",
+    [
+        lambda: _resp(500),
+        lambda: _resp(503),
+        httpx.ConnectError("x"),
+        httpx.ReadTimeout("t"),
+    ],
+)
+def test_a_failing_primary_is_served_by_the_fallback_on_the_same_path(primary: Any) -> None:
+    rig = _fb_rig(_by_host(primary, lambda: _resp(200, content=b"from backup")))
+    response = rig.call(url="/gw/main/x/y?z=1")
+    assert response.status_code == 200
+    assert response.content == b"from backup"
+    assert response.headers["X-Jarvis-Source"] == "fallback"
+    assert [str(r.url) for r in rig.requests][-1] == "https://backup.example.com/v2/x/y?z=1"
+
+
+@pytest.mark.req("REQ-4.12-2")
+def test_the_fallback_uses_its_own_credential_and_the_primary_secret_never_reaches_it() -> None:
+    rig = Rig(
+        [
+            _api(
+                "a1",
+                "main",
+                {"mode": "bearer"},
+                "https://primary.example.com",
+                fallback={"fallback_api": "backup"},
+                retry=NO_RETRY_CFG,
+            ),
+            _api(
+                "a2",
+                "backup",
+                {"mode": "header", "header_name": "X-Key"},
+                "https://backup.example.com",
+                retry=NO_RETRY_CFG,
+            ),
+        ],
+        _by_host(lambda: _resp(503), lambda: _resp(200)),
+    )
+    rig.call(url="/gw/main/x")
+    primary, backup = rig.requests
+    assert primary.headers["authorization"] == f"Bearer {SECRET}"
+    assert "authorization" not in backup.headers
+    assert backup.headers["x-key"] == SECRET
+
+
+@pytest.mark.req("REQ-4.12-2")
+def test_an_open_primary_circuit_goes_straight_to_the_fallback() -> None:
+    class OpenFor(_Circuit):
+        async def admit(
+            self, api_id: str, policy: Any, project_id: str, *, probe_ttl_s: int
+        ) -> Any:
+            self.action = "reject" if api_id == "a1" else "allow"
+            return await super().admit(api_id, policy, project_id, probe_ttl_s=probe_ttl_s)
+
+    rig = _fb_rig(_by_host(lambda: _resp(200), lambda: _resp(200)))
+    rig.forwarder._circuit = cast(Any, OpenFor())
+    response = rig.call(url="/gw/main/x")
+    assert response.headers["X-Jarvis-Source"] == "fallback"
+    assert [r.url.host for r in rig.requests] == ["backup.example.com"]
+
+
+@pytest.mark.req("REQ-4.12-4")
+def test_when_both_fail_a_primary_5xx_is_passed_through_and_nothing_is_leaked() -> None:
+    rig = _fb_rig(_by_host(lambda: _resp(502, content=b"primary body"), lambda: _resp(500)))
+    response = rig.call(url="/gw/main/x")
+    assert response.status_code == 502
+    assert response.content == b"primary body"
+    assert response.headers["X-Jarvis-Source"] == "upstream"
+
+
+@pytest.mark.req("REQ-4.12-4")
+@pytest.mark.parametrize(
+    ("primary", "code", "status"),
+    [
+        (httpx.ConnectError("x"), "JV_UPSTREAM_UNREACHABLE", 502),
+        (httpx.ReadTimeout("t"), "JV_UPSTREAM_TIMEOUT", 504),
+    ],
+)
+def test_when_both_fail_the_primarys_own_error_is_reported(
+    primary: Exception, code: str, status: int
+) -> None:
+    rig = _fb_rig(_by_host(primary, lambda: _resp(503)))
+    _json_error(rig.call(url="/gw/main/x"), code, status)
+    assert [r.url.host for r in rig.requests] == ["primary.example.com", "backup.example.com"]
+
+
+def test_a_fallback_that_is_refused_outright_leaves_the_primarys_error() -> None:
+    from jarvis_core.errors import DestinationBlockedError
+
+    def backup() -> httpx.Response:
+        raise DestinationBlockedError("destination is not allowed")
+
+    rig = _fb_rig(_by_host(httpx.ConnectError("x"), backup))
+    _json_error(rig.call(url="/gw/main/x"), "JV_UPSTREAM_UNREACHABLE", 502)
+
+
+def test_an_unexpected_failure_in_the_fallback_closes_the_held_answer_and_propagates() -> None:
+    closed: list[bool] = []
+
+    class Held(httpx.AsyncByteStream):
+        async def __aiter__(self) -> AsyncIterator[bytes]:
+            yield b""
+
+        async def aclose(self) -> None:
+            closed.append(True)
+
+    def backup() -> httpx.Response:
+        raise RuntimeError("boom")
+
+    rig = _fb_rig(_by_host(lambda: httpx.Response(503, stream=Held()), backup))
+    with pytest.raises(RuntimeError, match="boom"):
+        rig.call(url="/gw/main/x")
+    assert closed
+
+
+def test_an_unexpected_failure_in_the_fallback_propagates_when_nothing_is_held() -> None:
+    def backup() -> httpx.Response:
+        raise RuntimeError("boom")
+
+    rig = _fb_rig(_by_host(httpx.ConnectError("x"), backup))
+    with pytest.raises(RuntimeError, match="boom"):
+        rig.call(url="/gw/main/x")
+
+
+def test_a_fallback_is_not_tried_when_too_little_of_the_deadline_is_left() -> None:
+    def slow() -> httpx.Response:
+        time.sleep(0.25)
+        return _resp(503)
+
+    rig = _fb_rig(
+        _by_host(slow, lambda: _resp(200)),
+        deadline_ms=300,
+        attempt_timeout_ms=300,
+        min_attempt_ms=200,
+    )
+    assert rig.call(url="/gw/main/x").status_code == 503
+    assert all(r.url.host != "backup.example.com" for r in rig.requests)
+
+
+@pytest.mark.req("REQ-4.12-3")
+def test_the_fallbacks_own_fallback_is_never_followed() -> None:
+    rig = Rig(
+        [
+            _api(
+                "a1",
+                "main",
+                base_url="https://one.example.com",
+                retry=NO_RETRY_CFG,
+                fallback={"fallback_api": "mid"},
+            ),
+            _api(
+                "a2",
+                "mid",
+                base_url="https://two.example.com",
+                retry=NO_RETRY_CFG,
+                fallback={"fallback_api": "last"},
+            ),
+            _api("a3", "last", base_url="https://three.example.com", retry=NO_RETRY_CFG),
+        ],
+        lambda r: _resp(200) if r.url.host == "three.example.com" else _resp(503),
+    )
+    assert rig.call(url="/gw/main/x").status_code == 503
+    assert {r.url.host for r in rig.requests} == {"one.example.com", "two.example.com"}
+
+
+def test_a_missing_or_ambiguous_fallback_slug_means_no_fallback() -> None:
+    rig = _fb_rig(_by_host(lambda: _resp(503), lambda: _resp(200)))
+    twin = _api("a3", "backup", base_url="https://twin.example.com", retry=NO_RETRY_CFG)
+    other_project = ApiEntry("a4", "p2", "backup", 1, twin.config, None)
+    rig.store.update(lambda snap: snap.with_changes(apis={"a3": twin}))
+    assert (
+        rig.call(url="/gw/main/x").status_code == 503
+    )  # two APIs called backup in the project: fail closed
+    rig.store.update(lambda snap: snap.with_changes(apis={"a3": None, "a2": None}))
+    rig.store.update(lambda snap: snap.with_changes(apis={"a4": other_project}))
+    assert (
+        rig.call(url="/gw/main/x").status_code == 503
+    )  # the only "backup" belongs to another project
+
+
+def test_the_fallback_event_is_emitted() -> None:
+    from jarvis_core.memory import InMemoryTelemetrySink
+
+    sink = InMemoryTelemetrySink()
+    rig = _fb_rig(_by_host(lambda: _resp(503), lambda: _resp(200)))
+    rig.forwarder._events = sink
+    rig.call(url="/gw/main/x")
+    [event] = [e for e in sink.events if isinstance(e, dict)]
+    assert event["type"] == "fallback"
+    assert event["served"] is True
+    assert event["reason"] == "upstream_5xx"
+
+
+def test_without_a_snapshot_there_is_no_fallback() -> None:
+    forwarder = Forwarder(SsrfPolicy(), CredentialVault(BOX), max_body_bytes=LIMIT)
+    assert forwarder._fallback_api(_api("a1", "main", fallback={"fallback_api": "x"})) is None
+
+
 def test_the_forwarder_is_closed_when_the_app_shuts_down() -> None:
     rig = _rig()
     closed: list[bool] = []
