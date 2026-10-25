@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792921976466,
+  "lastUpdate": 1792929192818,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Micro benchmarks": [
@@ -958,6 +958,44 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 3.9905868642245114e-7",
             "extra": "mean: 1.5115184594885245 usec\nrounds: 72781"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d7b0043748f2be276e84c0d050c41d800459b6a2",
+          "message": "Merge pull request #36 from Elkrisent/fix/revocation-poll-redis-down\n\nfeat: per-request deadline and attempt timeouts (M2.1)",
+          "timestamp": "2026-10-25T17:22:38+05:30",
+          "tree_id": "291eb108fd2ad5646c712724aea27bc119cbc8c7",
+          "url": "https://github.com/Elkrisent/jarvis/commit/d7b0043748f2be276e84c0d050c41d800459b6a2"
+        },
+        "date": 1792929191918,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "packages/core/tests/bench/test_bench_route_template_match.py::test_bench_route_template_match",
+            "value": 148170.39207777756,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000001070817991130346",
+            "extra": "mean: 6.748986663105273 usec\nrounds: 18745"
+          },
+          {
+            "name": "packages/core/tests/bench/test_bench_token_bucket_take.py::test_bench_token_bucket_take",
+            "value": 654538.7893068638,
+            "unit": "iter/sec",
+            "range": "stddev: 4.945877234390329e-7",
+            "extra": "mean: 1.5277933353025097 usec\nrounds: 74212"
           }
         ]
       }
