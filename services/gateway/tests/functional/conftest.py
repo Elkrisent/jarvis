@@ -20,6 +20,7 @@ from jarvis_core.keys import hash_jarvis_key
 from jarvis_core.secretbox import AesGcmSecretBox
 from jarvis_core.ssrf import SsrfPolicy
 from jarvis_gateway.app import create_app
+from jarvis_gateway.circuit import CircuitBreaker
 from jarvis_gateway.config.manager import ConfigManager
 from jarvis_gateway.config.snapshot import ApiEntry, KeyEntry, Snapshot
 from jarvis_gateway.config.store import ConfigStore
@@ -85,6 +86,7 @@ async def make_gateway(upstream: Upstream) -> AsyncIterator[GatewayFactory]:
         apis: Sequence[ApiEntry] | None = None,
         sink: TelemetrySink | None = None,
         retry_budget: RetryBudget | None = None,
+        circuit_breaker: CircuitBreaker | None = None,
         **cfg: Any,
     ) -> Gateway:
         target = port or upstream.port
@@ -115,6 +117,7 @@ async def make_gateway(upstream: Upstream) -> AsyncIterator[GatewayFactory]:
             vault,
             max_body_bytes=max_body_bytes,
             retry_budget=retry_budget,
+            circuit=circuit_breaker,
             transport_factory=lambda: PinnedTransport(policy, resolver=resolve),
         )
         store.add_listener(forwarder.retain)

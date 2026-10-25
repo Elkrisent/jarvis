@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import http.cookiejar
 import logging
+import math
 import uuid
 from collections.abc import AsyncIterator, Callable
 from typing import Any
@@ -18,20 +19,24 @@ from urllib.parse import unquote
 import httpx
 from fastapi import Request
 from fastapi.responses import Response, StreamingResponse
+from jarvis_core.circuit import is_failure
 from jarvis_core.clock import Clock, Random, SystemClock, SystemRandom
 from jarvis_core.deadline import Deadline
 from jarvis_core.errors import (
     AuthInvalidError,
     BodyTooLargeError,
+    CircuitOpenError,
     UpstreamTimeoutError,
     UpstreamUnreachableError,
 )
+from jarvis_core.interfaces import CircuitState
 from jarvis_core.retry import IDEMPOTENT_METHODS, NO_RETRY, Failure, decide
 from jarvis_core.ssrf import SsrfPolicy
 from starlette.background import BackgroundTask
 from starlette.types import Receive, Scope, Send
 
 from jarvis_gateway.auth import Authenticated
+from jarvis_gateway.circuit import CircuitBreaker, Ticket
 from jarvis_gateway.config.snapshot import Snapshot
 from jarvis_gateway.credentials import CredentialUnavailable, CredentialVault
 from jarvis_gateway.forward import (
@@ -52,6 +57,13 @@ for _name in ("httpx", "httpcore"):
     logging.getLogger(_name).setLevel(logging.WARNING)
 
 Origin = tuple[str, str, int]
+
+
+class _ProbeState:
+    """Whether this request still owes the circuit a verdict on its half-open probe."""
+
+    def __init__(self, pending: bool) -> None:
+        self.pending = pending
 
 
 class UpstreamBodyError(Exception):
@@ -97,10 +109,12 @@ class Forwarder:
         clock: Clock | None = None,
         random: Random | None = None,
         retry_budget: RetryBudget | None = None,
+        circuit: CircuitBreaker | None = None,
     ) -> None:
         self._vault = vault
         self._random = SystemRandom() if random is None else random
         self._budget = retry_budget
+        self._circuit = circuit
         self._clock = SystemClock() if clock is None else clock
         self.max_body_bytes = max_body_bytes
         self._factory = transport_factory or (lambda: PinnedTransport(policy))
@@ -119,6 +133,8 @@ class Forwarder:
     async def aclose(self) -> None:
         if self._budget is not None:
             await self._budget.aclose()
+        if self._circuit is not None:
+            await self._circuit.aclose()
         clients, self._clients = list(self._clients.values()), {}
         await asyncio.gather(*(c.aclose() for c in clients), return_exceptions=True)
         if self._closing:
@@ -168,10 +184,44 @@ class Forwarder:
         started: float,
         record: RequestRecord,
     ) -> Response:
-        """``started`` is the clock's ``monotonic()`` at ingress: the deadline runs from there."""
+        """Circuit check, then the attempts. ``started`` is the clock's ``monotonic()`` at ingress:
+        the deadline runs from there."""
         api = authenticated.api
         config = api.config
         deadline = Deadline(self._clock, started, config.deadline_ms)
+        ticket = Ticket("allow", CircuitState.CLOSED)
+        if self._circuit is not None:
+            ticket = await self._circuit.admit(
+                api.api_id,
+                config.circuit,
+                api.project_id,
+                probe_ttl_s=math.ceil(config.deadline_ms / 1000) + 1,
+            )
+            record.set_circuit(ticket.state.value)
+            if ticket.action == "reject":
+                rejected = CircuitOpenError("the circuit for this API is open")
+                rejected.circuit_state = ticket.state.value
+                raise rejected
+        probe = _ProbeState(ticket.action == "probe")
+        try:
+            return await self._send(request, authenticated, request_id, deadline, record, probe)
+        finally:
+            if probe.pending and self._circuit is not None:  # cancelled or failed before a verdict
+                await self._circuit.finish_probe(
+                    api.api_id, config.circuit, api.project_id, "cancelled"
+                )
+
+    async def _send(
+        self,
+        request: Request,
+        authenticated: Authenticated,
+        request_id: str,
+        deadline: Deadline,
+        record: RequestRecord,
+        probe: _ProbeState,
+    ) -> Response:
+        api = authenticated.api
+        config = api.config
         # No await between the caller's snapshot read and this lookup: the secret is the one that
         # belongs to the policy that was just resolved.
         try:
@@ -223,6 +273,22 @@ class Forwarder:
                 failure = Failure(
                     "status", upstream.status_code, upstream.headers.get("retry-after")
                 )
+            if self._circuit is not None:
+                failed = is_failure(
+                    status=upstream.status_code if upstream is not None else None,
+                    timed_out=isinstance(error, UpstreamTimeoutError),
+                    connect_error=isinstance(error, UpstreamUnreachableError),
+                )
+                if probe.pending:  # the first attempt of the probing request is the probe
+                    probe.pending = False
+                    await self._circuit.finish_probe(
+                        api.api_id,
+                        config.circuit,
+                        api.project_id,
+                        "failure" if failed else "success",
+                    )
+                else:
+                    self._circuit.record(api.api_id, config.circuit, api.project_id, failure=failed)
             decision = decide(
                 config.retry,
                 method=request.method,
@@ -233,6 +299,8 @@ class Forwarder:
                 rng=self._random,
                 now_epoch=self._clock.now(),
             )
+            if decision.retry and self._circuit is not None and self._circuit.is_open(api.api_id):
+                decision = NO_RETRY  # the circuit opened meanwhile: stop hammering
             if decision.retry and self._budget is not None:
                 decision = (
                     decision
@@ -248,7 +316,14 @@ class Forwarder:
                 if error is not None:
                     raise error from None
                 assert upstream is not None
-                return _stream_back(upstream, request_id, record, deadline, attempts)
+                return _stream_back(
+                    upstream,
+                    request_id,
+                    record,
+                    deadline,
+                    attempts,
+                    self._circuit.state(api.api_id).value if self._circuit is not None else None,
+                )
             if upstream is not None:
                 await upstream.aclose()
             await self._clock.sleep(decision.delay_s)
@@ -291,6 +366,7 @@ def _stream_back(
     record: RequestRecord,
     deadline: Deadline,
     attempts: int,
+    circuit: str | None = None,
 ) -> Response:
     async def body() -> AsyncIterator[bytes]:
         chunks = upstream.aiter_raw().__aiter__()
@@ -322,6 +398,8 @@ def _stream_back(
         ("X-Jarvis-Source", "upstream"),
         ("X-Jarvis-Attempts", str(attempts)),
     ]
+    if circuit is not None:
+        kept.append(("X-Jarvis-Circuit", circuit))
     response = _RecordedStream(
         body(),
         status_code=upstream.status_code,

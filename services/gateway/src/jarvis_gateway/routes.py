@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse, Response
 from jarvis_core.clock import Clock, SystemClock
 from jarvis_core.errors import (
     BodyTooLargeError,
+    CircuitOpenError,
     JarvisError,
     NotImplementedYetError,
     StreamingUnsupportedError,
@@ -30,17 +31,19 @@ from jarvis_gateway.telemetry import NoopTelemetrySink
 METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
 
 
-def _jarvis_response(status: int, body: Mapping[str, object], request_id: str) -> JSONResponse:
-    return JSONResponse(
-        body,
-        status_code=status,
-        headers={"X-Jarvis-Request-Id": request_id, "X-Jarvis-Source": "jarvis"},
-    )
+def _jarvis_response(
+    status: int, body: Mapping[str, object], request_id: str, circuit: str | None = None
+) -> JSONResponse:
+    headers = {"X-Jarvis-Request-Id": request_id, "X-Jarvis-Source": "jarvis"}
+    if circuit is not None:
+        headers["X-Jarvis-Circuit"] = circuit
+    return JSONResponse(body, status_code=status, headers=headers)
 
 
 def _error(error: JarvisError, request_id: str) -> JSONResponse:
     error.request_id = request_id
-    return _jarvis_response(error.http_status, error.to_body(), request_id)
+    circuit = error.circuit_state if isinstance(error, CircuitOpenError) else None
+    return _jarvis_response(error.http_status, error.to_body(), request_id, circuit)
 
 
 def _ingress(request: Request, forwarder: Forwarder) -> None:

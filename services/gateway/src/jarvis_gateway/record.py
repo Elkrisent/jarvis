@@ -41,6 +41,7 @@ class RequestRecord:
         self._upstream_ms: int | None = None
         self._req_bytes = 0
         self._resp_bytes = 0
+        self._circuit: str | None = None
         self._finished = False
 
     def identify(self, *, project_id: str, key_id: str, api_id: str, route: str | None) -> None:
@@ -50,6 +51,9 @@ class RequestRecord:
             api_id,
             route,
         )
+
+    def set_circuit(self, state: str) -> None:
+        self._circuit = state
 
     def mark_attempt(self) -> None:
         self._attempts += 1
@@ -88,6 +92,7 @@ class RequestRecord:
                 req_bytes=self._req_bytes,
                 resp_bytes=self._resp_bytes,
                 error_code=error_code,
+                circuit=self._circuit,
             )
             self._sink.emit(event)
         except Exception:

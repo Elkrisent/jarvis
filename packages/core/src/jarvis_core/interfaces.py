@@ -78,6 +78,8 @@ class CircuitSnapshot:
     state: CircuitState = CircuitState.CLOSED
     opened_at: float | None = None
     open_duration_s: int = 0
+    # When the circuit last closed: calls before this no longer count toward the failure rate.
+    closed_at: float | None = None
 
 
 @dataclass(frozen=True)

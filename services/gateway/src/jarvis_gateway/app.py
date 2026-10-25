@@ -18,7 +18,10 @@ from jarvis_core.health import (
     tcp_reachable,
 )
 from jarvis_core.interfaces import TelemetrySink
+from jarvis_core.memory import InMemoryCircuitStore
 
+from jarvis_gateway.circuit import CircuitBreaker
+from jarvis_gateway.circuit_store import FallbackCircuitStore, RedisCircuitStore
 from jarvis_gateway.config.manager import ConfigManager, ConfigStatus
 from jarvis_gateway.config.postgres import PostgresLoader
 from jarvis_gateway.config.snapshot_file import CoalescingWriter, SnapshotFile
@@ -178,11 +181,20 @@ def create_app_from_env() -> FastAPI:
     )
     # One Redis-backed budget per process; with Redis down it falls back to local counts (D3).
     budget = RetryBudget(RedisBudgetBackend(settings.redis_url), clock=clock, sink=sink)
+    redis_circuits = RedisCircuitStore(settings.redis_url, clock=clock)
+    circuit = CircuitBreaker(
+        FallbackCircuitStore(redis_circuits, InMemoryCircuitStore(clock), clock=clock),
+        clock=clock,
+        sink=sink,
+        publish=redis_circuits.publish_change,
+        listen=redis_circuits.listen,
+    )
     forwarder = Forwarder(
         settings.ssrf_policy,
         vault,
         max_body_bytes=settings.max_body_bytes,
         retry_budget=budget,
+        circuit=circuit,
     )
     store.add_listener(vault.refresh)  # secrets are opened before the forwarder can see the config
     store.add_listener(forwarder.retain)
