@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792942677851,
+  "lastUpdate": 1792944575480,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Micro benchmarks": [
@@ -1176,6 +1176,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 5.773612947084437e-7",
             "extra": "mean: 1.5687940669622586 usec\nrounds: 81813"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "156198a7f514589e35997cfd69c81d8e103ecc4c",
+          "message": "Merge pull request #41 from Elkrisent/feat/m2.6-fallback\n\nfeat: fallback API with shared deadline, own circuit and credential (M2.6)",
+          "timestamp": "2026-10-25T21:39:05+05:30",
+          "tree_id": "5e5fa8a8beddc085498e4be90b8f86201b764233",
+          "url": "https://github.com/Elkrisent/jarvis/commit/156198a7f514589e35997cfd69c81d8e103ecc4c"
+        },
+        "date": 1792944575154,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "packages/core/tests/bench/test_bench_backoff_compute.py::test_bench_backoff_compute",
+            "value": 504313.6790491363,
+            "unit": "iter/sec",
+            "range": "stddev: 7.020255105587009e-7",
+            "extra": "mean: 1.9828928731131403 usec\nrounds: 20079"
+          },
+          {
+            "name": "packages/core/tests/bench/test_bench_route_template_match.py::test_bench_route_template_match",
+            "value": 146523.06972968017,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000014018375318425485",
+            "extra": "mean: 6.824863837789476 usec\nrounds: 42420"
+          },
+          {
+            "name": "packages/core/tests/bench/test_bench_token_bucket_take.py::test_bench_token_bucket_take",
+            "value": 646015.8488669924,
+            "unit": "iter/sec",
+            "range": "stddev: 4.78802720987391e-7",
+            "extra": "mean: 1.5479496389350798 usec\nrounds: 85165"
           }
         ]
       }
