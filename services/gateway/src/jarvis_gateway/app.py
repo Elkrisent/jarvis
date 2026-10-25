@@ -29,6 +29,7 @@ from jarvis_gateway.config.store import ConfigStore
 from jarvis_gateway.credentials import CredentialVault
 from jarvis_gateway.forwarder import Forwarder
 from jarvis_gateway.rate_limit import FallbackRateLimiter, RedisRateLimiter
+from jarvis_gateway.redis_health import RedisHealth
 from jarvis_gateway.retry_budget import RedisBudgetBackend, RetryBudget
 from jarvis_gateway.routes import build_gw_router
 from jarvis_gateway.routing import TemplateRegistry
@@ -84,6 +85,7 @@ def create_app(
     forwarder: Forwarder | None = None,
     sink: TelemetrySink | None = None,
     freeze_gc: bool = False,
+    redis_health: RedisHealth | None = None,
 ) -> FastAPI:
     """Without ``config`` the app only reports its dependencies, exactly as in M0.3.
 
@@ -137,6 +139,10 @@ def create_app(
                 body["status"] = "unavailable"
             elif state == "degraded" or readiness.status == "degraded":
                 body["status"] = "degraded"
+        if redis_health is not None:
+            body["redis"] = {"mode": "normal" if redis_health.available else "degraded"}
+            if not redis_health.available and body["status"] == "ok":
+                body["status"] = "degraded"  # running on local state (SPEC D3)
         if managed_sink is not None:  # numbers only; telemetry loss never changes the status
             body["telemetry"] = {
                 "queue": managed_sink.queue_depth,
@@ -180,11 +186,17 @@ def create_app_from_env() -> FastAPI:
         if settings.telemetry_enabled
         else NoopTelemetrySink()
     )
+    # One Redis health tracker: once Redis is known down, every helper below skips it at once.
+    health = RedisHealth.from_url(settings.redis_url, clock=clock, sink=sink)
     # One Redis-backed budget per process; with Redis down it falls back to local counts (D3).
-    budget = RetryBudget(RedisBudgetBackend(settings.redis_url), clock=clock, sink=sink)
+    budget = RetryBudget(
+        RedisBudgetBackend(settings.redis_url), clock=clock, sink=sink, health=health
+    )
     redis_circuits = RedisCircuitStore(settings.redis_url, clock=clock)
     circuit = CircuitBreaker(
-        FallbackCircuitStore(redis_circuits, InMemoryCircuitStore(clock), clock=clock),
+        FallbackCircuitStore(
+            redis_circuits, InMemoryCircuitStore(clock), clock=clock, health=health
+        ),
         clock=clock,
         sink=sink,
         publish=redis_circuits.publish_change,
@@ -197,11 +209,14 @@ def create_app_from_env() -> FastAPI:
         retry_budget=budget,
         circuit=circuit,
         events=sink,
+        redis_health=health,
+        redis_fail_open=settings.redis_fail_open,
         limiter=FallbackRateLimiter(
             RedisRateLimiter(settings.redis_url, clock=clock),
             InMemoryRateLimiter(clock),
             expected_instances=settings.expected_instances,
             clock=clock,
+            health=health,
         ),
     )
     store.add_listener(vault.refresh)  # secrets are opened before the forwarder can see the config
@@ -214,4 +229,5 @@ def create_app_from_env() -> FastAPI:
         forwarder=forwarder,
         sink=sink,
         freeze_gc=True,
+        redis_health=health,
     )

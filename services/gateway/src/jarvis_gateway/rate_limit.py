@@ -15,6 +15,8 @@ from jarvis_core.clock import Clock, SystemClock
 from jarvis_core.interfaces import RateDecision, RateLimiter
 from redis import asyncio as redis_asyncio
 
+from jarvis_gateway.redis_health import RedisHealth, RedisUnavailable
+
 log = logging.getLogger(__name__)
 
 PREFIX = "jarvis:rl:"
@@ -42,7 +44,7 @@ return {allowed, string.format('%.17g', tokens), string.format('%.17g', retry)}
 
 
 class RedisRateLimiter:
-    def __init__(self, url: str, *, clock: Clock | None = None, timeout_s: float = 1.0) -> None:
+    def __init__(self, url: str, *, clock: Clock | None = None, timeout_s: float = 0.25) -> None:
         self._clock = SystemClock() if clock is None else clock
         # A blocking pool: when more calls are in flight than connections, the rest wait for one
         # (up to ``timeout_s``) instead of failing, which would silently drop to the looser
@@ -89,6 +91,7 @@ class FallbackRateLimiter:
         *,
         expected_instances: int = 1,
         clock: Clock | None = None,
+        health: RedisHealth | None = None,
     ) -> None:
         if expected_instances < 1:
             raise ValueError("expected_instances must be at least 1")
@@ -96,15 +99,24 @@ class FallbackRateLimiter:
         self._local = local
         self._instances = expected_instances
         self._clock = SystemClock() if clock is None else clock
+        self._health = health
         self._last_warned: float | None = None
 
     async def take(
         self, key: str, *, capacity: int, refill_per_s: float, cost: int = 1
     ) -> RateDecision:
         try:
-            return await self._primary.take(
-                key, capacity=capacity, refill_per_s=refill_per_s, cost=cost
+            if self._health is None:
+                return await self._primary.take(
+                    key, capacity=capacity, refill_per_s=refill_per_s, cost=cost
+                )
+            return await self._health.call(
+                lambda: self._primary.take(
+                    key, capacity=capacity, refill_per_s=refill_per_s, cost=cost
+                )
             )
+        except RedisUnavailable:
+            pass  # already known and logged: go straight to the local bucket
         except Exception as exc:
             self._warn(exc)
         share = max(1, capacity // self._instances)

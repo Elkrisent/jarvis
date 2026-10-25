@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import socket
+import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -17,6 +18,7 @@ import httpx
 import uvicorn
 from jarvis_core.config import ApiDependency
 from jarvis_core.secretbox import AesGcmSecretBox
+from jarvis_gateway.config.manager import ConfigStatus
 from jarvis_gateway.config.snapshot import ApiEntry
 from jarvis_gateway.config.store import ConfigStore
 from jarvis_gateway.forwarder import Forwarder
@@ -49,6 +51,10 @@ class StoreOnly:
     async def start(self) -> None: ...
 
     async def stop(self) -> None: ...
+
+    def status(self) -> ConfigStatus:
+        now = time.time()
+        return ConfigStatus("postgres", 1, 1, now, now)
 
 
 @dataclass

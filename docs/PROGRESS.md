@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 merged (PR #20, merge commit `b17187d`); M1.5 merged (PR #21, merge commit `d756c4c`); M1.6 merged (PR #23, merge commit `937a936`); M1.7 merged (PR #24, merge commit `a3d3942`); M1.8 merged (PR #25, merge commit `0ea3df7`); M1.9 merged (PR #27, merge commit `c5307e8`). Checkpoint 1 done (PR #32, merge commit `ae6cf9d`; report `docs/checkpoints/P1-proxy.md`; pre-release `v0.1.0` tagged on `ae6cf9d`); Checkpoint 1 approved by the user on 2026-10-25. Phase 2 in progress: M2.1 to M2.5 merged (PR #36 to #40); M2.6 implemented on `feat/m2.6-fallback`.
+Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 merged (PR #20, merge commit `b17187d`); M1.5 merged (PR #21, merge commit `d756c4c`); M1.6 merged (PR #23, merge commit `937a936`); M1.7 merged (PR #24, merge commit `a3d3942`); M1.8 merged (PR #25, merge commit `0ea3df7`); M1.9 merged (PR #27, merge commit `c5307e8`). Checkpoint 1 done (PR #32, merge commit `ae6cf9d`; report `docs/checkpoints/P1-proxy.md`; pre-release `v0.1.0` tagged on `ae6cf9d`); Checkpoint 1 approved by the user on 2026-10-25. Phase 2 in progress: M2.1 to M2.6 merged (PR #36 to #41); M2.7 implemented on `feat/m2.7-redis-fail-open`.
 
 ## Current Phase
 
@@ -10,7 +10,7 @@ Phase 2: Reliability (Phase 1 approved 2026-10-25).
 
 ## Current Module
 
-M2.6 Fallback: code and tests done on `feat/m2.6-fallback` (PR pending). All Phase 2 modules are then done; the next step is Checkpoint 2 (Phase 2 acceptance and benchmarks), run only on the user's instruction.
+M2.7 Redis-down fail-open mode: code and tests done on `feat/m2.7-redis-fail-open` (PR pending). It is the last Phase 2 module (the earlier note that M2.6 was the last was wrong: Phase 2 has seven modules). After it merges, Checkpoint 2 is next, run only on the user's instruction.
 
 ## Completed
 
@@ -161,6 +161,14 @@ M2.6 Fallback: code and tests done on `feat/m2.6-fallback` (PR pending). All Pha
   * Verified locally with a local Redis: `make lint typecheck` clean; 1915 unit + functional + Redis integration tests pass (the API's Postgres integration tests were not run); `forwarder.py` fully covered. Not run: Postgres-backed integration, system, e2e, chaos, security, the CI gate.
   * Refactor note: `Forwarder.forward` is now `forward` (shared per-request state in `_Call`, fallback decision) over `_serve` (circuit admit and probe) over `_attempts` (quota, credential, attempt loop). No behavior change for APIs without a fallback (all earlier tests unchanged).
 
+* M2.7 Redis-down fail-open mode (branch `feat/m2.7-redis-fail-open`, from main):
+  * `jarvis_gateway.redis_health.RedisHealth`: a breaker around the gateway's Redis calls. Three failures in a row (or one timeout, since a black-holed Redis would make every further call wait too) mark Redis down; from then on the rate limiter, circuit store and retry budget skip Redis at once (no I/O, no waiting) and use their local state (in-memory buckets sized `limit / JARVIS_EXPECTED_INSTANCES`, in-memory circuit store, local retry counts). A background PING every second brings it back; recovery logs a WARNING and emits one `kind: "event"`, `type: "redis_unavailable"` record (`ts`, `down_since`, `duration_s`) after the outage, as the plan says. Counts queued for the retry budget during an outage are dropped (the window is 60 s). Telemetry keeps its own drop-and-count behavior; the config subscriber its own reconnect loop. Cache and dedup do not exist yet (M3): they will check `RedisHealth.available`.
+  * `/readyz` adds `redis: {mode: normal|degraded}` and reports `degraded` (still 200) while running on local state.
+  * REQ-2-4 "one global setting": `JARVIS_REDIS_FAIL_OPEN` (default `true`; `deploy/.env.example`, compose). With `false` the gateway answers 503 `JV_NOT_READY` (new `NotReadyError`, listed with the non-SPEC codes) while Redis is known down and serves again when it returns. SPEC does not define what fail-closed does, so that behavior is my interpretation. The dashboard "fail-open mode" setting (SPEC settings API) is Phase 4.
+  * Timeouts tightened so a black-holed Redis cannot eat a request's deadline: limiter 0.25 s, circuit store 0.25 s (client 0.5 s), budget command 0.25 s (client 0.5 s). Found by the black-hole test: with 1 s and 0.5 s timeouts the first requests spent more than their whole 1.5 s deadline waiting on Redis and returned 504. The concurrency tests that fire 600 simultaneous limiter calls now pass `timeout_s=10` explicitly (they test admission counts, not latency).
+  * Tests: `RedisHealth` and helper unit tests, `/readyz`, settings, forwarder fail-closed tests, and `functional/test_redis_outage.py` against the real Redis through a stoppable TCP proxy (needs REDIS_URL): (1) kill and restore Redis under load: not one non-200 in all requests, outage p99 at most 2x normal (floor 50 ms), recovery in 0.11 s here (limit 5 s), `/readyz` degraded during the outage, the shared limiter bucket back in Redis afterwards, exactly one `redis_unavailable` event of at least 2.5 s; (2) black-holed Redis: six slow-but-successful requests, then the next hundred have p99 under 100 ms; (3) fail-open off: 503 `JV_NOT_READY` during the outage, 200 after. Results are logged to `$BENCH_DIR/results.json` as `redis_outage_errors` (0), `redis_outage_recovery_s` (0.112), `redis_normal_p99_ms` (52.7) and `redis_outage_p99_ms` (14.9) (new entries in `benchmarks/budgets.yaml`; errors and recovery have budgets 0 and 5, the p99s are tracked). Mutation checks: timeouts not counting as severe, calls not refused while down, and no recovery each fail a named test.
+  * Verified locally with a local Redis: `make lint typecheck` clean; 1942 unit + functional + Redis integration tests pass; the new code is fully covered. Not run: Postgres-backed integration, system, e2e, chaos, security, the CI gate, and the full-stack S8 scenario (k6 with Docker; there is no S5/S8 k6 script in `tests/load/scenarios` yet, only `s2_passthrough.js`). The Checkpoint 2 acceptance story "Redis is killed during load" still needs a Docker-host run.
+
 ## In Progress
 
 Nothing besides the item above. Checkpoint 1 notes kept for reference (what was found while running it):
@@ -193,7 +201,7 @@ Nothing besides the item above. Checkpoint 1 notes kept for reference (what was 
 
 ## Resume Point
 
-M2.1 is in PR #36 (user merged #34; #35 landed on the fix branch). M2.6 is on `feat/m2.6-fallback`. Next: its PR, CI, merge; then, when the user says so, run the Checkpoint 2 protocol (docs/IMPLEMENTATION.md) and stop for approval.
+M2.1 is in PR #36 (user merged #34; #35 landed on the fix branch). M2.7 is on `feat/m2.7-redis-fail-open`. Next: its PR, CI, merge; then, when the user says so, run the Checkpoint 2 protocol (docs/IMPLEMENTATION.md) and stop for approval. Checkpoint 2 needs a Docker host and k6 for S2/S4/S8 and the acceptance stories, and py-spy profiling of the request path first (S2 p99 is enforced from Checkpoint 3 per the Checkpoint 1 decision, so Checkpoint 2 only reports it).
 
 ## Last Updated
 

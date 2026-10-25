@@ -100,6 +100,13 @@ class NotImplementedYetError(JarvisError):
     http_status = 501
 
 
+class NotReadyError(JarvisError):
+    """The gateway cannot serve right now (for example Redis is down and fail-open is off)."""
+
+    code = "JV_NOT_READY"
+    http_status = 503
+
+
 ALL_ERRORS: tuple[type[JarvisError], ...] = (
     AuthInvalidError,
     RateLimitedError,
@@ -118,6 +125,7 @@ MANAGEMENT_ERRORS: tuple[type[JarvisError], ...] = (
     NotFoundError,
     ConflictError,
     NotImplementedYetError,
+    NotReadyError,
 )
 
 _BY_CODE: dict[str, type[JarvisError]] = {

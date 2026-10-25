@@ -934,6 +934,53 @@ def test_a_retry_that_finds_the_upstream_quota_empty_is_not_sent() -> None:
     assert limiter.keys == ["up:a1", "up:a1"]
 
 
+@pytest.mark.req("REQ-2-4")
+def test_with_fail_open_off_requests_are_refused_while_redis_is_known_down() -> None:
+    from jarvis_gateway.redis_health import RedisHealth
+
+    async def ping() -> None: ...
+
+    health = RedisHealth(ping, failure_threshold=1)
+    rig = _limited_rig(_Limiter())
+    rig.forwarder._redis_health = health
+    rig.forwarder._redis_fail_open = False
+    assert rig.call().status_code == 200  # Redis is up
+    health._down_since = 1.0
+    response = rig.call()
+    _json_error(response, "JV_NOT_READY", 503)
+    assert len(rig.requests) == 1  # nothing was sent for the refused call
+
+
+@pytest.mark.req("REQ-2-3")
+def test_with_fail_open_on_requests_keep_flowing_while_redis_is_down() -> None:
+    from jarvis_gateway.redis_health import RedisHealth
+
+    async def ping() -> None: ...
+
+    health = RedisHealth(ping, failure_threshold=1)
+    health._down_since = 1.0
+    rig = _limited_rig(_Limiter())
+    rig.forwarder._redis_health = health  # fail-open is the default
+    assert rig.call().status_code == 200
+
+
+def test_closing_the_forwarder_closes_the_redis_health_tracker() -> None:
+    from jarvis_gateway.redis_health import RedisHealth
+
+    closed: list[bool] = []
+
+    async def ping() -> None: ...
+
+    async def closer() -> None:
+        closed.append(True)
+
+    rig = _limited_rig(_Limiter())
+    rig.forwarder._redis_health = RedisHealth(ping, closer=closer)
+    with rig.client:
+        rig.call()
+    assert closed == [True]
+
+
 def test_closing_the_forwarder_closes_its_limiter() -> None:
     limiter = _Limiter()
     rig = _limited_rig(limiter)

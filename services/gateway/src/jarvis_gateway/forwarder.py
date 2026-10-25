@@ -28,6 +28,7 @@ from jarvis_core.errors import (
     BodyTooLargeError,
     CircuitOpenError,
     JarvisError,
+    NotReadyError,
     QuotaExceededError,
     RateLimitedError,
     UpstreamTimeoutError,
@@ -51,6 +52,7 @@ from jarvis_gateway.forward import (
     inject_credential_header,
 )
 from jarvis_gateway.record import RequestRecord
+from jarvis_gateway.redis_health import RedisHealth
 from jarvis_gateway.retry_budget import RetryBudget
 from jarvis_gateway.upstream import PinnedTransport
 
@@ -153,6 +155,8 @@ class Forwarder:
         circuit: CircuitBreaker | None = None,
         limiter: RateLimiter | None = None,
         events: TelemetrySink | None = None,
+        redis_health: RedisHealth | None = None,
+        redis_fail_open: bool = True,
     ) -> None:
         self._vault = vault
         self._random = SystemRandom() if random is None else random
@@ -160,6 +164,8 @@ class Forwarder:
         self._circuit = circuit
         self._limiter = limiter
         self._events = events
+        self._redis_health = redis_health
+        self._redis_fail_open = redis_fail_open
         self._snapshot: Snapshot | None = None
         self._clock = SystemClock() if clock is None else clock
         self.max_body_bytes = max_body_bytes
@@ -184,6 +190,8 @@ class Forwarder:
             await self._budget.aclose()
         if self._circuit is not None:
             await self._circuit.aclose()
+        if self._redis_health is not None:
+            await self._redis_health.aclose()
         closer = getattr(self._limiter, "aclose", None)
         if closer is not None:
             await closer()
@@ -236,6 +244,12 @@ class Forwarder:
         except Exception as exc:
             log.warning("rate limiter failed (%s); letting the request through", type(exc).__name__)
             return None
+
+    def check_shared_state(self) -> None:
+        """With JARVIS_REDIS_FAIL_OPEN=false, refuse requests while Redis is down."""
+        health = self._redis_health
+        if health is not None and not self._redis_fail_open and not health.available:
+            raise NotReadyError("shared state is unavailable")
 
     async def check_inbound(self, authenticated: Authenticated) -> None:
         """Pipeline step 3: the (project, key, api) bucket, when the API turns it on."""

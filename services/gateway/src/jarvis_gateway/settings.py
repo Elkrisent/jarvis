@@ -55,6 +55,7 @@ class Settings:
     telemetry_batch_size: int = DEFAULT_TELEMETRY_BATCH_SIZE
     telemetry_maxlen: int = DEFAULT_TELEMETRY_MAXLEN
     expected_instances: int = 1
+    redis_fail_open: bool = True
 
     def __repr__(self) -> str:
         return (
@@ -134,13 +135,17 @@ def _positive_int(source: Mapping[str, str], name: str, default: int) -> int:
     return value
 
 
-def _telemetry_enabled(source: Mapping[str, str]) -> bool:
-    raw = (source.get("JARVIS_TELEMETRY_ENABLED") or "true").strip().lower()
+def _bool(source: Mapping[str, str], name: str, default: str) -> bool:
+    raw = (source.get(name) or default).strip().lower()
     if raw in _TRUE:
         return True
     if raw in _FALSE:
         return False
-    raise SettingsError("JARVIS_TELEMETRY_ENABLED must be true or false")
+    raise SettingsError(f"{name} must be true or false")
+
+
+def _telemetry_enabled(source: Mapping[str, str]) -> bool:
+    return _bool(source, "JARVIS_TELEMETRY_ENABLED", "true")
 
 
 def load_settings(env: Mapping[str, str] | None = None) -> Settings:
@@ -173,4 +178,5 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
             source, "JARVIS_TELEMETRY_STREAM_MAXLEN", DEFAULT_TELEMETRY_MAXLEN
         ),
         expected_instances=_positive_int(source, "JARVIS_EXPECTED_INSTANCES", 1),
+        redis_fail_open=_bool(source, "JARVIS_REDIS_FAIL_OPEN", "true"),
     )
