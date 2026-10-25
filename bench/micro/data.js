@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792937035975,
+  "lastUpdate": 1792938492968,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Micro benchmarks": [
@@ -1041,6 +1041,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 4.2804969823954525e-7",
             "extra": "mean: 1.5269171008322324 usec\nrounds: 79663"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "fb34af96fe3a048448a9a859c018679175aa6751",
+          "message": "Merge pull request #38 from Elkrisent/feat/m2.3-retry-budget\n\nfeat: per-API retry budget in Redis with local fallback (M2.3)",
+          "timestamp": "2026-10-25T19:57:44+05:30",
+          "tree_id": "137eed30e7c2a48a9a1f43017bd7ec08d89f4c7f",
+          "url": "https://github.com/Elkrisent/jarvis/commit/fb34af96fe3a048448a9a859c018679175aa6751"
+        },
+        "date": 1792938492617,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "packages/core/tests/bench/test_bench_backoff_compute.py::test_bench_backoff_compute",
+            "value": 502708.9364081355,
+            "unit": "iter/sec",
+            "range": "stddev: 7.884704940622054e-7",
+            "extra": "mean: 1.9892226447077272 usec\nrounds: 25772"
+          },
+          {
+            "name": "packages/core/tests/bench/test_bench_route_template_match.py::test_bench_route_template_match",
+            "value": 145741.39762289097,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000010133575901220134",
+            "extra": "mean: 6.8614684386897515 usec\nrounds: 42061"
+          },
+          {
+            "name": "packages/core/tests/bench/test_bench_token_bucket_take.py::test_bench_token_bucket_take",
+            "value": 644211.7089534509,
+            "unit": "iter/sec",
+            "range": "stddev: 4.14344641674176e-7",
+            "extra": "mean: 1.5522847320247286 usec\nrounds: 82899"
           }
         ]
       }
