@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792944769792,
+  "lastUpdate": 1792946679283,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Load (throughput)": [
@@ -863,6 +863,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "mock_direct_rps",
             "value": 1915.5822234853238,
+            "unit": "req/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "c0f19a8ba3a7495da8afd017c7a53d22736bd194",
+          "message": "Merge pull request #42 from Elkrisent/feat/m2.7-redis-fail-open\n\nfeat: Redis-down fail-open mode with a health breaker (M2.7)",
+          "timestamp": "2026-10-25T22:10:47+05:30",
+          "tree_id": "154cc2dd28f6c0faaf91390bd017c05c220459ae",
+          "url": "https://github.com/Elkrisent/jarvis/commit/c0f19a8ba3a7495da8afd017c7a53d22736bd194"
+        },
+        "date": 1792946678846,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "mock_direct_rps",
+            "value": 4217.258023969798,
             "unit": "req/s"
           }
         ]
