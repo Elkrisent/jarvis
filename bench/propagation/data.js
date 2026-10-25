@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792922049011,
+  "lastUpdate": 1792929262409,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Config propagation": [
@@ -488,6 +488,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "config_propagation_p99",
             "value": 14.36,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d7b0043748f2be276e84c0d050c41d800459b6a2",
+          "message": "Merge pull request #36 from Elkrisent/fix/revocation-poll-redis-down\n\nfeat: per-request deadline and attempt timeouts (M2.1)",
+          "timestamp": "2026-10-25T17:22:38+05:30",
+          "tree_id": "291eb108fd2ad5646c712724aea27bc119cbc8c7",
+          "url": "https://github.com/Elkrisent/jarvis/commit/d7b0043748f2be276e84c0d050c41d800459b6a2"
+        },
+        "date": 1792929261786,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "config_propagation_p99",
+            "value": 12.357,
             "unit": "ms"
           }
         ]
