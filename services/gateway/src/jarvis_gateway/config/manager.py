@@ -52,16 +52,17 @@ class SnapshotWriter(Protocol):
     async def aclose(self) -> None: ...
 
 
-Subscriber = Callable[
-    [
-        str,
-        Callable[[ConfigEvent], Awaitable[None]],
-        Callable[[], Awaitable[None]],
-        Clock,
-        asyncio.Event,
-    ],
-    Awaitable[None],
-]
+class Subscriber(Protocol):
+    def __call__(
+        self,
+        redis_url: str,
+        on_event: Callable[[ConfigEvent], Awaitable[None]],
+        on_connected: Callable[[], Awaitable[None]],
+        clock: Clock,
+        stop: asyncio.Event,
+        *,
+        on_disconnected: Callable[[], None],
+    ) -> Awaitable[None]: ...
 
 
 @dataclass(frozen=True)
@@ -110,6 +111,9 @@ class ConfigManager:
         # A failed targeted refresh asks the supervisor for an early full resync.
         self._resync_pending = False
         self._wake = asyncio.Event()
+        # While the pub/sub link is down, pushes (incl. revocations) are missed: poll Postgres at
+        # the retry interval instead of the resync interval.
+        self._subscriber_up = True
         self._last_supervised: float = 0.0
 
     @property
@@ -221,7 +225,7 @@ class ConfigManager:
 
     async def _supervise(self) -> None:
         while True:
-            urgent = self._last_sync_ok is None or self._resync_pending
+            urgent = self._last_sync_ok is None or self._resync_pending or not self._subscriber_up
             delay = RETRY_INTERVAL_S if urgent else self._interval
             try:
                 await self._pause(delay)
@@ -251,11 +255,21 @@ class ConfigManager:
 
     async def _subscribe(self, redis_url: str) -> None:
         async def on_connected() -> None:
+            self._subscriber_up = True
             await self.resync()
+
+        def on_disconnected() -> None:
+            self._subscriber_up = False
+            self._wake.set()
 
         try:
             await self._subscriber_fn(
-                redis_url, self.handle_event, on_connected, self._clock, self._stop
+                redis_url,
+                self.handle_event,
+                on_connected,
+                self._clock,
+                self._stop,
+                on_disconnected=on_disconnected,
             )
         except asyncio.CancelledError:
             raise

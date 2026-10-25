@@ -12,7 +12,7 @@ import pytest
 from jarvis_core.clock import Clock, FakeClock
 from jarvis_core.config import ApiDependency
 from jarvis_gateway.config.events import ApiChanged, ConfigEvent, Invalidated
-from jarvis_gateway.config.manager import ConfigManager, ConfigStatus
+from jarvis_gateway.config.manager import RETRY_INTERVAL_S, ConfigManager, ConfigStatus
 from jarvis_gateway.config.postgres import ConfigLoadError, InvalidApi, PostgresLoader, ProjectRows
 from jarvis_gateway.config.snapshot import ApiEntry, KeyEntry, Snapshot
 from jarvis_gateway.config.snapshot_file import CoalescingWriter, SnapshotFile
@@ -662,6 +662,8 @@ async def test_the_subscriber_feeds_events_and_resyncs_on_connect(tmp_path: Path
         on_connected: Callable[[], Awaitable[None]],
         clock: Clock,
         stop: asyncio.Event,
+        *,
+        on_disconnected: Callable[[], None],
     ) -> None:
         seen["url"], seen["clock"] = url, clock
         h.loader.apis["a1"] = _api("a1", 2)
@@ -695,7 +697,7 @@ async def test_a_subscriber_that_dies_is_logged_not_fatal(
 ) -> None:
     h = Harness(tmp_path)
 
-    async def dying_subscribe(*args: object) -> None:
+    async def dying_subscribe(*args: object, **kwargs: object) -> None:
         raise RuntimeError("SECRET-MARKER")
 
     manager = ConfigManager(
@@ -716,6 +718,58 @@ async def test_a_subscriber_that_dies_is_logged_not_fatal(
     assert "redis://" not in caplog.text
     await h.clock.step(INTERVAL)  # the supervisor still runs
     assert h.loader.calls == ["all", "all"]
+    await manager.stop()
+
+
+async def test_resync_runs_at_the_retry_interval_while_the_subscriber_is_down(
+    tmp_path: Path,
+) -> None:
+    """Revocations are pushed over Redis; with it down, Postgres is polled every 5 s, not 60 s."""
+    h = Harness(tmp_path)
+    lost = asyncio.Event()
+    reconnect = asyncio.Event()
+
+    async def flaky_subscribe(
+        url: str,
+        on_event: Callable[[ConfigEvent], Awaitable[None]],
+        on_connected: Callable[[], Awaitable[None]],
+        clock: Clock,
+        stop: asyncio.Event,
+        *,
+        on_disconnected: Callable[[], None],
+    ) -> None:
+        await on_connected()
+        await lost.wait()
+        on_disconnected()
+        await reconnect.wait()
+        await on_connected()
+        await stop.wait()
+
+    manager = ConfigManager(
+        h.loader,
+        h.file,
+        h.fake_writer,
+        h.store,
+        h.clock,
+        resync_interval_s=INTERVAL,
+        redis_url="redis://r:6379/0",
+        subscriber=flaky_subscribe,
+    )
+    await manager.start()
+    await settle()
+    assert h.loader.calls == ["all", "all"]  # startup load + resync on connect
+    lost.set()
+    await settle()
+    await h.clock.step(RETRY_INTERVAL_S)
+    assert h.loader.calls.count("all") == 3  # polled well before INTERVAL
+    await h.clock.step(RETRY_INTERVAL_S)
+    assert h.loader.calls.count("all") == 4
+    reconnect.set()
+    await settle()
+    await h.clock.step(RETRY_INTERVAL_S)  # the sleep already in flight finishes
+    calls = h.loader.calls.count("all")
+    await h.clock.step(RETRY_INTERVAL_S)
+    assert h.loader.calls.count("all") == calls  # back to the slow interval
     await manager.stop()
 
 

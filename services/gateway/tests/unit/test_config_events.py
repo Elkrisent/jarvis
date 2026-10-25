@@ -528,3 +528,53 @@ async def test_cancellation_while_closing_the_connection_propagates() -> None:
     conn = CancelledClose([stop.set])
     with pytest.raises(asyncio.CancelledError):
         await _run(Factory([conn], clock, stop), rec, clock, stop)
+
+
+async def test_on_disconnected_is_called_for_a_lost_connection_and_for_failed_connects() -> None:
+    clock, stop, rec = FakeClock(), asyncio.Event(), Recorder()
+    calls: list[str] = []
+    first = FakeConn([_msg("config:changed", b'{"api_id":"a","version":1}')], end=OSError("reset"))
+    failing = FakeConn(fail_subscribe=RedisConnectionError("refused"))
+    last = FakeConn([stop.set])
+    factory = Factory([first, failing, last], clock, stop)
+    await asyncio.wait_for(
+        subscribe(
+            "redis://x",
+            rec.on_event,
+            rec.on_connected,
+            clock,
+            stop,
+            on_disconnected=lambda: calls.append("down"),
+            connect=factory,
+        ),
+        timeout=5,
+    )
+    assert calls == ["down", "down"]
+
+
+async def test_a_failing_on_disconnected_callback_does_not_stop_the_subscriber(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    clock, stop, rec = FakeClock(), asyncio.Event(), Recorder()
+
+    def boom() -> None:
+        raise RuntimeError("SECRET-MARKER")
+
+    first = FakeConn([], end=OSError("reset"))
+    second = FakeConn([stop.set])
+    with caplog.at_level(logging.ERROR, logger=LOGGER):
+        await asyncio.wait_for(
+            subscribe(
+                "redis://x",
+                rec.on_event,
+                rec.on_connected,
+                clock,
+                stop,
+                on_disconnected=boom,
+                connect=Factory([first, second], clock, stop),
+            ),
+            timeout=5,
+        )
+    assert rec.log == ["connected", "connected"]
+    assert "RuntimeError" in caplog.text
+    assert "SECRET-MARKER" not in caplog.text
