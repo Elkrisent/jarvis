@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792915727763,
+  "lastUpdate": 1792922179227,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Load (latency)": [
@@ -1044,6 +1044,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "mock_direct_p99",
             "value": 6.542241000000001,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "79d6973f57c44dd5ac4cc2826258f2f10d08aa42",
+          "message": "Merge pull request #34 from Elkrisent/fix/revocation-poll-redis-down\n\nfix: poll Postgres every 5 s while the config pub/sub link is down",
+          "timestamp": "2026-10-25T15:22:25+05:30",
+          "tree_id": "abaf990b5fa977e4345d15d606ca1e1380eaaf86",
+          "url": "https://github.com/Elkrisent/jarvis/commit/79d6973f57c44dd5ac4cc2826258f2f10d08aa42"
+        },
+        "date": 1792922178311,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "mock_direct_p50",
+            "value": 5.136654,
+            "unit": "ms"
+          },
+          {
+            "name": "mock_direct_p95",
+            "value": 5.763163799999999,
+            "unit": "ms"
+          },
+          {
+            "name": "mock_direct_p99",
+            "value": 6.43096975,
             "unit": "ms"
           }
         ]
