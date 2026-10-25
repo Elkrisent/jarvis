@@ -2,15 +2,15 @@
 
 ## Status
 
-Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 merged (PR #20, merge commit `b17187d`); M1.5 merged (PR #21, merge commit `d756c4c`); M1.6 merged (PR #23, merge commit `937a936`); M1.7 merged (PR #24, merge commit `a3d3942`); M1.8 merged (PR #25, merge commit `0ea3df7`); M1.9 merged (PR #27, merge commit `c5307e8`). Checkpoint 1 done (PR #32, merge commit `ae6cf9d`; report `docs/checkpoints/P1-proxy.md`; pre-release `v0.1.0` tagged on `ae6cf9d`); waiting for user approval before Phase 2.
+Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 merged (PR #20, merge commit `b17187d`); M1.5 merged (PR #21, merge commit `d756c4c`); M1.6 merged (PR #23, merge commit `937a936`); M1.7 merged (PR #24, merge commit `a3d3942`); M1.8 merged (PR #25, merge commit `0ea3df7`); M1.9 merged (PR #27, merge commit `c5307e8`). Checkpoint 1 done (PR #32, merge commit `ae6cf9d`; report `docs/checkpoints/P1-proxy.md`; pre-release `v0.1.0` tagged on `ae6cf9d`); Checkpoint 1 approved by the user on 2026-10-25. Phase 2 in progress: M2.1 implemented on branch `feat/m2.1-deadlines` (not pushed or merged yet).
 
 ## Current Phase
 
-Phase 1: Proxy, complete (Checkpoint 1 done, awaiting user approval). Next phase: Phase 2: Reliability (not started).
+Phase 2: Reliability (Phase 1 approved 2026-10-25).
 
 ## Current Module
 
-None active. Checkpoint 1 is done; do not start M2.1 until the user approves.
+M2.1 Deadlines and attempt timeouts: code and tests done locally on `feat/m2.1-deadlines`; PR and CI pending. Next module: M2.2 Retry policy.
 
 ## Completed
 
@@ -111,9 +111,17 @@ None active. Checkpoint 1 is done; do not start M2.1 until the user approves.
   * Steps 6 to 8: report written; pre-release `v0.1.0` created on `ae6cf9d` (`gh release create --prerelease`, report as notes, `P1.json` attached); CI on `main` at `ae6cf9d`: `ci`, `security`, `system`, `bench` green. Stopped for approval.
   * Found and fixed on the way: story 4 exposed the SSRF resolver repeating failed container lookups per connection (user chose the narrow relaxation, see the Checkpoint 1 notes below); profiling found `sniffio` missing (about 0.9 ms CPU per request) and gen-2 GC pauses (fixed with `gc.freeze()`).
 
+* Fix `fix/revocation-poll-redis-down` (commit `4376ec5`, local, not pushed): with the config pub/sub link down the gateway resyncs from Postgres every 5 s instead of 60 s (`events.subscribe(on_disconnected=...)`, `ConfigManager._subscriber_up`). Branch `feat/m2.1-deadlines` is stacked on it.
+* M2.1 Deadlines and attempt timeouts (branch `feat/m2.1-deadlines`, local):
+  * `jarvis_core.deadline.Deadline` (injected `Clock`; `remaining`, `expired`, `attempt_timeout` = min(attempt, remaining), `can_start_attempt(min_attempt_ms)` rounded to the microsecond so 5.0 - 4.7 does not flip the 300 ms edge). `Forwarder` takes a `clock` (default `SystemClock`) and uses the deadline for: reading the request body (a stalled upload is a 504), the single attempt (`min(attempt_timeout_ms, remaining)` for both the httpx timeout and an overall `asyncio.timeout`), and the response body (cut with `UpstreamBodyError` when the deadline passes, which closes the M1.8 "trickling body holds a slot" minor).
+  * `can_start_attempt` is not used yet: the first attempt only needs time left; M2.2 (retries) is its caller. SPEC 4.6 says "a new attempt".
+  * Tests: `test_deadline.py` (edge values on a fake clock, hypothesis), `services/gateway/tests/functional/test_deadlines.py` (hang cut at the attempt timeout within 50 ms, time spent before forwarding, never-ending upload, trickling body, hypothesis over deadline/attempt/latency against the mock upstream), forwarder unit tests. Mutation checks: removing the attempt bound or the body deadline fails a named test; removing the upload deadline fails only the real-socket functional test (the test client cannot answer before its upload ends). REQ-4.6-2, -3, -5 linked in `docs/traceability.md` (only those rows updated by hand; a partial run would mark other rows "not run").
+  * Verified locally: `make lint typecheck` clean; 1069 unit + functional tests pass (core and gateway; gateway unit coverage of `forwarder.py` complete). NOT run here: integration, system, e2e, chaos and security suites and the CI coverage gate (no Postgres, Redis or Docker on this machine today; `make coverage` errors in the api integration tests for that reason), so CI on the PR decides.
+  * Known: the timing assertions (hang within 50 ms of the attempt timeout) can flake on a loaded machine.
+
 ## In Progress
 
-Nothing. Checkpoint 1 notes kept for reference (what was found while running it):
+Nothing besides the item above. Checkpoint 1 notes kept for reference (what was found while running it):
 
 * Step 3, acceptance stories: all four automated in `tests/e2e/test_checkpoint_1.py` and passing on the Docker stack (change base URL and key; metadata base URL rejected on save; revoked key rejected 1 s later; restart with Postgres down serves from the snapshot). Story 4 failed at first and exposed a real bug (next bullet); after the fix it passed in 10 of 11 stack runs, the one failure (first full-suite run) was not reproduced and not explained, so watch it.
 * Bug found by story 4 and fixed (user chose the narrow option): with a JARVIS container stopped (Postgres), `DestinationResolver` looked up every container name again for every new upstream connection (about 2 s timeout each, 8 s inside the resolver thread) and refused allowlisted private upstreams, so such traffic got 504s. Now lookups are single-flight and reused for 5 s when incomplete; a container name that has never resolved is treated as not running (WARNING logged with the name), a name that resolved before and now fails still fails closed. Regression tests in `test_ssrf.py` and the security suite (the old test that pinned the first-lookup fail-closed rule was rewritten for the new rule, not loosened: the previously-resolved case is still tested). Known residual: if Postgres dies while the gateway is running, its name had resolved, so allowlisted private upstreams are refused from the next lookup (at most 30 s later) until it returns.
@@ -124,7 +132,7 @@ Nothing. Checkpoint 1 notes kept for reference (what was found while running it)
 
 ## Next
 
-1. Wait for the user's approval of Checkpoint 1. Apply any feedback first as a follow-up PR and note it in the report. Do not start Phase 2 (M2.1 Deadlines and attempt timeouts) before that.
+1. Push `fix/revocation-poll-redis-down` and `feat/m2.1-deadlines` (ask the user first), open PRs, get CI green (integration coverage gate: gateway and core 1-point drop rule), merge, then start M2.2 Retry policy (uses `Deadline.can_start_attempt`).
 2. Before Checkpoint 3: profile the request path with py-spy (S2 p99 budget is enforced from there). The user declined a hosted-runner workflow for S2; an optional check on a different machine (plain Linux, 2 vCPU) would show how much of the p99 is this laptop.
 
 ## Blockers / Questions
@@ -143,8 +151,8 @@ Nothing. Checkpoint 1 notes kept for reference (what was found while running it)
 
 ## Resume Point
 
-Checkpoint 1 is complete and tagged (`v0.1.0`); waiting for the user's approval. Phase 2 starts at M2.1 only after that. Open decisions for the user: Redis-outage revocation window (Blockers), the P5 secret-rollback question.
+M2.1 is implemented on `feat/m2.1-deadlines` (stacked on `fix/revocation-poll-redis-down`); nothing pushed. Next: push and PR both with the user's go-ahead, wait for CI, then M2.2.
 
 ## Last Updated
 
-2026-10-24
+2026-10-25
