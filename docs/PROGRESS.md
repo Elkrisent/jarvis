@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 merged (PR #20, merge commit `b17187d`); M1.5 merged (PR #21, merge commit `d756c4c`); M1.6 merged (PR #23, merge commit `937a936`); M1.7 merged (PR #24, merge commit `a3d3942`); M1.8 merged (PR #25, merge commit `0ea3df7`); M1.9 merged (PR #27, merge commit `c5307e8`). Checkpoint 1 done (PR #32, merge commit `ae6cf9d`; report `docs/checkpoints/P1-proxy.md`; pre-release `v0.1.0` tagged on `ae6cf9d`); Checkpoint 1 approved by the user on 2026-10-25. Phase 2 in progress: M2.1 in PR #36 (CI running when last checked); M2.2 implemented on branch `feat/m2.2-retry-policy` (not pushed).
+Phase 0 (Foundations) complete (Checkpoint 0 passed, `v0.0.0`). Phase 1 in progress: M1.1 merged (PR #15, merge commit `828922e`); M1.2 merged (PR #16, merge commit `7b9e3c6`); M1.3 merged (PR #18, merge commit `7d8acec`); M1.4 merged (PR #20, merge commit `b17187d`); M1.5 merged (PR #21, merge commit `d756c4c`); M1.6 merged (PR #23, merge commit `937a936`); M1.7 merged (PR #24, merge commit `a3d3942`); M1.8 merged (PR #25, merge commit `0ea3df7`); M1.9 merged (PR #27, merge commit `c5307e8`). Checkpoint 1 done (PR #32, merge commit `ae6cf9d`; report `docs/checkpoints/P1-proxy.md`; pre-release `v0.1.0` tagged on `ae6cf9d`); Checkpoint 1 approved by the user on 2026-10-25. Phase 2 in progress: M2.1 merged (PR #36); M2.2 in PR #37 (CI green); M2.3 implemented on `feat/m2.3-retry-budget` (not pushed).
 
 ## Current Phase
 
@@ -10,7 +10,7 @@ Phase 2: Reliability (Phase 1 approved 2026-10-25).
 
 ## Current Module
 
-M2.2 Retry policy: code and tests done locally on `feat/m2.2-retry-policy` (stacked on M2.1, PR #36 pending merge); PR and CI pending. Next module: M2.3 Retry budget.
+M2.3 Retry budget: code and tests done locally on `feat/m2.3-retry-budget` (stacked on M2.2, PR #37 with CI green, awaiting merge). Next module: M2.4 Circuit breaker.
 
 ## Completed
 
@@ -127,6 +127,14 @@ M2.2 Retry policy: code and tests done locally on `feat/m2.2-retry-policy` (stac
   * Tests: `test_retry.py` (decision table over status x method x idempotency, hypothesis backoff bounds, Retry-After seconds and date, deadline edges), forwarder unit tests, `services/gateway/tests/functional/test_retries.py` (scripted upstream on real sockets: 503 then 200 with `X-Jarvis-Attempts: 2`, POST/PATCH never retried without config and the upstream sees one call, same key on every attempt, 4xx/500/501 never retried, Retry-After honored and refused beyond the deadline, attempt timeout retried, deadline never exceeded). Micro-benchmark `backoff_compute` (`packages/core/tests/bench`): 1.65 us mean locally (budget stays null). Mutation checks: method rule, deadline fit and `max_attempts` removed each fail a named test. REQ-4.7-1 to -6 and -9 linked (rows patched by hand).
   * Verified locally: `make lint typecheck` clean; 1429 unit + functional tests pass; `forwarder.py` fully covered by unit tests. Not run here (no Postgres, Redis or Docker): integration, system, e2e, chaos, security, the CI coverage gate.
 
+* M2.3 Retry budget (branch `feat/m2.3-retry-budget`, local, stacked on PR #37):
+  * `jarvis_gateway.retry_budget`: `RetryBudget` (per API, rolling 60 s window of per-second `{r, t}` hashes in Redis, `jarvis:rb:<api_id>:<second>`, TTL 61 s). `record_request` is sync and I/O free (once per request, not per attempt); a 1 s background task flushes the counts, and `try_acquire` flushes this instance's pending count and takes a retry in one Lua script if `retries + 1 <= ratio * requests`. Denied retries emit a `kind: "event"`, `type: "retry_budget_exhausted"` record (`v`, `ts`, `request_id`, `project_id`, `api_id`, `budget_ratio`), at most one per API per second per instance. The `Forwarder` asks only after the policy already allows a retry; a refusal returns the last answer/error as before.
+  * Redis down or slow (0.25 s cap): this instance's own counts apply (SPEC D3), one WARNING per 30 s with the exception type only. `create_app_from_env` builds one budget per process; `Forwarder.aclose` closes it (final flush).
+  * Strict reading of the SPEC rule: a retry needs `retries + 1 <= ratio * requests` over the last 60 s, so a lone request never retries until about five requests are in the window at the default 0.2. No minimum-retries allowance (SPEC does not give one). Say if you want one.
+  * Tests: `test_retry_budget.py` (window arithmetic, per-API, backend decides, flush, Redis-down fallback, slow backend, event throttle), forwarder unit tests, `integration/test_retry_budget_redis.py` (two instances share one budget, the window rolls, key TTL, unreachable Redis), and the retry-storm test `functional/test_retry_storm.py` (marked integration, needs REDIS_URL): 200 requests over two gateway instances against an upstream that always answers 503 make 264 or fewer upstream calls (1 + 0.2, plus 10% for flush lag); without the budget the same test makes 600 calls and fails. REQ-4.7-7 and -8 linked.
+  * Verified locally with a local Redis 7 on port 6390 (started for this work): `make lint typecheck` clean; 1539 unit + functional + Redis integration tests pass; coverage of the new code complete. Not run: Postgres-backed integration, system, e2e, chaos, security, and the CI gate (CI decides).
+  * Found, not fixed: the gateway's httpx client per upstream uses the default pool (100 connections, 20 keep-alive), so more than 100 concurrent requests to one upstream get pool-timeout 504s (seen when the storm test used 200 at once). Decide in the performance phase whether to raise or configure it.
+
 ## In Progress
 
 Nothing besides the item above. Checkpoint 1 notes kept for reference (what was found while running it):
@@ -159,7 +167,7 @@ Nothing besides the item above. Checkpoint 1 notes kept for reference (what was 
 
 ## Resume Point
 
-M2.1 is in PR #36 (user merged #34; #35 landed on the fix branch). M2.2 is on `feat/m2.2-retry-policy`, not pushed. Next: push and PR M2.2 once #36 is merged, wait for CI, then M2.3 Retry budget.
+M2.1 is in PR #36 (user merged #34; #35 landed on the fix branch). M2.3 is on `feat/m2.3-retry-budget`, not pushed (stacked on PR #37). Next: user merges #37, push and PR M2.3 against main, wait for CI, then M2.4 Circuit breaker.
 
 ## Last Updated
 

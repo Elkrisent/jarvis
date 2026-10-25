@@ -660,6 +660,68 @@ def test_a_callers_idempotency_key_is_kept_and_safe_methods_get_none() -> None:
     assert "Idempotency-Key" not in rig.requests[-1].headers
 
 
+class _Budget:
+    def __init__(self, allow: bool) -> None:
+        self.allow = allow
+        self.requests: list[str] = []
+        self.acquired: list[tuple[str, float, str, str]] = []
+        self.closed = False
+
+    def record_request(self, api_id: str) -> None:
+        self.requests.append(api_id)
+
+    async def try_acquire(
+        self, api_id: str, ratio: float, *, project_id: str, request_id: str
+    ) -> bool:
+        self.acquired.append((api_id, ratio, project_id, request_id))
+        return self.allow
+
+    async def aclose(self) -> None:
+        self.closed = True
+
+
+def _budget_rig(allow: bool) -> tuple[Rig, _Budget]:
+    budget = _Budget(allow)
+    rig = Rig(
+        [_api("a1", "weather", retry=FAST_RETRY)], _sequence(lambda: _resp(503), lambda: _resp(200))
+    )
+    rig.forwarder._budget = cast(Any, budget)
+    return rig, budget
+
+
+@pytest.mark.req("REQ-4.7-8")
+def test_an_exhausted_budget_means_the_503_is_returned_without_a_retry() -> None:
+    rig, budget = _budget_rig(allow=False)
+    response = rig.call()
+    assert response.status_code == 503
+    assert response.headers["X-Jarvis-Attempts"] == "1"
+    assert len(rig.requests) == 1
+    assert budget.requests == ["a1"]  # one request counted
+    assert [(a, r, p) for a, r, p, _ in budget.acquired] == [("a1", 0.2, "p1")]
+
+
+@pytest.mark.req("REQ-4.7-7")
+def test_a_granted_budget_lets_the_retry_through() -> None:
+    rig, budget = _budget_rig(allow=True)
+    assert rig.call().headers["X-Jarvis-Attempts"] == "2"
+    assert budget.requests == ["a1"]  # counted once per request, not per attempt
+    assert len(budget.acquired) == 1
+
+
+@pytest.mark.req("REQ-4.7-8")
+def test_the_budget_is_not_asked_when_the_policy_already_says_no() -> None:
+    rig, budget = _budget_rig(allow=True)
+    rig.call("POST", content=b"{}")  # a POST without an idempotency header is never retried
+    assert budget.acquired == []
+
+
+def test_closing_the_forwarder_closes_its_budget() -> None:
+    rig, budget = _budget_rig(allow=True)
+    with rig.client:
+        rig.call()
+    assert budget.closed
+
+
 def test_the_forwarder_is_closed_when_the_app_shuts_down() -> None:
     rig = _rig()
     closed: list[bool] = []

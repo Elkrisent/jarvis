@@ -25,6 +25,7 @@ from jarvis_gateway.config.snapshot_file import CoalescingWriter, SnapshotFile
 from jarvis_gateway.config.store import ConfigStore
 from jarvis_gateway.credentials import CredentialVault
 from jarvis_gateway.forwarder import Forwarder
+from jarvis_gateway.retry_budget import RedisBudgetBackend, RetryBudget
 from jarvis_gateway.routes import build_gw_router
 from jarvis_gateway.routing import TemplateRegistry
 from jarvis_gateway.settings import load_settings
@@ -164,9 +165,6 @@ def create_app_from_env() -> FastAPI:
         snapshot_max_age_s=settings.snapshot_max_age_s,
     )
     vault = CredentialVault(settings.secret_box)
-    forwarder = Forwarder(settings.ssrf_policy, vault, max_body_bytes=settings.max_body_bytes)
-    store.add_listener(vault.refresh)  # secrets are opened before the forwarder can see the config
-    store.add_listener(forwarder.retain)
     sink: TelemetrySink = (
         RedisTelemetrySink(
             RedisStreamWriter(settings.redis_url),
@@ -178,6 +176,16 @@ def create_app_from_env() -> FastAPI:
         if settings.telemetry_enabled
         else NoopTelemetrySink()
     )
+    # One Redis-backed budget per process; with Redis down it falls back to local counts (D3).
+    budget = RetryBudget(RedisBudgetBackend(settings.redis_url), clock=clock, sink=sink)
+    forwarder = Forwarder(
+        settings.ssrf_policy,
+        vault,
+        max_body_bytes=settings.max_body_bytes,
+        retry_budget=budget,
+    )
+    store.add_listener(vault.refresh)  # secrets are opened before the forwarder can see the config
+    store.add_listener(forwarder.retain)
     return create_app(
         dependencies_from_env(),
         config=manager,

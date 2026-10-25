@@ -25,6 +25,7 @@ from jarvis_gateway.config.snapshot import ApiEntry, KeyEntry, Snapshot
 from jarvis_gateway.config.store import ConfigStore
 from jarvis_gateway.credentials import CredentialVault
 from jarvis_gateway.forwarder import Forwarder
+from jarvis_gateway.retry_budget import RetryBudget
 from jarvis_gateway.upstream import PinnedTransport
 from mock_upstream.app import create_app as create_mock_upstream
 
@@ -83,6 +84,7 @@ async def make_gateway(upstream: Upstream) -> AsyncIterator[GatewayFactory]:
         max_body_bytes: int = MAX_BODY,
         apis: Sequence[ApiEntry] | None = None,
         sink: TelemetrySink | None = None,
+        retry_budget: RetryBudget | None = None,
         **cfg: Any,
     ) -> Gateway:
         target = port or upstream.port
@@ -112,6 +114,7 @@ async def make_gateway(upstream: Upstream) -> AsyncIterator[GatewayFactory]:
             policy,
             vault,
             max_body_bytes=max_body_bytes,
+            retry_budget=retry_budget,
             transport_factory=lambda: PinnedTransport(policy, resolver=resolve),
         )
         store.add_listener(forwarder.retain)
