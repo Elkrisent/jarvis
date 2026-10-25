@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792938695091,
+  "lastUpdate": 1792942874483,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Load (throughput)": [
@@ -805,6 +805,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "mock_direct_rps",
             "value": 3866.3531171020736,
+            "unit": "req/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "955fa8818953165ff96591f989c28b6a6c967be1",
+          "message": "Merge pull request #40 from Elkrisent/feat/m2.5-rate-limiters\n\nfeat: Redis token-bucket rate limiters, inbound and upstream quota (M2.5)",
+          "timestamp": "2026-10-25T21:07:25+05:30",
+          "tree_id": "5f1b2e26f8e9b821e2e27b34643865069a85b580",
+          "url": "https://github.com/Elkrisent/jarvis/commit/955fa8818953165ff96591f989c28b6a6c967be1"
+        },
+        "date": 1792942873939,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "mock_direct_rps",
+            "value": 1852.4015402396265,
             "unit": "req/s"
           }
         ]
