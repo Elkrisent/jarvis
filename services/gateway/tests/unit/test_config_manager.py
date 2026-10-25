@@ -773,6 +773,42 @@ async def test_resync_runs_at_the_retry_interval_while_the_subscriber_is_down(
     await manager.stop()
 
 
+async def test_a_short_resync_interval_is_kept_while_the_subscriber_is_down(
+    tmp_path: Path,
+) -> None:
+    """The subscriber being down only ever shortens the wait: a 1 s interval stays 1 s."""
+    h = Harness(tmp_path)
+
+    async def always_down(
+        url: str,
+        on_event: Callable[[ConfigEvent], Awaitable[None]],
+        on_connected: Callable[[], Awaitable[None]],
+        clock: Clock,
+        stop: asyncio.Event,
+        *,
+        on_disconnected: Callable[[], None],
+    ) -> None:
+        on_disconnected()
+        await stop.wait()
+
+    manager = ConfigManager(
+        h.loader,
+        h.file,
+        h.fake_writer,
+        h.store,
+        h.clock,
+        resync_interval_s=1.0,
+        redis_url="redis://r:6379/0",
+        subscriber=always_down,
+    )
+    await manager.start()
+    await settle()
+    before = h.loader.calls.count("all")
+    await h.clock.step(1.0)
+    assert h.loader.calls.count("all") == before + 1
+    await manager.stop()
+
+
 def test_resync_interval_must_be_positive(tmp_path: Path) -> None:
     h = Harness(tmp_path)
     with pytest.raises(ValueError, match="resync_interval_s"):
