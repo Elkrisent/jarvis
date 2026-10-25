@@ -26,7 +26,7 @@ from jarvis_core.errors import (
     UpstreamTimeoutError,
     UpstreamUnreachableError,
 )
-from jarvis_core.retry import IDEMPOTENT_METHODS, Failure, decide
+from jarvis_core.retry import IDEMPOTENT_METHODS, NO_RETRY, Failure, decide
 from jarvis_core.ssrf import SsrfPolicy
 from starlette.background import BackgroundTask
 from starlette.types import Receive, Scope, Send
@@ -41,6 +41,7 @@ from jarvis_gateway.forward import (
     inject_credential_header,
 )
 from jarvis_gateway.record import RequestRecord
+from jarvis_gateway.retry_budget import RetryBudget
 from jarvis_gateway.upstream import PinnedTransport
 
 log = logging.getLogger(__name__)
@@ -95,9 +96,11 @@ class Forwarder:
         transport_factory: Callable[[], httpx.AsyncBaseTransport] | None = None,
         clock: Clock | None = None,
         random: Random | None = None,
+        retry_budget: RetryBudget | None = None,
     ) -> None:
         self._vault = vault
         self._random = SystemRandom() if random is None else random
+        self._budget = retry_budget
         self._clock = SystemClock() if clock is None else clock
         self.max_body_bytes = max_body_bytes
         self._factory = transport_factory or (lambda: PinnedTransport(policy))
@@ -114,6 +117,8 @@ class Forwarder:
             self._discard(self._clients.pop(origin))
 
     async def aclose(self) -> None:
+        if self._budget is not None:
+            await self._budget.aclose()
         clients, self._clients = list(self._clients.values()), {}
         await asyncio.gather(*(c.aclose() for c in clients), return_exceptions=True)
         if self._closing:
@@ -183,6 +188,8 @@ class Forwarder:
         body = await self._read_body(request, deadline)
         record.add_request_bytes(len(body))
         client = self._client(httpx.URL(url))
+        if self._budget is not None:
+            self._budget.record_request(api.api_id)
         attempts = 0
         while True:
             if deadline.expired:
@@ -226,6 +233,17 @@ class Forwarder:
                 rng=self._random,
                 now_epoch=self._clock.now(),
             )
+            if decision.retry and self._budget is not None:
+                decision = (
+                    decision
+                    if await self._budget.try_acquire(
+                        api.api_id,
+                        config.retry.budget_ratio,
+                        project_id=api.project_id,
+                        request_id=request_id,
+                    )
+                    else NO_RETRY
+                )
             if not decision.retry:
                 if error is not None:
                     raise error from None

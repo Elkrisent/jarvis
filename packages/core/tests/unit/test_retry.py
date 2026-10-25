@@ -197,3 +197,8 @@ def test_parse_retry_after_http_date() -> None:
     assert parse_retry_after("Mon, 12 Jan 1970 13:46:50 GMT", NOW) == pytest.approx(10.0)
     assert parse_retry_after("Mon, 12 Jan 1970 13:46:30 GMT", NOW) == 0.0  # in the past
     assert parse_retry_after("Not, 99 Foo 1970 99:99:99 GMT", NOW) is None
+
+
+@pytest.mark.req("REQ-4.7-2")
+def test_a_date_without_a_zone_is_read_as_utc() -> None:
+    assert parse_retry_after("Mon, 12 Jan 1970 13:46:50 -0000", NOW) == pytest.approx(10.0)
