@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792929386634,
+  "lastUpdate": 1792937260090,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Load (throughput)": [
@@ -747,6 +747,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "mock_direct_rps",
             "value": 1876.4751681421776,
+            "unit": "req/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "e8f6dda1d36a4a0e588e60ce92e9cdf9716af369",
+          "message": "Merge pull request #37 from Elkrisent/feat/m2.2-retry-policy\n\nfeat: retry policy with full-jitter backoff and Retry-After (M2.2)",
+          "timestamp": "2026-10-25T19:33:24+05:30",
+          "tree_id": "08d7815b7df0093e0fdb8fefdb439a8f59db5df5",
+          "url": "https://github.com/Elkrisent/jarvis/commit/e8f6dda1d36a4a0e588e60ce92e9cdf9716af369"
+        },
+        "date": 1792937259642,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "mock_direct_rps",
+            "value": 2326.075306909373,
             "unit": "req/s"
           }
         ]
