@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792946480637,
+  "lastUpdate": 1792948614295,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Micro benchmarks": [
@@ -1266,6 +1266,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 5.950029056407629e-7",
             "extra": "mean: 1.571299438202695 usec\nrounds: 76717"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "144690045+Elkrisent@users.noreply.github.com",
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0b7cd7b5a60ecef7303073e7efe981249c1c96d8",
+          "message": "Merge pull request #43 from Elkrisent/fix/chaos-telemetry-events\n\nPhase 2 on Docker: telemetry stream test fix, S4 and S8 scenarios",
+          "timestamp": "2026-10-25T22:46:21+05:30",
+          "tree_id": "37640637dfef9d63b37ce6950b8b842c49f98130",
+          "url": "https://github.com/Elkrisent/jarvis/commit/0b7cd7b5a60ecef7303073e7efe981249c1c96d8"
+        },
+        "date": 1792948613699,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "packages/core/tests/bench/test_bench_backoff_compute.py::test_bench_backoff_compute",
+            "value": 514034.1529019523,
+            "unit": "iter/sec",
+            "range": "stddev: 6.309744938767126e-7",
+            "extra": "mean: 1.9453960293388164 usec\nrounds: 24127"
+          },
+          {
+            "name": "packages/core/tests/bench/test_bench_route_template_match.py::test_bench_route_template_match",
+            "value": 142294.4653273232,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000017131024621788855",
+            "extra": "mean: 7.027680224242575 usec\nrounds: 41920"
+          },
+          {
+            "name": "packages/core/tests/bench/test_bench_token_bucket_take.py::test_bench_token_bucket_take",
+            "value": 647275.5831180321,
+            "unit": "iter/sec",
+            "range": "stddev: 4.2122254272289415e-7",
+            "extra": "mean: 1.5449370037764083 usec\nrounds: 78592"
           }
         ]
       }
