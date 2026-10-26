@@ -175,7 +175,7 @@ def test_story_3_a_quota_of_60_per_minute_caps_what_the_upstream_receives(
         assert set(statuses) <= {200, 429}
 
 
-@pytest.mark.req("REQ-2-4", "REQ-4.11-4")
+@pytest.mark.req("REQ-2-4", "REQ-3-3", "REQ-4.11-4")
 def test_story_4_no_request_fails_because_of_jarvis_when_redis_is_killed_during_load(
     mock_upstream: MockUpstream,
     kill: Callable[[str], None],
@@ -219,5 +219,13 @@ def test_story_4_no_request_fails_because_of_jarvis_when_redis_is_killed_during_
             stop.set()
             for worker in workers:
                 worker.join()
+        # Redis lost its state (the test stack has no persistence) but nothing durable was lost.
+        with httpx.Client(base_url=f"{API_URL}/api/v1", headers=ADMIN, timeout=10) as api:
+            (project,) = [p for p in api.get("/projects").json() if p["slug"] == "cp2-story-4"]
+            assert [a["slug"] for a in api.get(f"/projects/{project['id']}/apis").json()] == [
+                "provider"
+            ]
+            assert len(api.get(f"/projects/{project['id']}/keys").json()) == 1
+        assert gateway.get("/v1/ping").status_code == 200
         assert len(statuses) > 100
         assert set(statuses) == {200}, {s: statuses.count(s) for s in set(statuses)}

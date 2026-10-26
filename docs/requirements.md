@@ -183,7 +183,7 @@ script parses it.
 
 | ID | Requirement | Phase |
 |----|-------------|-------|
-| REQ-4.12-1 | With `serve_stale` on, a stale cache entry is returned first if one exists. | P2 |
+| REQ-4.12-1 | With `serve_stale` on, a stale cache entry is returned first if one exists. | P3 |
 | REQ-4.12-2 | Otherwise `fallback_api` repeats the pipeline from step 6 against the other API with the same path. | P2 |
 | REQ-4.12-3 | A fallback API's own fallback is never followed (no chains). | P2 |
 | REQ-4.12-4 | Otherwise a controlled error with the appropriate `JV_*` code is returned. | P2 |

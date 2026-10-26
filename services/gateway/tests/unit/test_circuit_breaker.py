@@ -59,7 +59,7 @@ async def h() -> Harness:
     return Harness()
 
 
-@pytest.mark.req("REQ-4.8-4")
+@pytest.mark.req("REQ-4.8-4", "REQ-6.1-3")
 async def test_enough_failures_open_the_circuit_and_emit_an_event(h: Harness) -> None:
     assert (await h.admit()).action == "allow"
     await h.calls(0, 19)

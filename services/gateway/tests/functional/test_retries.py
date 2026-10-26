@@ -69,7 +69,7 @@ def _gateway(make_gateway: GatewayFactory, port: int, **cfg: object):  # type: i
     return make_gateway(port=port, **cfg)
 
 
-@pytest.mark.req("REQ-4.7-1")
+@pytest.mark.req("REQ-4.7-1", "REQ-4.4-3")
 async def test_a_503_then_a_200_succeeds_in_two_attempts(make_gateway: GatewayFactory) -> None:
     async with scripted(_resp(503), OK) as upstream:
         response = await _gateway(make_gateway, upstream.port).call("GET", "/gw/none/x")
