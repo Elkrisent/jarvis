@@ -190,7 +190,7 @@ M2.7 Redis-down fail-open mode: code and tests done on `feat/m2.7-redis-fail-ope
 
 ## In Progress
 
-Nothing besides the item above. Checkpoint 1 notes kept for reference (what was found while running it):
+Nothing is being implemented (Checkpoint 2 closed). Checkpoint 1 notes kept for reference (what was found while running it):
 
 * Step 3, acceptance stories: all four automated in `tests/e2e/test_checkpoint_1.py` and passing on the Docker stack (change base URL and key; metadata base URL rejected on save; revoked key rejected 1 s later; restart with Postgres down serves from the snapshot). Story 4 failed at first and exposed a real bug (next bullet); after the fix it passed in 10 of 11 stack runs, the one failure (first full-suite run) was not reproduced and not explained, so watch it.
 * Bug found by story 4 and fixed (user chose the narrow option): with a JARVIS container stopped (Postgres), `DestinationResolver` looked up every container name again for every new upstream connection (about 2 s timeout each, 8 s inside the resolver thread) and refused allowlisted private upstreams, so such traffic got 504s. Now lookups are single-flight and reused for 5 s when incomplete; a container name that has never resolved is treated as not running (WARNING logged with the name), a name that resolved before and now fails still fails closed. Regression tests in `test_ssrf.py` and the security suite (the old test that pinned the first-lookup fail-closed rule was rewritten for the new rule, not loosened: the previously-resolved case is still tested). Known residual: if Postgres dies while the gateway is running, its name had resolved, so allowlisted private upstreams are refused from the next lookup (at most 30 s later) until it returns.
