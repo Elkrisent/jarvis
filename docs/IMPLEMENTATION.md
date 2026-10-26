@@ -617,7 +617,7 @@ Benchmarks in scope: overhead (S2 only, since there's no cache yet), `config_pro
 - *Given* a quota of 60/min, *when* 200 requests arrive in a minute, *then* the upstream receives ≤ 60.
 - *Given* Redis is killed during load, *when* traffic continues, *then* no request fails because of JARVIS.
 
-Benchmarks in scope: S2, S4, S8, retry-storm ratio, micro-benchmarks. The S2 overhead p99 budget deferred from Checkpoint 1 is enforced here: profile the request path with py-spy first (the S2 p99 tail at 100 req/s was about 20 ms above the direct path with no cause found by tuning). Run the Part D protocol and stop.
+Benchmarks in scope: S2, S4, S8, retry-storm ratio, micro-benchmarks. The S2 overhead p99 budget stays deferred to Checkpoint 3 (`enforce_from_phase: 3`, user decision at Checkpoint 2, confirming the Checkpoint 1 decision): profile the request path with py-spy here and report the finding (the S2 p99 tail at 100 req/s was about 20 ms above the direct path with no cause found by tuning). Run the Part D protocol and stop.
 
 ---
 

@@ -77,7 +77,7 @@ async def test_an_unreachable_or_hung_primary_falls_back(make_gateway: GatewayFa
         listener.close()
 
 
-@pytest.mark.req("REQ-4.12-2")
+@pytest.mark.req("REQ-4.12-2", "REQ-8-7")
 async def test_with_the_primary_circuit_open_the_fallback_serves_and_the_primary_gets_no_call(
     make_gateway: GatewayFactory,
 ) -> None:
@@ -214,7 +214,7 @@ async def test_the_fallback_shares_the_request_deadline(make_gateway: GatewayFac
         listener.close()
 
 
-@pytest.mark.req("REQ-4.12-2")
+@pytest.mark.req("REQ-4.12-2", "REQ-6.1-3")
 async def test_a_fallback_emits_an_event_and_the_request_event_says_fallback(
     make_gateway: GatewayFactory,
 ) -> None:

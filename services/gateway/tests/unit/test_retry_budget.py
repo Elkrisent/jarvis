@@ -162,7 +162,7 @@ async def test_a_slow_backend_is_cut_off_and_the_local_rule_applies() -> None:
     await budget.aclose()
 
 
-@pytest.mark.req("REQ-4.7-8")
+@pytest.mark.req("REQ-4.7-8", "REQ-6.1-3")
 async def test_exhaustion_emits_one_event_per_api_per_interval() -> None:
     clock = FakeClock()
     sink = InMemoryTelemetrySink()

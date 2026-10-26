@@ -177,6 +177,15 @@ M2.7 Redis-down fail-open mode: code and tests done on `feat/m2.7-redis-fail-ope
   * Finding: in Docker the name `redis` takes about 4 s to fail DNS while the container is stopped, and lookups already in flight do not notice the container returning. That, not JARVIS, is most of the 2.6 s recovery. First S8 measurements (3.8 s, then 5.2 s) used the wrong end points (`docker start` issued and `/readyz` polling) and were replaced by the PING-to-log-line measure. `RedisHealth` now probes every 0.5 s (was 1 s).
   * Not done, belongs to the checkpoint itself: `tests/e2e/test_checkpoint_2.py` (the four acceptance stories), py-spy profiling, `make bench-checkpoint PHASE=2`, the report and the `v0.2.0` pre-release.
 
+* Checkpoint 2 (branch `feat/checkpoint-2`; report `docs/checkpoints/P2-reliability.md`):
+  * Step 1/2: all Phase 2 module DoDs verified; 2,319 non-perf tests pass together on Docker with a throwaway Postgres and Redis (unit 1804, integration 178, system 16, functional 173, e2e 12, chaos 3, security 133); `make coverage` 1,982 pass (core 100/99.6, gateway 100/100, api 100/100, worker 95.7/100). Two timing flakes seen once each under load, not loosened: `test_deadlines.py` (2 tests) and `test_circuit_shared.py` (extra probes after a 0.25 s Redis timeout, designed fail-open); both pass alone.
+  * Step 3: the four acceptance stories are in `tests/e2e/test_checkpoint_2.py` and pass (4 runs).
+  * Step 4: `make bench-checkpoint PHASE=2` completed, all enforced budgets met (S2 p50 2.21 ms, p99 7.90 ms; retry storm 0.134 calls/request; S8 0 errors, p99 ratio 0.97, recovery 1.72 s). `benchmarks/checkpoints/P2.json` and `BENCHMARKS.md` updated. A second S2 run during profiling gave p99 16.5 ms, so the p99 is still unstable.
+  * py-spy: profile at `benchmarks/profiles/P2/gateway.raw`; gateway about 4% busy, no request-path hotspot visible, inconclusive (details in the report).
+  * Step 5: `make traceability COMPLETED_PHASE=2 TRACE_MARKERS="not perf"` passes, 129/246 covered. Six untagged tests were tagged, story 4 now checks Redis loss loses no durable data (REQ-3-3), REQ-4.12-1 (`serve_stale`) retagged P3 (user decision).
+  * User decisions: S2 p99 enforcement stays at Checkpoint 3 (`docs/IMPLEMENTATION.md` corrected).
+  * Not done: PR merge, `v0.2.0` pre-release (after approval).
+
 ## In Progress
 
 Nothing besides the item above. Checkpoint 1 notes kept for reference (what was found while running it):
@@ -190,8 +199,8 @@ Nothing besides the item above. Checkpoint 1 notes kept for reference (what was 
 
 ## Next
 
-1. Push `fix/revocation-poll-redis-down` and `feat/m2.1-deadlines` (ask the user first), open PRs, get CI green (integration coverage gate: gateway and core 1-point drop rule), merge, then start M2.2 Retry policy (uses `Deadline.can_start_attempt`).
-2. Before Checkpoint 3: profile the request path with py-spy (S2 p99 budget is enforced from there). The user declined a hosted-runner workflow for S2; an optional check on a different machine (plain Linux, 2 vCPU) would show how much of the p99 is this laptop.
+1. User reviews and merges the Checkpoint 2 PR, answers the questions in the report (section 10), then approves. Only then: create the `v0.2.0` pre-release (`gh release create --prerelease`, report as notes, attach `benchmarks/checkpoints/P2.json`) and start Phase 3 (M3.1 Cache).
+2. Before Checkpoint 3: profile the request path with py-spy under a longer, heavier load (the Checkpoint 2 profile was inconclusive); decide the httpx pool size (default 100 connections per upstream) and the redis-py pool size for the retry budget and circuit clients.
 
 ## Blockers / Questions
 
@@ -209,8 +218,8 @@ Nothing besides the item above. Checkpoint 1 notes kept for reference (what was 
 
 ## Resume Point
 
-M2.1 is in PR #36 (user merged #34; #35 landed on the fix branch). M2.7 is on `feat/m2.7-redis-fail-open`. Next: its PR, CI, merge; then, when the user says so, run the Checkpoint 2 protocol (docs/IMPLEMENTATION.md) and stop for approval. Checkpoint 2 needs a Docker host and k6 for S2/S4/S8 and the acceptance stories, and py-spy profiling of the request path first (S2 p99 is enforced from Checkpoint 3 per the Checkpoint 1 decision, so Checkpoint 2 only reports it).
+Checkpoint 2 is complete on branch `feat/checkpoint-2` and waiting for user approval. Do not tag `v0.2.0` or start Phase 3 until the user approves. After approval: merge the PR, tag `v0.2.0` as described under Next, then begin M3.1 (Cache) per `docs/IMPLEMENTATION.md`. Docker, Compose and the k6 image work on this machine; for the stack suites use `docker compose -p jarvis-test --profile test -f deploy/docker-compose.yml -f deploy/docker-compose.test.yml --env-file deploy/.env.example up -d --build --wait`. For Postgres-backed tests and `make bench-checkpoint`: `docker run -d --rm --name cp2-pg -e POSTGRES_PASSWORD=pw -p 15432:5432 timescale/timescaledb:2.17.2-pg16` with `DATABASE_URL=postgresql://postgres:pw@127.0.0.1:15432/postgres`, and a local Redis with `redis-server --port 6390 --save "" --daemonize yes` and `REDIS_URL=redis://localhost:6390/0`. py-spy from the host cannot attach to containers here; use a sidecar (`docker run --pid=container:<gateway> --cap-add SYS_PTRACE python:3.12-slim`, `pip install py-spy`).
 
 ## Last Updated
 
-2026-10-25
+2026-10-26

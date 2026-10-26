@@ -28,7 +28,7 @@ async def _trip(gateway, n: int = 5) -> None:  # type: ignore[no-untyped-def]
     await gateway.forwarder._circuit.drain()
 
 
-@pytest.mark.req("REQ-4.8-10")
+@pytest.mark.req("REQ-4.8-10", "REQ-4.4-3")
 async def test_an_open_circuit_fails_fast_and_the_upstream_gets_no_calls(
     make_gateway: GatewayFactory,
 ) -> None:

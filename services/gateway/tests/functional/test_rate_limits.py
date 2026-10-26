@@ -28,7 +28,7 @@ async def test_the_inbound_limiter_is_off_by_default(
         assert (await gateway.call("GET", "/gw/none/x")).status_code == 200
 
 
-@pytest.mark.req("REQ-4.11-2")
+@pytest.mark.req("REQ-4.11-2", "REQ-4.3-4")
 async def test_inbound_buckets_are_separate_per_key(
     make_gateway: GatewayFactory, upstream: Upstream
 ) -> None:
@@ -69,7 +69,7 @@ async def test_a_limited_request_never_reaches_the_upstream(
         assert len(upstream.heads) == 2
 
 
-@pytest.mark.req("REQ-4.11-3")
+@pytest.mark.req("REQ-4.11-3", "REQ-4.3-7")
 async def test_the_upstream_quota_applies_across_keys_and_answers_quota_exceeded(
     make_gateway: GatewayFactory,
 ) -> None:
