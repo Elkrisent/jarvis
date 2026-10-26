@@ -184,7 +184,9 @@ M2.7 Redis-down fail-open mode: code and tests done on `feat/m2.7-redis-fail-ope
   * py-spy: profile at `benchmarks/profiles/P2/gateway.raw`; gateway about 4% busy, no request-path hotspot visible, inconclusive (details in the report).
   * Step 5: `make traceability COMPLETED_PHASE=2 TRACE_MARKERS="not perf"` passes, 129/246 covered. Six untagged tests were tagged, story 4 now checks Redis loss loses no durable data (REQ-3-3), REQ-4.12-1 (`serve_stale`) retagged P3 (user decision).
   * User decisions: S2 p99 enforcement stays at Checkpoint 3 (`docs/IMPLEMENTATION.md` corrected).
-  * Not done: PR merge, `v0.2.0` pre-release (after approval).
+  * CI: the trivy scans failed on a new Debian openssl CVE (CVE-2026-84782, also failing on `main`); fixed by upgrading `libssl3` and `openssl` in `deploy/docker/service.Dockerfile` (remove once the base image has the fix). All checks green on PR #44.
+  * Approved by the user on 2026-10-26 ("go with your recommendations", then "create the pre-release"). Recommendations accepted: keep the five SPEC interpretations listed under Blockers / Questions; decide the httpx and redis-py pool sizes in Phase 3; enforce the S2 p99 budget at Checkpoint 3 only if repeat runs are stable.
+  * Pre-release `v0.2.0` created on the PR #44 merge commit with `P2.json` attached. M3.1 was deliberately NOT started.
 
 ## In Progress
 
@@ -199,7 +201,7 @@ Nothing besides the item above. Checkpoint 1 notes kept for reference (what was 
 
 ## Next
 
-1. User reviews and merges the Checkpoint 2 PR, answers the questions in the report (section 10), then approves. Only then: create the `v0.2.0` pre-release (`gh release create --prerelease`, report as notes, attach `benchmarks/checkpoints/P2.json`) and start Phase 3 (M3.1 Cache).
+1. Start M3.1 (Cache) next session, per `docs/IMPLEMENTATION.md` Phase 3 (SPEC §4.9). It also covers REQ-4.12-1 (`serve_stale`), retagged to P3.
 2. Before Checkpoint 3: profile the request path with py-spy under a longer, heavier load (the Checkpoint 2 profile was inconclusive); decide the httpx pool size (default 100 connections per upstream) and the redis-py pool size for the retry budget and circuit clients.
 
 ## Blockers / Questions
@@ -218,7 +220,7 @@ Nothing besides the item above. Checkpoint 1 notes kept for reference (what was 
 
 ## Resume Point
 
-Checkpoint 2 is complete on branch `feat/checkpoint-2` and waiting for user approval. Do not tag `v0.2.0` or start Phase 3 until the user approves. After approval: merge the PR, tag `v0.2.0` as described under Next, then begin M3.1 (Cache) per `docs/IMPLEMENTATION.md`. Docker, Compose and the k6 image work on this machine; for the stack suites use `docker compose -p jarvis-test --profile test -f deploy/docker-compose.yml -f deploy/docker-compose.test.yml --env-file deploy/.env.example up -d --build --wait`. For Postgres-backed tests and `make bench-checkpoint`: `docker run -d --rm --name cp2-pg -e POSTGRES_PASSWORD=pw -p 15432:5432 timescale/timescaledb:2.17.2-pg16` with `DATABASE_URL=postgresql://postgres:pw@127.0.0.1:15432/postgres`, and a local Redis with `redis-server --port 6390 --save "" --daemonize yes` and `REDIS_URL=redis://localhost:6390/0`. py-spy from the host cannot attach to containers here; use a sidecar (`docker run --pid=container:<gateway> --cap-add SYS_PTRACE python:3.12-slim`, `pip install py-spy`).
+Phase 2 is closed (Checkpoint 2 approved, `v0.2.0`). Start M3.1 (Cache) from `main`: create the branch per the conventions in `docs/IMPLEMENTATION.md`, read the M3.1 section and SPEC §4.9, and write the tests it lists. Do not begin M3.2 until M3.1's Definition of Done is met. Stack and tooling notes (Docker stack, throwaway Postgres on port 15432, local Redis on 6390, py-spy sidecar) are in the Checkpoint 2 entry and `docs/checkpoints/P2-reliability.md`: `docker compose -p jarvis-test --profile test -f deploy/docker-compose.yml -f deploy/docker-compose.test.yml --env-file deploy/.env.example up -d --build --wait`; `docker run -d --rm --name cp2-pg -e POSTGRES_PASSWORD=pw -p 15432:5432 timescale/timescaledb:2.17.2-pg16` with `DATABASE_URL=postgresql://postgres:pw@127.0.0.1:15432/postgres`; `redis-server --port 6390 --save "" --daemonize yes` with `REDIS_URL=redis://localhost:6390/0`.
 
 ## Last Updated
 

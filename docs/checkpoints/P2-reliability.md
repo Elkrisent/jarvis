@@ -1,5 +1,5 @@
 # Checkpoint P2 — Reliability
-2026-10-26 · Verified on `main` at `0b7cd7b` plus the checkpoint PR · Tag `v0.2.0` (pre-release, created only after you approve and this PR merges)
+2026-10-26 · Verified on `main` at `0b7cd7b` plus the checkpoint PR · Tag `v0.2.0` (pre-release, approved 2026-10-26)
 
 ## 1. In plain words
 JARVIS now protects an application from a misbehaving provider. Every request has a deadline and
