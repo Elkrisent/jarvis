@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792948614295,
+  "lastUpdate": 1793003394746,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Micro benchmarks": [
@@ -1311,6 +1311,49 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 4.2122254272289415e-7",
             "extra": "mean: 1.5449370037764083 usec\nrounds: 78592"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent",
+            "email": "144690045+Elkrisent@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "0b7cd7b5a60ecef7303073e7efe981249c1c96d8",
+          "message": "Merge pull request #43 from Elkrisent/fix/chaos-telemetry-events\n\nPhase 2 on Docker: telemetry stream test fix, S4 and S8 scenarios",
+          "timestamp": "2026-10-25T17:16:21Z",
+          "url": "https://github.com/Elkrisent/jarvis/commit/0b7cd7b5a60ecef7303073e7efe981249c1c96d8"
+        },
+        "date": 1793003394390,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "packages/core/tests/bench/test_bench_backoff_compute.py::test_bench_backoff_compute",
+            "value": 523092.2110011931,
+            "unit": "iter/sec",
+            "range": "stddev: 5.008581573255951e-7",
+            "extra": "mean: 1.9117088325326241 usec\nrounds: 25123"
+          },
+          {
+            "name": "packages/core/tests/bench/test_bench_route_template_match.py::test_bench_route_template_match",
+            "value": 147151.14639202,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000010254117389366715",
+            "extra": "mean: 6.7957336692161165 usec\nrounds: 39894"
+          },
+          {
+            "name": "packages/core/tests/bench/test_bench_token_bucket_take.py::test_bench_token_bucket_take",
+            "value": 660497.2431776761,
+            "unit": "iter/sec",
+            "range": "stddev: 4.247892638099257e-7",
+            "extra": "mean: 1.5140108612550203 usec\nrounds: 82495"
           }
         ]
       }
