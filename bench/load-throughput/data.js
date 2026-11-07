@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793960706319,
+  "lastUpdate": 1794044367623,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Load (throughput)": [
@@ -1218,6 +1218,33 @@ window.BENCHMARK_DATA = {
           {
             "name": "mock_direct_rps",
             "value": 3905.8196685568396,
+            "unit": "req/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent",
+            "email": "144690045+Elkrisent@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "afd6d4b84a0bba5e8f7b5b8f9c7636bcafacdd97",
+          "message": "Merge pull request #44 from Elkrisent/feat/checkpoint-2\n\nCheckpoint 2: Reliability",
+          "timestamp": "2026-10-26T17:54:21Z",
+          "url": "https://github.com/Elkrisent/jarvis/commit/afd6d4b84a0bba5e8f7b5b8f9c7636bcafacdd97"
+        },
+        "date": 1794044367252,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "mock_direct_rps",
+            "value": 3027.7613879194305,
             "unit": "req/s"
           }
         ]
