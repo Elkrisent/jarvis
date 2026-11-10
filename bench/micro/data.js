@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794221544744,
+  "lastUpdate": 1794307501692,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Micro benchmarks": [
@@ -1958,6 +1958,49 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 4.3690052169385814e-7",
             "extra": "mean: 1.2580182706266165 usec\nrounds: 71043"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent",
+            "email": "144690045+Elkrisent@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "afd6d4b84a0bba5e8f7b5b8f9c7636bcafacdd97",
+          "message": "Merge pull request #44 from Elkrisent/feat/checkpoint-2\n\nCheckpoint 2: Reliability",
+          "timestamp": "2026-10-26T17:54:21Z",
+          "url": "https://github.com/Elkrisent/jarvis/commit/afd6d4b84a0bba5e8f7b5b8f9c7636bcafacdd97"
+        },
+        "date": 1794307500977,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "packages/core/tests/bench/test_bench_backoff_compute.py::test_bench_backoff_compute",
+            "value": 822733.5545070807,
+            "unit": "iter/sec",
+            "range": "stddev: 2.55024959511086e-7",
+            "extra": "mean: 1.2154603328402278 usec\nrounds: 45428"
+          },
+          {
+            "name": "packages/core/tests/bench/test_bench_route_template_match.py::test_bench_route_template_match",
+            "value": 250415.04996552557,
+            "unit": "iter/sec",
+            "range": "stddev: 4.786045777263446e-7",
+            "extra": "mean: 3.9933702073324637 usec\nrounds: 55658"
+          },
+          {
+            "name": "packages/core/tests/bench/test_bench_token_bucket_take.py::test_bench_token_bucket_take",
+            "value": 1051072.6885508206,
+            "unit": "iter/sec",
+            "range": "stddev: 3.127977210853912e-7",
+            "extra": "mean: 951.408985213727 nsec\nrounds: 96759"
           }
         ]
       }
