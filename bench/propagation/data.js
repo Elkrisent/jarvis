@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795434394105,
+  "lastUpdate": 1795526198795,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Config propagation": [
@@ -1505,6 +1505,33 @@ window.BENCHMARK_DATA = {
           {
             "name": "config_propagation_p99",
             "value": 9.215,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent",
+            "email": "144690045+Elkrisent@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "afd6d4b84a0bba5e8f7b5b8f9c7636bcafacdd97",
+          "message": "Merge pull request #44 from Elkrisent/feat/checkpoint-2\n\nCheckpoint 2: Reliability",
+          "timestamp": "2026-10-26T17:54:21Z",
+          "url": "https://github.com/Elkrisent/jarvis/commit/afd6d4b84a0bba5e8f7b5b8f9c7636bcafacdd97"
+        },
+        "date": 1795526197796,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "config_propagation_p99",
+            "value": 34.181,
             "unit": "ms"
           }
         ]
