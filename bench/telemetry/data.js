@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795434477969,
+  "lastUpdate": 1795526275072,
   "repoUrl": "https://github.com/Elkrisent/jarvis",
   "entries": {
     "Telemetry overhead": [
@@ -1537,6 +1537,38 @@ window.BENCHMARK_DATA = {
           {
             "name": "telemetry_overhead_p99_redis_down",
             "value": -0.01,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Tarun Ragunath",
+            "username": "Elkrisent",
+            "email": "144690045+Elkrisent@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "afd6d4b84a0bba5e8f7b5b8f9c7636bcafacdd97",
+          "message": "Merge pull request #44 from Elkrisent/feat/checkpoint-2\n\nCheckpoint 2: Reliability",
+          "timestamp": "2026-10-26T17:54:21Z",
+          "url": "https://github.com/Elkrisent/jarvis/commit/afd6d4b84a0bba5e8f7b5b8f9c7636bcafacdd97"
+        },
+        "date": 1795526274215,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "telemetry_overhead_p99",
+            "value": 0.242,
+            "unit": "ms"
+          },
+          {
+            "name": "telemetry_overhead_p99_redis_down",
+            "value": -0.007,
             "unit": "ms"
           }
         ]
